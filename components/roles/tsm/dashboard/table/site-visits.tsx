@@ -46,6 +46,11 @@ const getAgentPicture = (refId: string, agents: Agent[]) => {
   return agent?.profilePicture || "/Taskflow.png";
 };
 
+// Helper to check if agent exists in agents list
+const agentExists = (refId: string, agents: Agent[]): boolean => {
+  return agents.some((a) => a.ReferenceID.toLowerCase() === refId.toLowerCase());
+};
+
 // Extract date part only (YYYY-MM-DD)
 const toDateKey = (dateStr: string): string => {
   const d = new Date(dateStr);
@@ -81,12 +86,16 @@ export const SiteVisits: React.FC<SiteVisitsProps> = ({
         }
         url.searchParams.append("type", "Client Visit");
         
-        // Only add date params if filter is set
+        // Only add date params if filter is set - use local date format to avoid timezone issues
         if (dateCreatedFilterRange?.from) {
-          url.searchParams.append("from", new Date(dateCreatedFilterRange.from).toISOString());
+          const fromDate = new Date(dateCreatedFilterRange.from);
+          const fromStr = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, "0")}-${String(fromDate.getDate()).padStart(2, "0")}`;
+          url.searchParams.append("from", fromStr);
         }
         if (dateCreatedFilterRange?.to) {
-          url.searchParams.append("to", new Date(dateCreatedFilterRange.to).toISOString());
+          const toDate = new Date(dateCreatedFilterRange.to);
+          const toStr = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
+          url.searchParams.append("to", toStr);
         }
 
         console.log("[Frontend] Fetching from:", url.toString());
@@ -115,14 +124,11 @@ export const SiteVisits: React.FC<SiteVisitsProps> = ({
     >();
 
     taskLogs.forEach((visit) => {
-      // Skip visits without SiteVisitAccount
-      if (!visit.SiteVisitAccount || visit.SiteVisitAccount.trim() === "") {
-        return;
-      }
-
+      // Count all Client Visit records, use SiteVisitAccount if available
       const refId = visit.ReferenceID.toLowerCase();
       const dateKey = toDateKey(visit.date_created);
-      const siteAccount = visit.SiteVisitAccount;
+      // Use SiteVisitAccount if available, otherwise use a placeholder to count the visit
+      const siteAccount = visit.SiteVisitAccount?.trim() || "(No Account Specified)";
       
       // Unique key: agent + date + site_account
       const uniqueKey = `${refId}_${dateKey}_${siteAccount.toLowerCase()}`;
@@ -145,8 +151,9 @@ export const SiteVisits: React.FC<SiteVisitsProps> = ({
       }
     });
 
-    // Convert to array and sort by count (descending)
+    // Convert to array, filter out agents without name info, and sort by count (descending)
     return Array.from(agentVisitMap.entries())
+      .filter(([refId]) => agentExists(refId, agents)) // Only show agents with name info
       .map(([refId, data]) => ({
         refId,
         agentName: data.agentName,
