@@ -24,17 +24,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       filter.Type = type;
     }
 
-    // Filter by date range - ensure proper date parsing
+    // Filter by date range - treat dates as Philippines time (UTC+8)
     if (from || to) {
       filter.date_created = {};
       if (from) {
-        const fromDate = new Date(from as string);
-        fromDate.setHours(0, 0, 0, 0);
+        // Parse YYYY-MM-DD and treat as start of day in Philippines (UTC+8)
+        const [year, month, day] = (from as string).split('-').map(Number);
+        const fromDate = new Date(Date.UTC(year, month - 1, day, -8, 0, 0, 0)); // Subtract 8 hours for PH timezone
         filter.date_created.$gte = fromDate;
       }
       if (to) {
-        const toDate = new Date(to as string);
-        toDate.setHours(23, 59, 59, 999);
+        // Parse YYYY-MM-DD and treat as end of day in Philippines (UTC+8)
+        const [year, month, day] = (to as string).split('-').map(Number);
+        const toDate = new Date(Date.UTC(year, month - 1, day, -8 + 23, 59, 59, 999)); // End of PH day in UTC
         filter.date_created.$lte = toDate;
       }
     }
