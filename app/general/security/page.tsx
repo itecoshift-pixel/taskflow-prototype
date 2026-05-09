@@ -449,7 +449,7 @@ function SettingsContent() {
         </header>
 
         {/* Content */}
-        <div className="flex flex-col gap-5 p-5 max-w-6xl mx-auto w-full">
+        <div className="flex flex-col gap-5 p-5 w-full mx-auto w-full">
           <SectionCard
             icon={ShieldAlert}
             title="Security Alerts"

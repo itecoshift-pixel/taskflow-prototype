@@ -164,7 +164,7 @@ export const NewTask: React.FC<NewTaskProps> = ({
   const fetchExistingActivities = useCallback(async () => {
     if (!referenceid) return;
     try {
-      const url = new URL("/api/activity/tsa/planner/fetch", window.location.origin);
+      const url = new URL("/api/activity/tsa/planner/fetch-onprogress", window.location.origin);
       url.searchParams.append("referenceid", referenceid);
       const res = await fetch(url.toString());
       if (!res.ok) return;

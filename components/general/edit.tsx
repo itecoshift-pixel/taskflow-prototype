@@ -542,13 +542,13 @@ export default function ProfileClient() {
               </header>
 
               {/* ── Content ─────────────────────────────────────────── */}
-              <div className="flex flex-col gap-6 p-5 max-w-5xl mx-auto w-full">
+              <div className="flex flex-col gap-6 p-5 w-full mx-auto w-full">
 
                 {/* Avatar + form side-by-side on md+ */}
                 <div className="flex flex-col md:flex-row gap-5 items-start">
 
                   {/* ── Left: Avatar ─────────────────────────────────── */}
-                  <div className="w-full md:w-56 shrink-0 flex flex-col items-center gap-3">
+                  <div className="w-full md:w-80 shrink-0 flex flex-col items-center gap-3">
                     {/* Avatar display */}
                     <div className="w-full aspect-square relative overflow-hidden border-2 border-gray-200 bg-gray-100">
                       {userDetails.profilePicture ? (
