@@ -130,7 +130,6 @@ function DashboardContent() {
                         <Card className="rounded-none">
                             <CardContent>
                                 <ApprovalQuotation
-                                    referenceid={userDetails.referenceid}
                                     email={userDetails.email}
                                     contact={userDetails.contact}
                                     signature={userDetails.signature}
