@@ -314,7 +314,8 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
   );
 
   const filteredActivities = useMemo(() => {
-    if (!hasActiveFilter) return [];
+    // Always filter if there's search or status filter, even if no date filter
+    if (!committedSearch.trim() && !dateCreatedFilterRange?.from && statusFilter === "All") return [];
 
     return mergedActivities
       .filter((item) => {
@@ -338,7 +339,7 @@ export const AllActivities: React.FC<AllActivitiesProps> = ({
         return true;
       })
       .sort((a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime());
-  }, [mergedActivities, statusFilter, committedSearch, hasActiveFilter]);
+  }, [mergedActivities, statusFilter, committedSearch, dateCreatedFilterRange]);
 
   const displayedActivities = useMemo(
     () => filteredActivities.slice(0, displayCount),

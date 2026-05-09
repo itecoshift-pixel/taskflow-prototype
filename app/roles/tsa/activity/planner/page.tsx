@@ -787,8 +787,10 @@ function DashboardContent() {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
+
+            
             <div className="flex items-center gap-2 px-3">
-              <Button
+              {/*<Button
                 variant="outline"
                 size="sm"
                 className="rounded-none text-xs"
@@ -796,7 +798,8 @@ function DashboardContent() {
               >
                 <Eye className="w-4 h-4 mr-2" />
                 View All
-              </Button>
+              </Button>*/}
+              
               {userDetails.referenceid && (
                 <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
               )}
