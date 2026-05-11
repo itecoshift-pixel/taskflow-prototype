@@ -61,6 +61,8 @@ interface SPFRecord {
     item_qty?: string;
     spf_creation_id?: number;
     tin_no?: string;
+    date_updated?: string;
+    created_at?: string;
 }
 
 interface SPFProps {
@@ -409,12 +411,19 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             if (!res.ok) throw new Error("Failed to fetch SPF records");
             const data = await res.json();
 
+            // Sort by date_updated descending (most recent first)
+            const sortedActivities = (data.activities || []).sort((a: SPFRecord, b: SPFRecord) => {
+                const dateA = new Date(a.date_updated || a.created_at || a.id).getTime();
+                const dateB = new Date(b.date_updated || b.created_at || b.id).getTime();
+                return dateB - dateA; // Descending order
+            });
+
             if (loadMore && page > 1) {
                 // Append new data for load more
-                setAllActivities(prev => [...prev, ...(data.activities || [])]);
+                setAllActivities(prev => [...prev, ...sortedActivities]);
             } else {
                 // Replace data for initial load or new search
-                setAllActivities(data.activities || []);
+                setAllActivities(sortedActivities);
             }
 
             // Update pagination info
