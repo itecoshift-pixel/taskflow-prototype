@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
@@ -113,6 +113,11 @@ const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }
   </div>
 );
 
+/* ================= VALIDATION ================= */
+
+const isFinitePositive = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0;
+
 /* ================= COMPONENT ================= */
 
 export function OutboundCallsTableCard({
@@ -128,15 +133,38 @@ export function OutboundCallsTableCard({
     const saved = loadConfig();
     return {
       columns:        saved?.columns        ?? DEFAULT_COLUMNS.map((c) => ({ ...c })),
-      obTargetPerDay: saved?.obTargetPerDay ?? 20,
+      obTargetPerDay: saved?.obTargetPerDay ?? null, // null = not yet set, will be filled by API
       hiddenAgents:   saved?.hiddenAgents   ?? ([] as string[]),
     };
   }, []);
 
   /* ---- Committed state (drives table) ---- */
   const [columns,        setColumns]        = useState<ColumnConfig[]>(() => initConfig().columns);
-  const [obTargetPerDay, setObTargetPerDay] = useState<number>(()        => initConfig().obTargetPerDay);
+  const [obTargetPerDay, setObTargetPerDay] = useState<number>(()        => initConfig().obTargetPerDay ?? 20);
   const [hiddenAgents,   setHiddenAgents]   = useState<string[]>(()      => initConfig().hiddenAgents);
+  const [quotaLoading,   setQuotaLoading]   = useState<boolean>(() => initConfig().obTargetPerDay === null);
+
+  /* ---- Fetch quota from API on mount (only if not already saved in localStorage) ---- */
+  useEffect(() => {
+    if (initConfig().obTargetPerDay !== null) return; // user has a saved override, respect it
+    fetch("/api/outbound-quota")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isFinitePositive(data?.outbound_quota)) {
+          setObTargetPerDay(data.outbound_quota);
+          setDraftObTarget(data.outbound_quota);
+        } else {
+          console.warn("outbound-quota: received invalid value, falling back to 20", data);
+        }
+      })
+      .catch((err) => {
+        console.warn("outbound-quota: fetch failed, falling back to 20", err);
+      })
+      .finally(() => {
+        setQuotaLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ---- Draft state (panel, committed on Save) ---- */
   const [draftColumns,      setDraftColumns]      = useState<ColumnConfig[]>([]);
@@ -155,12 +183,13 @@ export function OutboundCallsTableCard({
     setObTargetPerDay(draftObTarget);
     setHiddenAgents(draftHiddenAgents);
     saveConfig({ columns: draftColumns, obTargetPerDay: draftObTarget, hiddenAgents: draftHiddenAgents });
+    setQuotaLoading(false);
     setShowSettings(false);
   };
 
   const resetPanel = () => {
     setDraftColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })));
-    setDraftObTarget(20);
+    setDraftObTarget(obTargetPerDay); // reset to current API-sourced value
     setDraftHiddenAgents([]);
   };
 
@@ -203,10 +232,17 @@ export function OutboundCallsTableCard({
   /* ---- Days count & OB target ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diff = dateCreatedFilterRange.to.getTime() - dateCreatedFilterRange.from.getTime();
-      return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+      const start = new Date(dateCreatedFilterRange.from);
+      const end = new Date(dateCreatedFilterRange.to);
+      let count = 0;
+      const current = new Date(start);
+      while (current <= end) {
+        if (current.getDay() !== 0) count++; // exclude Sundays
+        current.setDate(current.getDate() + 1);
+      }
+      return count || 1;
     }
-    return 26;
+    return 22; // default working days per month (excluding Sundays)
   }, [dateCreatedFilterRange]);
 
   const obTarget = obTargetPerDay * daysCount;
@@ -623,7 +659,7 @@ export function OutboundCallsTableCard({
                           <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
-                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{obTarget}</TableCell>}
+                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget}</TableCell>}
                       {col("totalCalls")   && <TableCell className="text-center font-semibold text-gray-800">{stat.totalCalls}</TableCell>}
                       {col("achievement")  && (
                         <TableCell className="text-center">
@@ -649,7 +685,7 @@ export function OutboundCallsTableCard({
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{obTarget * visibleStats.length}</TableCell>}
+                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget * visibleStats.length}</TableCell>}
                   {col("totalCalls")   && <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>}
                   {col("achievement")  && <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>}
                   {col("numQuotes")    && <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>}

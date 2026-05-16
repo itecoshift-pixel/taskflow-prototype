@@ -1,96 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 500;
-const DEFAULT_LIMIT = 3000;
-const MAX_LIMIT = 3000;
-
-// Generator for history batches
-async function* fetchHistoryBatches(referenceid: string, fromDate?: string, toDate?: string, limit?: number) {
-  let lastId: number | null = null;
-  let totalFetched = 0;
-
-  while (true) {
-    let query = supabase
-      .from("history")
-      .select("*")
-      .eq("referenceid", referenceid)
-      .order("id", { ascending: false })
-      .limit(BATCH_SIZE);
-
-    if (lastId !== null) query = query.lt("id", lastId);
-    if (fromDate) query = query.gte("date_created", fromDate);
-    if (toDate) query = query.lte("date_created", toDate);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    yield data;
-    totalFetched += data.length;
-
-    // Stop if we reached the limit
-    if (limit && totalFetched >= limit) break;
-    lastId = data[data.length - 1].id;
-  }
-}
-
-// Generator for revised quotations batches
-async function* fetchRevisedQuotationsBatches(referenceid: string, fromDate?: string, toDate?: string, limit?: number) {
-  let lastId: number | null = null;
-  let totalFetched = 0;
-
-  while (true) {
-    let query = supabase
-      .from("revised_quotations")
-      .select("*")
-      .eq("referenceid", referenceid)
-      .order("id", { ascending: false })
-      .limit(BATCH_SIZE);
-
-    if (lastId !== null) query = query.lt("id", lastId);
-    if (fromDate) query = query.gte("date_created", fromDate);
-    if (toDate) query = query.lte("date_created", toDate);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    yield data;
-    totalFetched += data.length;
-
-    // Stop if we reached the limit
-    if (limit && totalFetched >= limit) break;
-    lastId = data[data.length - 1].id;
-  }
-}
-
-// Generator for signatories batches
-async function* fetchSignatoriesBatches(referenceid: string, quotationNumbers: string[]) {
-  if (!quotationNumbers.length) return;
-  let offset = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("signatories")
-      .select("*")
-      .eq("referenceid", referenceid)
-      .in("quotation_number", quotationNumbers)
-      .range(offset, offset + BATCH_SIZE - 1);
-
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    yield data;
-    offset += BATCH_SIZE;
-  }
-}
+// Admin reference ID — sees ALL records from ALL users with no status restriction
+const ADMIN_REFERENCE_ID = "JG-NCR-920587";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { 
-    referenceid, 
-    from, 
-    to, 
+  const {
+    referenceid,
+    from,
+    to,
     limit = "10",
     page = "1",
     search,
@@ -99,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     source,
     type_client,
     call_status,
-    quotation_status
+    quotation_status,
   } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
@@ -111,21 +29,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const limitNum = Math.min(Math.max(1, parseInt(typeof limit === "string" ? limit : "10", 10)), 50);
   const offset = (pageNum - 1) * limitNum;
 
+  // Admin view: sees ALL records from ALL users, no status restriction
+  const isAdminView = referenceid === ADMIN_REFERENCE_ID;
+
   try {
-    // Build base query for history table
+    // Build base query
     let query = supabase
       .from("history")
       .select("*", { count: "exact" })
-      .eq("referenceid", referenceid)
-      .eq("status", "Quote-Done") // Only show Quote-Done activities
       .order("date_updated", { ascending: false })
       .order("date_created", { ascending: false });
+
+    if (isAdminView) {
+      // Admin: no referenceid filter, no status filter — sees everything
+      query = query
+        .eq("status", "Quote-Done");
+    } else {
+      // Regular user: own data only, Quote-Done status only
+      query = query
+        .eq("referenceid", referenceid)
+        .eq("status", "Quote-Done");
+    }
 
     // Apply search filter
     if (search && typeof search === "string") {
       const searchTerm = search.trim();
       if (searchTerm) {
-        query = query.or(`company_name.ilike.%${searchTerm}%,quotation_number.ilike.%${searchTerm}%,activity_reference_number.ilike.%${searchTerm}%,contact_person.ilike.%${searchTerm}%,contact_number.ilike.%${searchTerm}%,email_address.ilike.%${searchTerm}%,remarks.ilike.%${searchTerm}%`);
+        query = query.or(
+          `company_name.ilike.%${searchTerm}%,quotation_number.ilike.%${searchTerm}%,activity_reference_number.ilike.%${searchTerm}%,contact_person.ilike.%${searchTerm}%,contact_number.ilike.%${searchTerm}%,email_address.ilike.%${searchTerm}%,remarks.ilike.%${searchTerm}%`
+        );
       }
     }
 
@@ -169,96 +101,99 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Fetch revised quotations for PDF configuration
-    const quotationNumbers = historyData?.map(item => item.quotation_number).filter(Boolean) || [];
-    const { data: revisedData, error: revisedError } = await supabase
+    const quotationNumbers = historyData?.map((item) => item.quotation_number).filter(Boolean) || [];
+
+    // For admin, fetch revised_quotations without referenceid restriction
+    let revisedQuery = supabase
       .from("revised_quotations")
       .select("*")
-      .eq("referenceid", referenceid)
       .in("quotation_number", quotationNumbers.length > 0 ? quotationNumbers : [""]);
-
+    if (!isAdminView) {
+      revisedQuery = revisedQuery.eq("referenceid", referenceid);
+    }
+    const { data: revisedData, error: revisedError } = await revisedQuery;
     if (revisedError) {
       console.error("Revised quotations query error:", revisedError);
     }
 
-    // Fetch signatories
-    const { data: signatoryData, error: signatoryError } = await supabase
+    // For admin, fetch signatories without referenceid restriction
+    let signatoryQuery = supabase
       .from("signatories")
       .select("*")
-      .eq("referenceid", referenceid)
       .in("quotation_number", quotationNumbers.length > 0 ? quotationNumbers : [""]);
-
+    if (!isAdminView) {
+      signatoryQuery = signatoryQuery.eq("referenceid", referenceid);
+    }
+    const { data: signatoryData, error: signatoryError } = await signatoryQuery;
     if (signatoryError) {
       console.error("Signatories query error:", signatoryError);
     }
 
     // Create maps for quick lookup
     const revisedMap = new Map();
-    (revisedData || []).forEach(item => {
+    (revisedData || []).forEach((item) => {
       revisedMap.set(item.activity_reference_number || item.quotation_number, item);
     });
 
     const signaturesMap = new Map();
-    (signatoryData || []).forEach(item => {
+    (signatoryData || []).forEach((item) => {
       signaturesMap.set(item.quotation_number, item);
     });
 
     // Filter out items without meaningful data and merge with additional data
-    const filteredData = (historyData || []).filter(item => {
-      if (!item || typeof item !== "object") return false;
-      
-      const checks = [
-        "activity_reference_number", "referenceid", "quotation_number", "quotation_amount"
-      ];
-      return checks.some((col) => {
-        try {
-          const val = item[col as keyof typeof item];
-          if (val === null || val === undefined) return false;
-          if (typeof val === "string") return val.trim() !== "" && val.trim() !== "-";
-          if (typeof val === "number") return !isNaN(val);
-          return Boolean(val);
-        } catch (err) {
-          return false;
-        }
+    const filteredData = (historyData || [])
+      .filter((item) => {
+        if (!item || typeof item !== "object") return false;
+        const checks = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
+        return checks.some((col) => {
+          try {
+            const val = item[col as keyof typeof item];
+            if (val === null || val === undefined) return false;
+            if (typeof val === "string") return val.trim() !== "" && val.trim() !== "-";
+            if (typeof val === "number") return !isNaN(val);
+            return Boolean(val);
+          } catch {
+            return false;
+          }
+        });
+      })
+      .map((item) => {
+        const revised = revisedMap.get(item.activity_reference_number || item.quotation_number);
+        const sig = signaturesMap.get(item.quotation_number);
+
+        return {
+          ...item,
+          // PDF configuration from revised_quotations
+          hide_discount_in_preview: revised?.hide_discount_in_preview ?? item.hide_discount_in_preview ?? false,
+          show_discount_columns: revised?.show_discount_columns ?? item.show_discount_columns ?? false,
+          show_summary_discounts: revised?.show_summary_discounts ?? item.show_summary_discounts ?? false,
+          show_profit_margins: revised?.show_profit_margins ?? item.show_profit_margins ?? false,
+          margin_alert_threshold: revised?.margin_alert_threshold ?? item.margin_alert_threshold ?? 0,
+          show_margin_alerts: revised?.show_margin_alerts ?? item.show_margin_alerts ?? false,
+          product_view_mode: revised?.product_view_mode ?? item.product_view_mode ?? "list",
+          visible_columns: revised?.visible_columns ?? item.visible_columns ?? null,
+          // Signatory data
+          agent_signature: sig?.agent_signature || null,
+          agent_contact_number: sig?.agent_contact_number || null,
+          agent_email_address: sig?.agent_email_address || null,
+          tsm_signature: sig?.tsm_signature || null,
+          tsm_contact_number: sig?.tsm_contact_number || null,
+          tsm_email_address: sig?.tsm_email_address || null,
+          manager_signature: sig?.manager_signature || null,
+          manager_contact_number: sig?.manager_contact_number || null,
+          manager_email_address: sig?.manager_email_address || null,
+          tsm_approval_date: sig?.tsm_approval_date || null,
+          tsm_remarks: sig?.tsm_remarks || null,
+          manager_remarks: sig?.manager_remarks || null,
+          manager_approval_date: sig?.manager_approval_date || null,
+        };
       });
-    }).map(item => {
-      // Merge with revised quotation data for PDF config
-      const revised = revisedMap.get(item.activity_reference_number || item.quotation_number);
-      const sig = signaturesMap.get(item.quotation_number);
-      
-      return {
-        ...item,
-        // PDF configuration from revised_quotations
-        hide_discount_in_preview: revised?.hide_discount_in_preview ?? item.hide_discount_in_preview ?? false,
-        show_discount_columns: revised?.show_discount_columns ?? item.show_discount_columns ?? false,
-        show_summary_discounts: revised?.show_summary_discounts ?? item.show_summary_discounts ?? false,
-        show_profit_margins: revised?.show_profit_margins ?? item.show_profit_margins ?? false,
-        margin_alert_threshold: revised?.margin_alert_threshold ?? item.margin_alert_threshold ?? 0,
-        show_margin_alerts: revised?.show_margin_alerts ?? item.show_margin_alerts ?? false,
-        product_view_mode: revised?.product_view_mode ?? item.product_view_mode ?? 'list',
-        visible_columns: revised?.visible_columns ?? item.visible_columns ?? null,
-        // Signatory data
-        agent_signature: sig?.agent_signature || null,
-        agent_contact_number: sig?.agent_contact_number || null,
-        agent_email_address: sig?.agent_email_address || null,
-        tsm_signature: sig?.tsm_signature || null,
-        tsm_contact_number: sig?.tsm_contact_number || null,
-        tsm_email_address: sig?.tsm_email_address || null,
-        manager_signature: sig?.manager_signature || null,
-        manager_contact_number: sig?.manager_contact_number || null,
-        manager_email_address: sig?.manager_email_address || null,
-        tsm_approval_date: sig?.tsm_approval_date || null,
-        tsm_remarks: sig?.tsm_remarks || null,
-        manager_remarks: sig?.manager_remarks || null,
-        manager_approval_date: sig?.manager_approval_date || null,
-      };
-    });
 
     // Calculate pagination info
     const totalPages = Math.ceil((totalCount || 0) / limitNum);
     const hasMore = pageNum < totalPages;
 
-    // Validate and sanitize response data
-    const safeResponse = {
+    return res.status(200).json({
       activities: filteredData || [],
       totalCount: Math.max(0, totalCount || 0),
       totalPages: Math.max(0, totalPages),
@@ -266,28 +201,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       itemsPerPage: Math.max(1, limitNum),
       hasMore: Boolean(hasMore),
       offset: Math.max(0, offset),
+      isAdminView,
       search_applied: {
-        query: typeof search === 'string' ? search.trim() : null,
+        query: typeof search === "string" ? search.trim() : null,
         filters: {
-          status: typeof status === 'string' ? status : null,
-          type_activity: typeof type_activity === 'string' ? type_activity : null,
-          source: typeof source === 'string' ? source : null,
-          type_client: typeof type_client === 'string' ? type_client : null,
-          call_status: typeof call_status === 'string' ? call_status : null,
-          quotation_status: typeof quotation_status === 'string' ? quotation_status : null,
+          status: typeof status === "string" ? status : null,
+          type_activity: typeof type_activity === "string" ? type_activity : null,
+          source: typeof source === "string" ? source : null,
+          type_client: typeof type_client === "string" ? type_client : null,
+          call_status: typeof call_status === "string" ? call_status : null,
+          quotation_status: typeof quotation_status === "string" ? quotation_status : null,
           date_range: {
             from: from || null,
-            to: to || null
-          }
-        }
+            to: to || null,
+          },
+        },
       },
-      cached: false
-    };
-
-    return res.status(200).json(safeResponse);
+      cached: false,
+    });
   } catch (err: any) {
     console.error("Server error:", err);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: err.message || "Server error",
       activities: [],
       totalCount: 0,
@@ -295,7 +229,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       currentPage: 1,
       itemsPerPage: 10,
       hasMore: false,
-      offset: 0
+      offset: 0,
     });
   }
 }

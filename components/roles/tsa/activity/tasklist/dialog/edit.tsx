@@ -165,6 +165,47 @@ export default function TaskListEditDialog({
 
   const [formData, setFormData] = useState<Partial<Completed>>(() => buildInitial(item));
 
+  const [tableStyles, setTableStyles] = useState({
+    table_bg: "#ffffff",
+    table_border: "#111111",
+    table_border_radius: "0",
+    tr_border: "#d1d5db",
+    tr_hover_bg: "#f3f4f6",
+    th_bg: "#1f1f1f",
+    th_text: "#ffffff",
+    th_border: "#111111",
+    th_padding: "14",
+    th_font_size: "11",
+    td_text: "#111827",
+    td_border: "#e5e7eb",
+    td_padding: "14",
+    td_font_size: "12",
+    tfoot_bg: "#1f1f1f",
+    tfoot_text: "#ffffff",
+    tfoot_border: "#111111",
+    tfoot_padding: "12",
+    tfoot_font_size: "12",
+    pagination_bg: "#1f1f1f",
+    pagination_text: "#d1d5db",
+    pagination_radius: "8",
+    pagination_border: "#d1d5db",
+    toolbar_bg: "#1f1f1f",
+    toolbar_border: "#111111",
+    toolbar_btn_bg: "rgba(255,255,255,0.08)",
+    toolbar_btn_text: "#ffffff",
+    toolbar_input_bg: "rgba(255,255,255,0.08)",
+    toolbar_btn_border: "#3f3f3f",
+    toolbar_input_text: "#ffffff",
+    toolbar_input_border: "#3f3f3f",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((r) => r.json())
+      .then((d) => { if (d?.table_styles) setTableStyles(d.table_styles); })
+      .catch(() => { });
+  }, []);
+
   // FIX: reset form when item changes (dialog reused for different rows)
   useEffect(() => {
     setFormData(buildInitial(item));
@@ -177,20 +218,20 @@ export default function TaskListEditDialog({
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
-    
+
     // Debug: Log what we're sending
     console.log("Saving edit:", { id: item.id, formData });
-    
+
     try {
       const res = await fetch(`/api/activity/tsa/historical/update?id=${item.id}`, {
         method: "PUT",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-CSRF-Protection": "1"
         },
         body: JSON.stringify(formData),
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         console.error("Update failed:", errorData);
@@ -228,16 +269,21 @@ export default function TaskListEditDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg rounded-none p-0 overflow-hidden gap-0">
+      <DialogContent className="max-w-lg p-0 overflow-hidden"
+        style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
 
         {/* ── Header ──────────────────────────────────────────────────── */}
-        <div className="bg-zinc-900 px-6 pt-5 pb-4">
+        <div className="px-6 pt-5 pb-4"
+          style={{
+            color: tableStyles.th_text,
+            backgroundColor: tableStyles.th_bg,
+          }}>
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
               <div className="bg-white/10 rounded-full p-1.5">
-                <PenLine className="h-4 w-4 text-white" />
+                <PenLine className="h-4 w-4" />
               </div>
-              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+              <DialogTitle className="text-sm font-bold tracking-wide uppercase">
                 Edit Activity
               </DialogTitle>
             </div>
@@ -256,7 +302,9 @@ export default function TaskListEditDialog({
               <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
                 Activity Type
               </Label>
-              <div className="border border-zinc-200 rounded px-3 py-2 bg-zinc-50 text-xs text-zinc-600 font-mono">
+              <div 
+              className="border border-zinc-200 px-3 py-2 bg-zinc-50 text-xs text-zinc-600 font-mono"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                 {item.type_activity}
               </div>
             </div>
@@ -268,7 +316,8 @@ export default function TaskListEditDialog({
               <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
                 Company Name
               </Label>
-              <div className="border border-zinc-200 rounded px-3 py-2 bg-zinc-50 text-xs text-zinc-700 font-bold">
+              <div className="border border-zinc-200 px-3 py-2 bg-zinc-50 text-xs text-zinc-700 font-bold"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                 {item.company_name}
               </div>
             </div>
@@ -280,7 +329,8 @@ export default function TaskListEditDialog({
               Remarks
             </Label>
             <Textarea
-              className="w-full rounded-none text-xs resize-none"
+              className="w-full text-xs resize-none"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
               rows={3}
               value={String(formData.remarks ?? "")}
               onChange={(e) => handleChange("remarks", e.target.value)}
@@ -306,7 +356,7 @@ export default function TaskListEditDialog({
                     value={String(value ?? "")}
                     onValueChange={(val) => handleChange(key as keyof Completed, val)}
                   >
-                    <SelectTrigger className="w-full rounded-none text-xs">
+                    <SelectTrigger className="w-full text-xs" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                       <SelectValue placeholder="Select call status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -331,7 +381,7 @@ export default function TaskListEditDialog({
                     value={String(value ?? "")}
                     onValueChange={(val) => handleChange("quotation_status", val)}
                   >
-                    <SelectTrigger className="w-full rounded-none text-xs">
+                    <SelectTrigger className="w-full text-xs" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                       <SelectValue placeholder="Select quotation status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -353,7 +403,8 @@ export default function TaskListEditDialog({
                   {getLabel(key)}
                 </Label>
                 <Input
-                  className="w-full rounded-none text-xs"
+                  className="w-full text-xs"
+                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                   type={getInputType(key)}
                   value={String(value ?? "")}
                   onChange={(e) => handleChange(key as keyof Completed, e.target.value)}
@@ -367,14 +418,16 @@ export default function TaskListEditDialog({
         <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
           <Button
             variant="outline"
-            className="rounded-none flex-1 text-xs h-10"
+            className="flex-1 text-xs h-10"
+            style={{ borderRadius: tableStyles.pagination_radius }}
             onClick={onClose}
             disabled={saving}
           >
             Cancel
           </Button>
           <Button
-            className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+            className="flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+            style={{ borderRadius: tableStyles.pagination_radius }}
             onClick={handleSave}
             disabled={saving}
           >

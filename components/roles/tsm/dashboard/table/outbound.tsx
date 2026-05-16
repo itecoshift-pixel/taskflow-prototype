@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
@@ -50,6 +50,11 @@ const convBadge = (count: number) => (
   <span className="ml-1 text-green-600 text-[12px] font-medium">{count}</span>
 );
 
+/* ================= VALIDATION ================= */
+
+const isFinitePositive = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0;
+
 /* ================= COMPONENT ================= */
 
 export function OutboundCallsTableCard({
@@ -58,6 +63,26 @@ export function OutboundCallsTableCard({
   dateCreatedFilterRange,
 }: OutboundCardProps) {
   const [showComputation, setShowComputation] = useState(false);
+  const [outboundQuota, setOutboundQuota] = useState<number>(20);
+  const [quotaLoading, setQuotaLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetch("/api/outbound-quota")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isFinitePositive(data?.outbound_quota)) {
+          setOutboundQuota(data.outbound_quota);
+        } else {
+          console.warn("outbound-quota: received invalid value, falling back to 20", data);
+        }
+      })
+      .catch((err) => {
+        console.warn("outbound-quota: fetch failed, falling back to 20", err);
+      })
+      .finally(() => {
+        setQuotaLoading(false);
+      });
+  }, []);
 
   /* ---- Agent map ---- */
   const agentMap = useMemo(() => {
@@ -132,7 +157,7 @@ export function OutboundCallsTableCard({
     return 22; // Default working days per month (excluding Sundays)
   }, [dateCreatedFilterRange]);
 
-  const obTarget = 20 * daysCount;
+  const obTarget = outboundQuota * daysCount;
 
   /* ---- Step 3: Compute per-agent stats ---- */
   const statsByAgent = useMemo(() => {
@@ -481,7 +506,9 @@ export function OutboundCallsTableCard({
                       </TableCell>
 
                       {/* OB Target */}
-                      <TableCell className="text-center text-gray-600">{obTarget}</TableCell>
+                      <TableCell className="text-center text-gray-600">
+                        {quotaLoading ? "…" : obTarget}
+                      </TableCell>
 
                       {/* Successful Calls */}
                       <TableCell className="text-center font-semibold text-gray-800">
@@ -546,7 +573,9 @@ export function OutboundCallsTableCard({
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  <TableCell className="text-center text-gray-600">{obTarget * statsByAgent.length}</TableCell>
+                  <TableCell className="text-center text-gray-600">
+                    {quotaLoading ? "…" : obTarget * statsByAgent.length}
+                  </TableCell>
                   <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>
                   <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>
                   <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>
@@ -569,7 +598,7 @@ export function OutboundCallsTableCard({
           <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
             <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
             <p><strong>Base data:</strong> All records where <code>source = "Outbound - Touchbase"</code> AND <code>call_status = "Successful"</code> (date filter applied here).</p>
-            <p><strong>OB Target:</strong> 20 × number of days in selected range <em>(Sundays excluded)</em> (default: 22 working days = 440).</p>
+            <p><strong>OB Target:</strong> {outboundQuota} × number of days in selected range <em>(Sundays excluded)</em> (default: 22 working days = {outboundQuota * 22}).</p>
             <p><strong>Achievement:</strong> (Successful Calls ÷ OB Target) × 100%</p>
             <p><strong>Calls → Quote %:</strong> Count of unique <code>activity_reference_number</code>s (from OB calls) that have ANY activity with <code>status = "Quote - Done"</code> in the full history ÷ Successful Calls</p>
             <p><strong>Quote → SO %:</strong> Count of unique refs with <code>status = "SO-Done"</code> ÷ Count of Quoted refs</p>

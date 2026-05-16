@@ -63,6 +63,7 @@ function DashboardContent() {
     >(undefined);
 
     const queryUserId = searchParams?.get("id") ?? "";
+    const querySearch = searchParams?.get("search") ?? "";
 
     // Sync URL query param with userId context
     useEffect(() => {
@@ -181,7 +182,8 @@ function DashboardContent() {
                                 referenceid={userDetails.referenceid}
                                 target_quota={userDetails.target_quota}
                                 dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                                initialSearch={querySearch} />
                         </div>
                     </main>
                 </SidebarInset>

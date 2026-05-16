@@ -39,6 +39,7 @@ interface Account {
   company_group: string;
   next_available_date: string;
   tin_number?: string;
+  account_reference_number: string;
 }
 
 interface UserDetails {

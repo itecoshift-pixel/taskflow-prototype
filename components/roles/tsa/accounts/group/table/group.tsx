@@ -106,6 +106,56 @@ export function AccountsTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [dialogSearch, setDialogSearch] = useState("");
 
+  // ── Table styles from API ─────────────────────────────────────────────────
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f9fafb",
+    layout: "datatable",
+    td_text: "#111827",
+    th_text: "#374151",
+    table_bg: "#ffffff",
+    tfoot_bg: "#ffffff",
+    td_border: "#f3f4f6",
+    th_border: "#e5e7eb",
+    tr_border: "#f3f4f6",
+    td_padding: "12",
+    tfoot_text: "#6b7280",
+    th_padding: "12",
+    toolbar_bg: "#f9fafb",
+    tr_hover_bg: "#f9fafb",
+    table_border: "#e5e7eb",
+    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    td_font_size: "13",
+    tfoot_border: "#e5e7eb",
+    th_font_size: "12",
+    pagination_bg: "#ffffff",
+    tfoot_padding: "12",
+    th_font_weight: "600",
+    toolbar_border: "#e5e7eb",
+    toolbar_btn_bg: "#ffffff",
+    pagination_text: "#374151",
+    tfoot_font_size: "12",
+    toolbar_btn_text: "#374151",
+    toolbar_input_bg: "#ffffff",
+    pagination_border: "#d1d5db",
+    pagination_radius: "8",
+    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+    th_letter_spacing: "0.01em",
+    toolbar_btn_border: "#d1d5db",
+    toolbar_input_text: "#374151",
+    table_border_radius: "16",
+    pagination_active_bg: "#3b82f6",
+    toolbar_input_border: "#d1d5db",
+    pagination_active_text: "#ffffff"
+
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => { });
+  }, []);
+
   // ── Effects ──
   useEffect(() => {
     setLocalPosts(posts);
@@ -181,7 +231,7 @@ export function AccountsTable({
         accessorKey: "industry",
         header: ({ column }) => (
           <button
-            className="flex items-center text-xs font-semibold text-slate-600 hover:text-slate-900 uppercase tracking-wide"
+            className="flex items-center uppercase tracking-wide"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
             Industry
@@ -190,7 +240,11 @@ export function AccountsTable({
         ),
         cell: (info) => (
           <button
-            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+            style={{
+              color: tableStyles.td_text,
+              fontSize: `${tableStyles.td_font_size}px`,
+              borderColor: tableStyles.td_border,
+            }}
             onClick={() => openGroupDialog(info.row.original)}
           >
             {String(info.getValue())}
@@ -202,7 +256,7 @@ export function AccountsTable({
         id: "number_of_companies",
         header: ({ column }) => (
           <button
-            className="flex items-center text-xs font-semibold text-slate-600 hover:text-slate-900 uppercase tracking-wide"
+            className="flex items-center uppercase tracking-wide"
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           >
             Companies
@@ -218,7 +272,7 @@ export function AccountsTable({
       {
         id: "region",
         header: () => (
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+          <span className="flex items-center uppercase tracking-wide">
             Regions
           </span>
         ),
@@ -249,7 +303,7 @@ export function AccountsTable({
       {
         id: "action",
         header: () => (
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+          <span className="flex items-center uppercase tracking-wide">
             Action
           </span>
         ),
@@ -342,12 +396,30 @@ export function AccountsTable({
       </div>
 
       {/* ── Table ── */}
-      <div className="rounded-none border border-slate-200 overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+      <div
+        className="overflow-hidden border"
+        style={{
+          borderColor: tableStyles.table_border,
+          borderRadius: `${tableStyles.table_border_radius}px`,
+          backgroundColor: tableStyles.table_bg,
+        }}
+      >
+        <div
+          className="px-4 py-3 border-b flex items-center justify-between"
+          style={{ borderColor: tableStyles.th_border, backgroundColor: tableStyles.th_bg }}
+        >
+          <span
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: tableStyles.th_text }}
+          >
             Industries
           </span>
-          <Badge variant="outline" className="text-xs font-mono">
+          <Badge variant="outline" style={{
+            color: tableStyles.th_text,
+            fontSize: `${tableStyles.th_font_size}px`,
+            padding: `${tableStyles.td_padding}px 16px`,
+            borderColor: tableStyles.td_border,
+          }} className="uppercase">
             {filteredGroupedPosts.length} groups
           </Badge>
         </div>
@@ -355,9 +427,22 @@ export function AccountsTable({
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="bg-white border-b border-slate-100 hover:bg-white">
+              <TableRow
+                key={hg.id}
+                style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}
+              >
                 {hg.headers.map((header) => (
-                  <TableHead key={header.id} className="py-3 px-4">
+                  <TableHead
+                    key={header.id}
+                    className="font-bold uppercase tracking-wider"
+                    style={{
+                      color: tableStyles.th_text,
+                      fontSize: `${tableStyles.th_font_size}px`,
+                      padding: `${tableStyles.th_padding}px 16px`,
+                      borderColor: tableStyles.th_border,
+                      backgroundColor: tableStyles.th_bg,
+                    }}
+                  >
                     {flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
@@ -368,7 +453,11 @@ export function AccountsTable({
           <TableBody>
             {table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-12 text-slate-400">
+                <TableCell
+                  colSpan={columns.length}
+                  className="text-center py-12"
+                  style={{ color: tableStyles.td_text }}
+                >
                   <div className="flex flex-col items-center gap-2">
                     <Building2 className="h-8 w-8 opacity-30" />
                     <p className="text-sm">No industries found</p>
@@ -379,10 +468,26 @@ export function AccountsTable({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  className="hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors"
+                  className="transition-colors"
+                  style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg;
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-3 px-4">
+                    <TableCell
+                      key={cell.id}
+                      className="align-top"
+                      style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 16px`,
+                        borderColor: tableStyles.td_border,
+                      }}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -393,7 +498,10 @@ export function AccountsTable({
         </Table>
 
         {/* ── Pagination ── */}
-        <div className="px-4 py-3 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div
+          className="px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-3"
+          style={{ borderColor: tableStyles.th_border, backgroundColor: tableStyles.table_bg }}
+        >
           <p className="text-xs text-slate-500">
             Page{" "}
             <span className="font-medium text-slate-700">
@@ -454,7 +562,12 @@ export function AccountsTable({
           <DialogHeader className="px-6 pt-5 pb-4 border-b border-slate-100 flex-shrink-0">
             <div className="flex items-start justify-between">
               <div>
-                <DialogTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <DialogTitle style={{
+                  color: tableStyles.td_text,
+                  fontSize: `${tableStyles.td_font_size}px`,
+                  padding: `${tableStyles.td_padding}px 16px`,
+                  borderColor: tableStyles.td_border,
+                }}>
                   <Building2 className="h-4 w-4 text-slate-500" />
                   {selectedGroup?.industry}
                 </DialogTitle>
@@ -554,10 +667,10 @@ export function AccountsTable({
                         <p className="text-xs font-medium text-slate-600 mt-0.5">
                           {acc.date_created
                             ? new Date(acc.date_created).toLocaleDateString("en-PH", {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })
                             : "—"}
                         </p>
                       </div>

@@ -274,6 +274,55 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [highlightedArn, setHighlightedArn] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f9fafb",
+    layout: "datatable",
+    td_text: "#111827",
+    th_text: "#374151",
+    table_bg: "#ffffff",
+    tfoot_bg: "#ffffff",
+    td_border: "#f3f4f6",
+    th_border: "#e5e7eb",
+    tr_border: "#f3f4f6",
+    td_padding: "12",
+    tfoot_text: "#6b7280",
+    th_padding: "12",
+    toolbar_bg: "#f9fafb",
+    tr_hover_bg: "#f9fafb",
+    table_border: "#e5e7eb",
+    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    td_font_size: "13",
+    tfoot_border: "#e5e7eb",
+    th_font_size: "12",
+    pagination_bg: "#ffffff",
+    tfoot_padding: "12",
+    th_font_weight: "600",
+    toolbar_border: "#e5e7eb",
+    toolbar_btn_bg: "#ffffff",
+    pagination_text: "#374151",
+    tfoot_font_size: "12",
+    toolbar_btn_text: "#374151",
+    toolbar_input_bg: "#ffffff",
+    pagination_border: "#d1d5db",
+    pagination_radius: "8",
+    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+    th_letter_spacing: "0.01em",
+    toolbar_btn_border: "#d1d5db",
+    toolbar_input_text: "#374151",
+    table_border_radius: "16",
+    pagination_active_bg: "#3b82f6",
+    toolbar_input_border: "#d1d5db",
+    pagination_active_text: "#ffffff"
+
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => { });
+  }, []);
+
   // ── Inline status edit state ─────────────────────────────────────────────
   const [editStatusMode, setEditStatusMode] = useState(false);
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
@@ -337,12 +386,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       url.searchParams.append("referenceid", referenceid);
       url.searchParams.append("page", String(page));
       url.searchParams.append("limit", String(itemsPerPage));
-      
+
       // Add search term if present
       if (searchTerm.trim()) {
         url.searchParams.append("search", searchTerm.trim());
       }
-      
+
       // Add filters
       if (filterStatus !== "all") url.searchParams.append("status", filterStatus);
       if (filterTypeActivity !== "all") url.searchParams.append("type_activity", filterTypeActivity);
@@ -350,7 +399,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       if (filterTypeClient !== "all") url.searchParams.append("type_client", filterTypeClient);
       if (filterCallStatus !== "all") url.searchParams.append("call_status", filterCallStatus);
       if (filterQuotationStatus !== "all") url.searchParams.append("quotation_status", filterQuotationStatus);
-      
+
       if (from && to) {
         url.searchParams.append("from", from);
         url.searchParams.append("to", to);
@@ -359,7 +408,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed to fetch activities");
       const data = await res.json();
-      
+
       if (loadMore && page > 1) {
         // Append new data for load more
         setActivities(prev => [...prev, ...(data.activities || [])]);
@@ -367,7 +416,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         // Replace data for initial load or new search
         setActivities(data.activities || []);
       }
-      
+
       // Update pagination info
       setTotalCount(data.totalCount || 0);
       setHasMore(data.hasMore || false);
@@ -610,7 +659,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     try {
       let newStatus: string | null = null;
       let reason = '';
-      
+
       // Business rules for status progression
       switch (trigger) {
         case 'quotation':
@@ -619,14 +668,14 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             reason = 'Quotation marked for SO conversion';
           }
           break;
-          
+
         case 'so':
           if (item.so_number && item.so_amount && item.status === 'Quote-Done') {
             newStatus = 'SO-Done';
             reason = 'Sales Order created';
           }
           break;
-          
+
         case 'delivery':
           if (item.dr_number && item.delivery_date && item.status === 'SO-Done') {
             newStatus = 'Delivered';
@@ -634,11 +683,11 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           }
           break;
       }
-      
+
       if (newStatus && newStatus !== item.status) {
         const res = await fetch('/api/activity/tsa/historical/auto-update-status', {
           method: 'PUT',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Protection': '1'
           },
@@ -651,12 +700,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
             autoUpdate: true
           })
         });
-        
+
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData?.error || 'Failed to auto-update status');
         }
-        
+
         // Show notification for auto-update
         sileo.success({
           title: 'Status Auto-Updated',
@@ -666,7 +715,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           fill: 'black',
           styles: { title: 'text-white!', description: 'text-white' },
         });
-        
+
         // Refresh data
         fetchActivities();
       }
@@ -700,17 +749,17 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     try {
       const res = await fetch("/api/activity/tsa/historical/update-quotation-status", {
         method: "PUT",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-CSRF-Protection": "1"
         },
-        body: JSON.stringify({ 
-          id, 
-          quotation_status: main.trim(), 
-          quotation_status_sub: sub?.trim() || "" 
+        body: JSON.stringify({
+          id,
+          quotation_status: main.trim(),
+          quotation_status_sub: sub?.trim() || ""
         }),
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData?.error || "Failed to update");
@@ -721,7 +770,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       if (updatedItem) {
         // Create updated item object
         const itemWithNewStatus = { ...updatedItem, quotation_status: main.trim() };
-        
+
         // Trigger status progression automation
         await autoUpdateStatus(itemWithNewStatus, 'quotation');
       }
@@ -886,15 +935,22 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       )}
 
       {activities.length > 0 && (
-        <div className="bg-white border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+        <div
+          className="overflow-x-auto border"
+          style={{
+            borderColor: tableStyles.table_border,
+            borderRadius: `${tableStyles.table_border_radius}px`,
+            backgroundColor: tableStyles.table_bg,
+          }}
+        >
+          <div className="px-4 py-3 flex items-center justify-between" style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg, color: tableStyles.th_text, }}>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">Quotation History</span>
-              <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono border-zinc-200">
+              <span className="text-xs font-bold uppercase tracking-widest">Quotation History</span>
+              <Badge variant="outline" className="rounded-none bg-white text-[10px] font-mono">
                 {activities.length}
               </Badge>
               {totalCount > activities.length && (
-                <span className="text-[10px] text-zinc-400">
+                <span className="text-[10px]">
                   Showing {activities.length} of {totalCount} total
                 </span>
               )}
@@ -902,10 +958,16 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
           </div>
 
           <div className="overflow-x-auto">
-            <Table className="text-xs">
-              <TableHeader className="bg-zinc-50/50">
-                <TableRow className="hover:bg-transparent border-b border-zinc-200">
-                  <TableHead className="w-10 h-11 text-center">
+            <Table>
+              <TableHeader>
+                <TableRow style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">
                     <Checkbox
                       checked={selectedIds.size === activities.length && activities.length > 0}
                       onCheckedChange={(checked) => {
@@ -918,17 +980,83 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                       className="rounded-none h-4 w-4"
                     />
                   </TableHead>
-                  <TableHead className="w-20 text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Edit</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation #</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation Status</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quotation Remarks</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Status</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Duration</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Company</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Timeline</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Feedback / Notes</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-right">Amount</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 text-center">Updated</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Edit</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Quotation #</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Quotation Status</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Quotation Remarks</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Status</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Duration</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Company</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Timeline</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Feedback / Notes</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Amount</TableHead>
+                  <TableHead style={{
+                    color: tableStyles.th_text,
+                    fontSize: `${tableStyles.th_font_size}px`,
+                    padding: `${tableStyles.th_padding}px 12px`,
+                    borderColor: tableStyles.th_border,
+                    backgroundColor: tableStyles.th_bg,
+                  }} className="uppercase font-bold">Updated</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -952,8 +1080,20 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         }
                       }}
                       className={`group border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50 transition-colors ${isHighlighted ? "rq-highlight-row" : ""}`}
+                      style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg;
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg;
+                      }}
                     >
-                      <TableCell className="text-center">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         <Checkbox
                           className="rounded-none h-4 w-4"
                           checked={isSelected}
@@ -961,7 +1101,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         />
                       </TableCell>
 
-                      <TableCell className="text-center">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -973,11 +1118,21 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         </Button>
                       </TableCell>
 
-                      <TableCell className="font-mono text-[11px] font-bold text-zinc-700 uppercase">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {displayValue(item.quotation_number)}
                       </TableCell>
 
-                      <TableCell className="px-3">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {item.status === "Quote-Done" ? (
                           <Select
                             value={`${item.quotation_status || ""}__${item.quotation_status_sub || ""}`}
@@ -1009,18 +1164,26 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         )}
                       </TableCell>
 
-                      <TableCell className="px-3 capitalize">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         <div className="flex items-center gap-1">
                           {displayValue(item.quotation_status_sub)}
                           {item.quotation_status === 'Convert to SO' && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-800">
-                              AUTO
-                            </span>
+                            "-"
                           )}
                         </div>
                       </TableCell>
 
-                      <TableCell className="text-center">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {editStatusMode ? (
                           <Input
                             className="h-7 text-[10px] w-28 uppercase font-bold border-blue-200 bg-blue-50/50 focus:ring-0 focus:border-blue-400 rounded-none mx-auto text-center"
@@ -1060,15 +1223,30 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         )}
                       </TableCell>
 
-                      <TableCell className="font-mono text-[10px] text-zinc-500">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {formatDuration(item.start_date, item.end_date)}
                       </TableCell>
 
-                      <TableCell className="font-bold text-zinc-800">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {item.company_name}
                       </TableCell>
 
-                      <TableCell className="text-[10px] text-zinc-500 leading-tight py-2">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {item.tsm_approval_date && (
                           <div className="flex items-center gap-1">
                             <span className="text-zinc-400 uppercase font-bold tracking-tighter">TSM:</span>
@@ -1084,17 +1262,32 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
                         {!item.tsm_approval_date && !item.manager_approval_date && <span className="text-zinc-300 italic">No activity logs</span>}
                       </TableCell>
 
-                      <TableCell className="text-right font-mono font-bold text-zinc-700">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {item.tsm_remarks || "—"}{item.manager_remarks}
                       </TableCell>
 
-                      <TableCell className="text-right font-mono font-bold text-zinc-700">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {item.quotation_amount ? (
                           `₱${parseFloat(String(item.quotation_amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                         ) : "—"}
                       </TableCell>
 
-                      <TableCell className="text-center font-mono text-[11px] text-zinc-400">
+                      <TableCell style={{
+                        color: tableStyles.td_text,
+                        fontSize: `${tableStyles.td_font_size}px`,
+                        padding: `${tableStyles.td_padding}px 12px`,
+                        borderColor: tableStyles.td_border,
+                      }}>
                         {new Date(item.date_updated!).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
                       </TableCell>
                     </TableRow>
@@ -1103,7 +1296,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
               </TableBody>
             </Table>
           </div>
-          
+
           {/* Load More Button */}
           {hasMore && (
             <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
@@ -48,6 +48,11 @@ const convBadge = (count: number) => (
   <span className="ml-1 text-green-600 text-xs font-medium">{count}</span>
 );
 
+/* ================= VALIDATION ================= */
+
+const isFinitePositive = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0;
+
 /* ================= COMPONENT ================= */
 
 export function OutboundCallsCard({
@@ -57,6 +62,40 @@ export function OutboundCallsCard({
   dateCreatedFilterRange,
 }: OutboundCardProps) {
   const [showComputation, setShowComputation] = useState(false);
+  const [outboundQuota, setOutboundQuota] = useState<number>(20);
+  const [quotaLoading, setQuotaLoading] = useState<boolean>(true);
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f8fafc", td_text: "#334155", th_text: "#475569",
+    table_bg: "#ffffff", td_border: "#e2e8f0", th_border: "#e2e8f0",
+    tr_border: "#e2e8f0", td_padding: "10", th_padding: "10",
+    tr_hover_bg: "#f1f5f9", table_border: "#e2e8f0", td_font_size: "12",
+    th_font_size: "11", table_border_radius: "6",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/outbound-quota")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isFinitePositive(data?.outbound_quota)) {
+          setOutboundQuota(data.outbound_quota);
+        } else {
+          console.warn("outbound-quota: received invalid value, falling back to 20", data);
+        }
+      })
+      .catch((err) => {
+        console.warn("outbound-quota: fetch failed, falling back to 20", err);
+      })
+      .finally(() => {
+        setQuotaLoading(false);
+      });
+  }, []);
 
   /* ---- Step 1: Successful OB ---- */
   const successfulOBCalls = useMemo(() => {
@@ -114,15 +153,20 @@ export function OutboundCallsCard({
   /* ---- Step 4: Target ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diff =
-        dateCreatedFilterRange.to.getTime() -
-        dateCreatedFilterRange.from.getTime();
-      return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+      const start = new Date(dateCreatedFilterRange.from);
+      const end = new Date(dateCreatedFilterRange.to);
+      let count = 0;
+      const current = new Date(start);
+      while (current <= end) {
+        if (current.getDay() !== 0) count++; // exclude Sundays
+        current.setDate(current.getDate() + 1);
+      }
+      return count || 1;
     }
-    return 26;
+    return 22; // default working days per month (excluding Sundays)
   }, [dateCreatedFilterRange]);
 
-  const obTarget = 20 * daysCount;
+  const obTarget = outboundQuota * daysCount;
 
   /* ---- Step 5: Stats ---- */
   const stats = useMemo(() => {
@@ -234,57 +278,74 @@ export function OutboundCallsCard({
         </div>
 
         {/* Stats */}
-        <div className="overflow-x-auto rounded-xl border border-gray-100">
+        <div
+          className="overflow-x-auto border"
+          style={{
+            borderColor: tableStyles.table_border,
+            borderRadius: `${tableStyles.table_border_radius}px`,
+            backgroundColor: tableStyles.table_bg,
+          }}
+        >
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 text-[11px]">
-                <TableHead className="text-center">OB Target</TableHead>
-                <TableHead className="text-center">Successful OB</TableHead>
-                <TableHead className="text-center">Achievement</TableHead>
-                <TableHead className="text-center">Quote Based on OB Successful</TableHead>
-                <TableHead className="text-center">Calls → Quote</TableHead>
-                <TableHead className="text-center">Quote Amount</TableHead>
-                <TableHead className="text-center">SO Based on OB Successful</TableHead>
-                <TableHead className="text-center">Quote → SO</TableHead>
-                <TableHead className="text-center">SI Based on OB Successful</TableHead>
-                <TableHead className="text-center">SO Amount</TableHead>
-                <TableHead className="text-center">SO → SI</TableHead>
-                <TableHead className="text-center">SI Amount</TableHead>
+              <TableRow
+                style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}
+              >
+                {[
+                  "OB Target", "Successful OB", "Achievement",
+                  "Quote Based on OB Successful", "Calls → Quote", "Quote Amount",
+                  "SO Based on OB Successful", "Quote → SO",
+                  "SI Based on OB Successful", "SO Amount", "SO → SI", "SI Amount",
+                ].map((label) => (
+                  <TableHead
+                    key={label}
+                    className="text-center font-bold uppercase tracking-wider whitespace-nowrap"
+                    style={{
+                      color: tableStyles.th_text,
+                      fontSize: `${tableStyles.th_font_size}px`,
+                      padding: `${tableStyles.th_padding}px 12px`,
+                      borderColor: tableStyles.th_border,
+                      backgroundColor: tableStyles.th_bg,
+                    }}
+                  >
+                    {label}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              <TableRow className="text-xs font-mono">
-                <TableCell className="text-center">{obTarget}</TableCell>
-                <TableCell className="text-center font-semibold">{stats.totalCalls}</TableCell>
-                <TableCell className="text-center">{stats.achievement.toFixed(2)}%</TableCell>
-                <TableCell className="text-center">
-                  {convBadge(stats.numQuotes)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {stats.callsToQuote}
-                </TableCell>
-                <TableCell className="text-center font-semibold text-green-600">
-                  ₱{stats.quoteAmount.toLocaleString()}
-                </TableCell>
-                <TableCell className="text-center">
-                  {convBadge(stats.numSO)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {stats.quoteToSO}
-                </TableCell>
-                <TableCell className="text-center">
-                  {convBadge(stats.numSI)}
-                </TableCell>
-                <TableCell className="text-center font-semibold text-blue-600">
-                  ₱{stats.soAmount.toLocaleString()}
-                </TableCell>
-                <TableCell className="text-center">
-                  {stats.soToSI}
-                </TableCell>
-                <TableCell className="text-center font-semibold text-emerald-600">
-                  ₱{stats.actualSales.toLocaleString()}
-                </TableCell>
+              <TableRow
+                className="font-mono"
+                style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
+              >
+                {[
+                  { content: quotaLoading ? "…" : obTarget },
+                  { content: stats.totalCalls, className: "font-semibold" },
+                  { content: `${stats.achievement.toFixed(2)}%` },
+                  { content: convBadge(stats.numQuotes) },
+                  { content: stats.callsToQuote },
+                  { content: `₱${stats.quoteAmount.toLocaleString()}`, className: "font-semibold text-green-600" },
+                  { content: convBadge(stats.numSO) },
+                  { content: stats.quoteToSO },
+                  { content: convBadge(stats.numSI) },
+                  { content: `₱${stats.soAmount.toLocaleString()}`, className: "font-semibold text-blue-600" },
+                  { content: stats.soToSI },
+                  { content: `₱${stats.actualSales.toLocaleString()}`, className: "font-semibold text-emerald-600" },
+                ].map((cell, i) => (
+                  <TableCell
+                    key={i}
+                    className={`text-center ${cell.className ?? ""}`}
+                    style={{
+                      color: cell.className?.includes("text-") ? undefined : tableStyles.td_text,
+                      fontSize: `${tableStyles.td_font_size}px`,
+                      padding: `${tableStyles.td_padding}px 12px`,
+                      borderColor: tableStyles.td_border,
+                    }}
+                  >
+                    {cell.content}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableBody>
           </Table>

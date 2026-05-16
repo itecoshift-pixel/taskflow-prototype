@@ -16,13 +16,17 @@ import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
 } from "@/components/ui/sidebar";
+import {
+  Pagination, PaginationContent, PaginationItem,
+  PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
 
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 import {
   Laptop, Smartphone, Monitor, Globe, AlertCircle,
-  ShieldAlert, ChevronLeft, ChevronRight, Loader2, Inbox,
+  ShieldAlert, Loader2, Inbox,
 } from "lucide-react";
 import { UAParser } from "ua-parser-js";
 
@@ -61,14 +65,11 @@ function getDeviceModel(userAgent?: string, deviceId?: string): string {
   if (!userAgent) return deviceId ? `Device: ${deviceId}` : "Unknown Device";
   const parser = new UAParser(userAgent);
   const device = parser.getDevice();
-  
-  // Try to get device model and name from various sources
+
   const model = device.model || "";
   const vendor = device.vendor || "";
-  
-  // Common device name mappings for better readability
+
   const deviceNameMap: Record<string, string> = {
-    // iPhone models
     "iPhone15,2": "iPhone 14 Pro",
     "iPhone15,3": "iPhone 14 Pro Max",
     "iPhone14,7": "iPhone 14",
@@ -80,8 +81,6 @@ function getDeviceModel(userAgent?: string, deviceId?: string): string {
     "iPhone12,1": "iPhone 11",
     "iPhone12,3": "iPhone 11 Pro",
     "iPhone12,5": "iPhone 11 Pro Max",
-    
-    // Samsung models
     "SM-G991B": "Samsung Galaxy S21",
     "SM-G996B": "Samsung Galaxy S21+",
     "SM-G998B": "Samsung Galaxy S21 Ultra",
@@ -95,8 +94,6 @@ function getDeviceModel(userAgent?: string, deviceId?: string): string {
     "SM-F721B": "Samsung Galaxy Z Flip 4",
     "SM-F926B": "Samsung Galaxy Z Fold 3",
     "SM-F936B": "Samsung Galaxy Z Fold 4",
-    
-    // iPad models
     "iPad13,1": "iPad Air (5th gen)",
     "iPad13,2": "iPad Air (5th gen)",
     "iPad14,1": "iPad mini (6th gen)",
@@ -110,39 +107,19 @@ function getDeviceModel(userAgent?: string, deviceId?: string): string {
     "iPad13,10": "iPad Pro 12.9-inch (5th gen)",
     "iPad13,11": "iPad Pro 12.9-inch (5th gen)",
   };
-  
-  // Check if we have a mapped device name
+
   const mappedName = deviceNameMap[model];
-  if (mappedName) {
-    return mappedName;
-  }
-  
-  // Return vendor + model if available
-  if (model && vendor) {
-    return `${vendor} ${model}`;
-  } else if (model) {
-    return model;
-  } else if (vendor) {
-    return vendor;
-  }
-  
-  // Fallback to browser and OS info if device info is not available
+  if (mappedName) return mappedName;
+  if (model && vendor) return `${vendor} ${model}`;
+  if (model) return model;
+  if (vendor) return vendor;
+
   const browser = parser.getBrowser();
   const os = parser.getOS();
-  
-  if (browser.name && os.name) {
-    return `${browser.name} on ${os.name}`;
-  } else if (browser.name) {
-    return browser.name;
-  } else if (os.name) {
-    return os.name;
-  }
-  
-  // Final fallback: use device ID if available
-  if (deviceId) {
-    return `Device: ${deviceId}`;
-  }
-  
+  if (browser.name && os.name) return `${browser.name} on ${os.name}`;
+  if (browser.name) return browser.name;
+  if (os.name) return os.name;
+  if (deviceId) return `Device: ${deviceId}`;
   return "Unknown Device";
 }
 
@@ -179,150 +156,66 @@ const SectionCard = ({
 
 // ─── Alert row ────────────────────────────────────────────────────────────────
 
-const AlertRow = ({ alert, index }: { alert: SecurityAlert; index: number }) => {
+const AlertRow = ({ alert, index, tableStyles }: {
+  alert: SecurityAlert;
+  index: number;
+  tableStyles: Record<string, string>;
+}) => {
   const DeviceIcon = getDeviceIcon(alert.userAgent);
   const deviceLabel = getDeviceLabel(alert.userAgent);
   const deviceModel = getDeviceModel(alert.userAgent, alert.deviceId);
 
+  const tdStyle: React.CSSProperties = {
+    color: tableStyles.td_text,
+    fontSize: `${tableStyles.td_font_size}px`,
+    padding: `${tableStyles.td_padding}px 12px`,
+    borderColor: tableStyles.td_border,
+    borderBottomWidth: "1px",
+    borderBottomStyle: "solid",
+  };
+
   return (
-    <tr className={`border-b border-gray-100 last:border-b-0 text-xs ${index % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
-      {/* Email */}
-      <td className="px-3 py-3">
+    <tr
+      style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg; }}
+    >
+      <td style={tdStyle}>
         <div className="flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-          <span className="text-gray-700 font-mono text-[11px]">{alert.Email}</span>
+          <span className="font-mono text-[11px]">{alert.Email}</span>
         </div>
       </td>
-
-      {/* IP */}
-      <td className="px-3 py-3">
+      <td style={tdStyle}>
         <div className="flex items-center gap-2">
           <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-          <span className="font-mono text-[11px] text-gray-600">{alert.ipAddress || "—"}</span>
+          <span className="font-mono text-[11px]">{alert.ipAddress || "—"}</span>
         </div>
       </td>
-
-      {/* Device */}
-      <td className="px-3 py-3">
+      <td style={tdStyle}>
         <div className="flex items-center gap-2">
           <DeviceIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
           <div>
-            <p className="text-[11px] font-bold text-gray-700 uppercase">{deviceLabel}</p>
-            <p className="text-[10px] text-gray-600 font-semibold truncate max-w-[120px]">
-              {deviceModel}
-            </p>
-            <p className="text-[9px] text-gray-400 font-mono truncate max-w-[120px]">
-              {alert.deviceId || "—"}
-            </p>
+            <p className="text-[11px] font-bold uppercase">{deviceLabel}</p>
+            <p className="text-[10px] font-semibold truncate max-w-[120px]">{deviceModel}</p>
+            <p className="text-[9px] font-mono truncate max-w-[120px] opacity-60">{alert.deviceId || "—"}</p>
           </div>
         </div>
       </td>
-
-      {/* Message */}
-      <td className="px-3 py-3">
+      <td style={tdStyle}>
         <span className="inline-block bg-red-50 border border-red-100 text-red-700 text-[10px] font-semibold px-2 py-0.5 uppercase tracking-wide max-w-[200px] truncate">
           {alert.message || "—"}
         </span>
       </td>
-
-      {/* Timestamp */}
-      <td className="px-3 py-3 whitespace-nowrap">
-        <span className="text-[11px] font-mono text-gray-500">
+      <td style={tdStyle} className="whitespace-nowrap">
+        <span className="text-[11px] font-mono">
           {new Date(alert.timestamp).toLocaleString("en-PH", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
+            month: "short", day: "numeric", year: "numeric",
+            hour: "2-digit", minute: "2-digit",
           })}
         </span>
       </td>
     </tr>
-  );
-};
-
-// ─── Pagination ───────────────────────────────────────────────────────────────
-
-const Pagination = ({
-  current,
-  total,
-  onChange,
-}: {
-  current: number;
-  total: number;
-  onChange: (p: number) => void;
-}) => {
-  if (total <= 1) return null;
-
-  // Show at most 5 page buttons, centred on current
-  const range = (start: number, end: number) =>
-    Array.from({ length: end - start + 1 }, (_, i) => start + i);
-
-  const half = 2;
-  const start = Math.max(1, current - half);
-  const end = Math.min(total, current + half);
-  const pages = range(start, end);
-
-  return (
-    <div className="flex items-center justify-center gap-1 mt-4 select-none">
-      <button
-        className="h-7 w-7 flex items-center justify-center border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        disabled={current === 1}
-        onClick={() => onChange(current - 1)}
-      >
-        <ChevronLeft className="w-3.5 h-3.5" />
-      </button>
-
-      {start > 1 && (
-        <>
-          <button
-            className="h-7 w-7 text-[11px] font-semibold border border-gray-200 hover:bg-gray-100 transition-colors"
-            onClick={() => onChange(1)}
-          >
-            1
-          </button>
-          {start > 2 && <span className="text-gray-300 text-xs px-0.5">…</span>}
-        </>
-      )}
-
-      {pages.map((p) => (
-        <button
-          key={p}
-          className={`h-7 w-7 text-[11px] font-bold border transition-colors ${
-            p === current
-              ? "bg-gray-900 text-white border-gray-900"
-              : "border-gray-200 text-gray-600 hover:bg-gray-100"
-          }`}
-          onClick={() => onChange(p)}
-        >
-          {p}
-        </button>
-      ))}
-
-      {end < total && (
-        <>
-          {end < total - 1 && <span className="text-gray-300 text-xs px-0.5">…</span>}
-          <button
-            className="h-7 w-7 text-[11px] font-semibold border border-gray-200 hover:bg-gray-100 transition-colors"
-            onClick={() => onChange(total)}
-          >
-            {total}
-          </button>
-        </>
-      )}
-
-      <button
-        className="h-7 w-7 flex items-center justify-center border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        disabled={current === total}
-        onClick={() => onChange(current + 1)}
-      >
-        <ChevronRight className="w-3.5 h-3.5" />
-      </button>
-
-      <span className="ml-2 text-[10px] text-gray-400 font-mono">
-        {current} / {total}
-      </span>
-    </div>
   );
 };
 
@@ -340,7 +233,42 @@ function SettingsContent() {
   const [userEmail, setUserEmail] = useState("");
   const [loadingUser, setLoadingUser] = useState(false);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [page, setPage] = useState(1);
+
+  const [tableStyles, setTableStyles] = useState({
+    table_bg: "#ffffff",
+    table_border: "#111111",
+    table_border_radius: "0",
+    tr_border: "#d1d5db",
+    tr_hover_bg: "#f3f4f6",
+    th_bg: "#1f1f1f",
+    th_text: "#ffffff",
+    th_border: "#111111",
+    th_padding: "14",
+    th_font_size: "11",
+    td_text: "#111827",
+    td_border: "#e5e7eb",
+    td_padding: "14",
+    td_font_size: "12",
+    tfoot_bg: "#1f1f1f",
+    tfoot_text: "#ffffff",
+    tfoot_border: "#111111",
+    tfoot_padding: "12",
+    tfoot_font_size: "12",
+    toolbar_bg: "#1f1f1f",
+    toolbar_border: "#111111",
+    toolbar_btn_text: "#ffffff",
+    toolbar_btn_border: "#3f3f3f",
+    pagination_bg: "#1f1f1f",
+    pagination_text: "#ffffff",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => {});
+  }, []);
 
   // ── Sync userId from URL ──────────────────────────────────────────────────
 
@@ -352,7 +280,6 @@ function SettingsContent() {
 
   useEffect(() => {
     if (!userId) return;
-
     const fetchUser = async () => {
       setLoadingUser(true);
       try {
@@ -362,51 +289,45 @@ function SettingsContent() {
         setUserEmail(data.Email || "");
       } catch (err) {
         console.error("User fetch error:", err);
-        // No toast here — failed user fetch is a silent background operation
       } finally {
         setLoadingUser(false);
       }
     };
-
     fetchUser();
   }, [userId]);
 
-  // ── Fetch security alerts (filtered client-side by email) ──────────────────
+  // ── Fetch security alerts ─────────────────────────────────────────────────
 
   useEffect(() => {
     if (!userEmail) return;
-
     const fetchAlerts = async () => {
       setLoadingAlerts(true);
       try {
         const res = await fetch("/api/security-alerts");
         if (!res.ok) throw new Error("Failed to fetch alerts");
         const data: SecurityAlert[] = await res.json();
-        // Filter to this user only
         const mine = (data || []).filter((a) => a.Email === userEmail);
-        // Sort newest first
         mine.sort(
           (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
         setSecurityAlerts(mine);
-        setCurrentPage(1);
+        setPage(1);
       } catch (err) {
         console.error("Security alerts fetch error:", err);
       } finally {
         setLoadingAlerts(false);
       }
     };
-
     fetchAlerts();
   }, [userEmail]);
 
-  // ── Pagination ────────────────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  const totalPages = Math.ceil(securityAlerts.length / PAGE_SIZE);
+  const pageCount = Math.ceil(securityAlerts.length / PAGE_SIZE);
 
   const paginated = useMemo(
-    () => securityAlerts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [securityAlerts, currentPage]
+    () => securityAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [securityAlerts, page]
   );
 
   const isLoading = loadingUser || loadingAlerts;
@@ -437,7 +358,6 @@ function SettingsContent() {
             </Breadcrumb>
           </div>
 
-          {/* Alert count badge */}
           {securityAlerts.length > 0 && (
             <div className="pr-4">
               <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest bg-red-600 text-white px-2.5 py-1">
@@ -449,7 +369,7 @@ function SettingsContent() {
         </header>
 
         {/* Content */}
-        <div className="flex flex-col gap-5 p-5 w-full mx-auto w-full">
+        <div className="flex flex-col gap-5 p-5 w-full mx-auto">
           <SectionCard
             icon={ShieldAlert}
             title="Security Alerts"
@@ -478,42 +398,101 @@ function SettingsContent() {
                     {securityAlerts.length} record{securityAlerts.length !== 1 ? "s" : ""}
                   </span>
                   <span className="text-[10px] text-gray-300 font-mono">
-                    Showing {(currentPage - 1) * PAGE_SIZE + 1}–
-                    {Math.min(currentPage * PAGE_SIZE, securityAlerts.length)} of{" "}
+                    Showing {(page - 1) * PAGE_SIZE + 1}–
+                    {Math.min(page * PAGE_SIZE, securityAlerts.length)} of{" "}
                     {securityAlerts.length}
                   </span>
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto border border-gray-100">
-                  <table className="w-full border-collapse">
+                <div
+                  className="overflow-x-auto border"
+                  style={{
+                    borderColor: tableStyles.table_border,
+                    borderRadius: `${tableStyles.table_border_radius}px`,
+                  }}
+                >
+                  <table className="w-full border-collapse" style={{ backgroundColor: tableStyles.table_bg }}>
                     <thead>
-                      <tr className="bg-gray-900 text-white">
-                        {["Email", "IP Address", "Device Info", "Message", "Timestamp"].map(
-                          (h) => (
-                            <th
-                              key={h}
-                              className="px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest"
-                            >
-                              {h}
-                            </th>
-                          )
-                        )}
+                      <tr style={{ backgroundColor: tableStyles.th_bg }}>
+                        {["Email", "IP Address", "Device Info", "Message", "Timestamp"].map((h) => (
+                          <th
+                            key={h}
+                            className="text-left font-black uppercase tracking-widest"
+                            style={{
+                              color: tableStyles.th_text,
+                              fontSize: `${tableStyles.th_font_size}px`,
+                              padding: `${tableStyles.th_padding}px 12px`,
+                              borderColor: tableStyles.th_border,
+                            }}
+                          >
+                            {h}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {paginated.map((alert, i) => (
-                        <AlertRow key={`${alert.timestamp}-${i}`} alert={alert} index={i} />
+                        <AlertRow
+                          key={`${alert.timestamp}-${i}`}
+                          alert={alert}
+                          index={i}
+                          tableStyles={tableStyles}
+                        />
                       ))}
                     </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: tableStyles.tfoot_bg, borderColor: tableStyles.tfoot_border }}>
+                        <td
+                          colSpan={5}
+                          className="uppercase tracking-wider"
+                          style={{
+                            color: tableStyles.tfoot_text,
+                            fontSize: `${tableStyles.tfoot_font_size}px`,
+                            padding: `${tableStyles.tfoot_padding}px 12px`,
+                          }}
+                        >
+                          {securityAlerts.length} alert{securityAlerts.length !== 1 ? "s" : ""} total
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
 
-                <Pagination
-                  current={currentPage}
-                  total={totalPages}
-                  onChange={setCurrentPage}
-                />
+                {/* Pagination */}
+                {pageCount > 1 && (
+                  <div
+                    className="flex items-center justify-center border-t"
+                    style={{ backgroundColor: tableStyles.pagination_bg, borderColor: tableStyles.toolbar_border }}
+                  >
+                    <Pagination style={{ color: tableStyles.pagination_text, padding: `${tableStyles.tfoot_padding}px 12px` }}>
+                      <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+                            aria-disabled={page === 1}
+                            className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${page === 1 ? "pointer-events-none opacity-30" : ""}`}
+                          />
+                        </PaginationItem>
+                        <span
+                          className="font-mono text-[11px] font-bold select-none px-3 py-1 border"
+                          style={{ color: tableStyles.pagination_text, borderColor: tableStyles.toolbar_btn_border }}
+                        >
+                          {page} / {pageCount}
+                        </span>
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+                            aria-disabled={page === pageCount}
+                            className={`rounded-none h-8 px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${page === pageCount ? "pointer-events-none opacity-30" : ""}`}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
               </>
             )}
           </SectionCard>

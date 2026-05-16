@@ -76,12 +76,12 @@ interface SPFProps {
 
 const StatusBadge = ({ status }: { status?: string }) => {
     const s = (status || "").toLowerCase();
-    
+
     // Map status values to display text
     const getDisplayText = (status: string) => {
         const statusMap: Record<string, string> = {
             "pending for procurement": "For Procurement Costing",
-            "approved by procurement": "Ready for Quotation", 
+            "approved by procurement": "Ready for Quotation",
             "for revision": "Revised by Sales",
             "processed by pd": "Pending for Procurement",
             // else
@@ -89,10 +89,10 @@ const StatusBadge = ({ status }: { status?: string }) => {
             "pending": "Pending",
             "declined": "Declined",
         };
-        
+
         return statusMap[s] || status || "—";
     };
-    
+
     const cls =
         s === "approved" || s === "approved by procurement" ? "bg-emerald-50 text-emerald-700 border-emerald-100"
             : s === "pending" || s === "pending for procurement" ? "bg-amber-50 text-amber-700 border-amber-100"
@@ -222,9 +222,8 @@ const Pagination: React.FC<PaginationProps> = ({ total, current, perPage, onPage
                                     variant={p === current ? "secondary" : "ghost"}
                                     size="sm"
                                     onClick={() => onPageChange(p)}
-                                    className={`rounded-none h-8 w-8 p-0 text-[11px] font-bold transition-all ${
-                                        p === current ? "bg-zinc-900 text-white hover:bg-zinc-800" : "hover:bg-zinc-100"
-                                    }`}
+                                    className={`rounded-none h-8 w-8 p-0 text-[11px] font-bold transition-all ${p === current ? "bg-zinc-900 text-white hover:bg-zinc-800" : "hover:bg-zinc-100"
+                                        }`}
                                 >
                                     {p}
                                 </Button>
@@ -311,6 +310,55 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     const [revisionTargetSpfNumber, setRevisionTargetSpfNumber] = useState<string | null>(null);
 
     const endTimerRef = useRef<number | null>(null);
+
+    const [tableStyles, setTableStyles] = useState({
+        th_bg: "#f9fafb",
+        layout: "datatable",
+        td_text: "#111827",
+        th_text: "#374151",
+        table_bg: "#ffffff",
+        tfoot_bg: "#ffffff",
+        td_border: "#f3f4f6",
+        th_border: "#e5e7eb",
+        tr_border: "#f3f4f6",
+        td_padding: "12",
+        tfoot_text: "#6b7280",
+        th_padding: "12",
+        toolbar_bg: "#f9fafb",
+        tr_hover_bg: "#f9fafb",
+        table_border: "#e5e7eb",
+        table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+        td_font_size: "13",
+        tfoot_border: "#e5e7eb",
+        th_font_size: "12",
+        pagination_bg: "#ffffff",
+        tfoot_padding: "12",
+        th_font_weight: "600",
+        toolbar_border: "#e5e7eb",
+        toolbar_btn_bg: "#ffffff",
+        pagination_text: "#374151",
+        tfoot_font_size: "12",
+        toolbar_btn_text: "#374151",
+        toolbar_input_bg: "#ffffff",
+        pagination_border: "#d1d5db",
+        pagination_radius: "8",
+        table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+        th_letter_spacing: "0.01em",
+        toolbar_btn_border: "#d1d5db",
+        toolbar_input_text: "#374151",
+        table_border_radius: "16",
+        pagination_active_bg: "#3b82f6",
+        toolbar_input_border: "#d1d5db",
+        pagination_active_text: "#ffffff"
+
+    });
+
+    useEffect(() => {
+        fetch("/api/table-styles")
+            .then((res) => res.json())
+            .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+            .catch(() => { });
+    }, []);
 
     // ─── Fetch accounts (paginated with search) ────────────────────────
 
@@ -672,14 +720,14 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
 
                 {/* ── Accounts panel ──────────────────────────────────────────────── */}
-                <div className="col-span-1 border border-zinc-200 bg-white rounded-none overflow-hidden shadow-sm">
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+                <div className="col-span-1 overflow-hidden shadow-sm">
+                    <div className="flex items-center gap-3 px-4 py-3" style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg, color: tableStyles.th_text, }}>
                         <Building2 className="w-4 h-4 text-zinc-400" />
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                            <h3 className="text-xs font-bold uppercase tracking-widest">
                                 Accounts
                             </h3>
-                            <p className="text-[11px] text-zinc-400">
+                            <p className="text-[11px]">
                                 {allAccounts.filter((acc: Account) => {
                                     if (!accountsSearchTerm.trim()) return true;
                                     const search = accountsSearchTerm.toLowerCase();
@@ -748,30 +796,30 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                     );
                                 })
                                 .map((acc: Account, i: number) => (
-                                <div key={acc.id || i} className="p-3 hover:bg-zinc-50 transition-colors">
-                                    <div className="flex items-start justify-between gap-2 mb-2">
-                                        <div className="min-w-0 flex-1">
-                                            <h4 className="text-xs font-bold text-zinc-800 truncate">
-                                                {acc.company_name}
-                                            </h4>
-                                            <p className="text-[11px] text-zinc-500 truncate uppercase">
-                                                {acc.contact_person}
-                                            </p>
+                                    <div key={acc.id || i} className="p-3 hover:bg-zinc-50 transition-colors">
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <div className="min-w-0 flex-1">
+                                                <h4 className="text-xs font-bold text-zinc-800 truncate">
+                                                    {acc.company_name}
+                                                </h4>
+                                                <p className="text-[11px] text-zinc-500 truncate uppercase">
+                                                    {acc.contact_person}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="h-7 rounded-none text-[10px] font-bold uppercase gap-1 px-2 shrink-0 bg-zinc-900 hover:bg-zinc-800"
+                                                onClick={() => openContactSelection(acc)}
+                                                disabled={loadingSPF}
+                                            >
+                                                <PlusCircle className="w-3 h-3" /> Create
+                                            </Button>
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            className="h-7 rounded-none text-[10px] font-bold uppercase gap-1 px-2 shrink-0 bg-zinc-900 hover:bg-zinc-800"
-                                            onClick={() => openContactSelection(acc)}
-                                            disabled={loadingSPF}
-                                        >
-                                            <PlusCircle className="w-3 h-3" /> Create
-                                        </Button>
+                                        <p className="text-[10px] text-zinc-400 truncate uppercase">
+                                            {acc.address}
+                                        </p>
                                     </div>
-                                    <p className="text-[10px] text-zinc-400 truncate uppercase">
-                                        {acc.address}
-                                    </p>
-                                </div>
-                            ))
+                                ))
                         )}
                     </div>
 
@@ -797,17 +845,22 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                 </div>
 
                 {/* ── SPF Records table ────────────────────────────────────────────── */}
-                <div className="col-span-3 border border-zinc-200 bg-white rounded-none overflow-hidden shadow-sm flex flex-col">
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
-                        <FileText className="w-4 h-4 text-zinc-400" />
+                <div className="col-span-3 border rounded-none overflow-hidden shadow-sm flex flex-col"
+                    style={{
+                        borderColor: tableStyles.table_border,
+                        borderRadius: `${tableStyles.table_border_radius}px`,
+                        backgroundColor: tableStyles.table_bg,
+                    }}>
+                    <div className="flex items-center gap-3 px-4 py-3" style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg, color: tableStyles.th_text, }}>
+                        <FileText className="w-4 h-4" />
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                            <h3 className="text-xs font-bold uppercase tracking-widest">
                                 SPF Records
                             </h3>
-                            <p className="text-[11px] text-zinc-400">
+                            <p className="text-[11px]">
                                 {allActivities.length} records
                                 {totalCount > allActivities.length && (
-                                    <span className="text-[10px] text-zinc-400 ml-2">
+                                    <span className="text-[10px] ml-2">
                                         Showing {allActivities.length} of {totalCount} total
                                     </span>
                                 )}
@@ -816,7 +869,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                         {/* SPF Records Search Bar */}
                         <div className="relative flex gap-2 max-w-xs">
                             <div className="relative flex-1">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" />
                                 <Input
                                     className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
                                     placeholder="Search SPF records..."
@@ -854,7 +907,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                         ) : (
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-zinc-50/50 hover:bg-zinc-50/50">
+                                    <TableRow style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}>
                                         {[
                                             "Actions", "Status", "SPF No.", "Customer",
                                             "Contact Person", "Contact No.", "Reg. Address",
@@ -862,7 +915,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             "Payment", "Warranty", "Delivery Date",
                                             "Prepared By", "Approved By",
                                         ].map((h) => (
-                                            <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 whitespace-nowrap px-3 py-2.5">
+                                            <TableHead key={h} style={{
+                                                color: tableStyles.th_text,
+                                                fontSize: `${tableStyles.th_font_size}px`,
+                                                padding: `${tableStyles.th_padding}px 12px`,
+                                                borderColor: tableStyles.th_border,
+                                                backgroundColor: tableStyles.th_bg,
+                                            }} className="uppercase font-bold">
                                                 {h}
                                             </TableHead>
                                         ))}
@@ -873,8 +932,13 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                         const isHighlighted = highlight === item.spf_number;
                                         return (
                                             <TableRow key={item.id}
-                                                className={`text-xs ${isHighlighted ? "bg-yellow-50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : (idx % 2 === 0 ? "bg-white" : "bg-zinc-50/30")} hover:bg-zinc-50/50 transition-colors border-b border-zinc-100`}>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap">
+                                                className={`text-xs ${isHighlighted ? "bg-yellow-50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : (idx % 2 === 0 ? "bg-white" : "bg-zinc-50/30")}`} style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>
                                                     <div className="flex items-center gap-1">
                                                         <button
                                                             title="Edit"
@@ -909,22 +973,92 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                         />
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap">
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>
                                                     <StatusBadge status={item.status} />
                                                 </TableCell>
-                                                <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-zinc-500 font-semibold">{item.spf_number}</TableCell>
-                                                <TableCell className="px-3 py-2 font-bold whitespace-nowrap text-zinc-800">{item.customer_name}</TableCell>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap text-zinc-600 capitalize">{item.contact_person}</TableCell>
-                                                <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-zinc-500">{item.contact_number}</TableCell>
-                                                <TableCell className="px-3 py-2 max-w-[140px] truncate text-zinc-500">{item.registered_address}</TableCell>
-                                                <TableCell className="px-3 py-2 text-zinc-400 text-[10px]">{item.delivery_address || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 text-zinc-400 text-[10px]">{item.billing_address || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 text-zinc-400 text-[10px]">{item.collection_address || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap text-zinc-500">{item.payment_terms || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 text-zinc-500">{item.warranty || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap font-mono text-[10px] text-zinc-400">{item.delivery_date || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap text-zinc-500">{item.prepared_by || "—"}</TableCell>
-                                                <TableCell className="px-3 py-2 whitespace-nowrap text-zinc-500">{item.approved_by || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.spf_number}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.customer_name}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.contact_person}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.contact_number}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.registered_address}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.delivery_address || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.billing_address || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.collection_address || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.payment_terms || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.warranty || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.delivery_date || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.prepared_by || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>{item.approved_by || "—"}</TableCell>
                                             </TableRow>
                                         );
                                     })}
@@ -932,7 +1066,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             </Table>
                         )}
                     </div>
-                    
+
                     {/* Load More Button */}
                     {hasMore && (
                         <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">

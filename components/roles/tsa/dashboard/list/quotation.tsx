@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
@@ -59,6 +59,20 @@ export function QuotationCard({
   dateRange,
 }: QuotationCardProps) {
   const [showComputation, setShowComputation] = useState(false);
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f8fafc", td_text: "#334155", th_text: "#475569",
+    table_bg: "#ffffff", td_border: "#e2e8f0", th_border: "#e2e8f0",
+    tr_border: "#e2e8f0", td_padding: "10", th_padding: "10",
+    tr_hover_bg: "#f1f5f9", table_border: "#e2e8f0", td_font_size: "12",
+    th_font_size: "11", table_border_radius: "6",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
+      .catch(() => { });
+  }, []);
 
   /* ---- Compute stats ---- */
   const stats = useMemo(() => {
@@ -135,26 +149,57 @@ export function QuotationCard({
         </div>
 
         {/* Stats Table */}
-        <div className="overflow-x-auto rounded-xl border border-gray-100">
+        <div
+          className="overflow-x-auto border"
+          style={{
+            borderColor: tableStyles.table_border,
+            borderRadius: `${tableStyles.table_border_radius}px`,
+            backgroundColor: tableStyles.table_bg,
+          }}
+        >
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50 text-[11px]">
-                <TableHead className="text-gray-900 text-center">
+              <TableRow style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}>
+                <TableHead style={{
+                  color: tableStyles.th_text,
+                  fontSize: `${tableStyles.th_font_size}px`,
+                  padding: `${tableStyles.th_padding}px 12px`,
+                  borderColor: tableStyles.th_border,
+                  backgroundColor: tableStyles.th_bg,
+                }} className="uppercase font-bold">
                   Total Quotations
                   <span className="block text-[9px] font-normal text-gray-400">
                     (Quote-Done)
                   </span>
                 </TableHead>
-                <TableHead className="text-gray-900 text-center">
+                <TableHead style={{
+                  color: tableStyles.th_text,
+                  fontSize: `${tableStyles.th_font_size}px`,
+                  padding: `${tableStyles.th_padding}px 12px`,
+                  borderColor: tableStyles.th_border,
+                  backgroundColor: tableStyles.th_bg,
+                }} className="uppercase font-bold">
                   Quotation Amount
                 </TableHead>
-                <TableHead className="text-gray-900 text-center">
+                <TableHead style={{
+                  color: tableStyles.th_text,
+                  fontSize: `${tableStyles.th_font_size}px`,
+                  padding: `${tableStyles.th_padding}px 12px`,
+                  borderColor: tableStyles.th_border,
+                  backgroundColor: tableStyles.th_bg,
+                }} className="uppercase font-bold">
                   Quote → SO
                   <span className="block text-[9px] font-normal text-gray-400">
                     (SO ÷ Quotes)
                   </span>
                 </TableHead>
-                <TableHead className="text-gray-900 text-center">
+                <TableHead style={{
+                  color: tableStyles.th_text,
+                  fontSize: `${tableStyles.th_font_size}px`,
+                  padding: `${tableStyles.th_padding}px 12px`,
+                  borderColor: tableStyles.th_border,
+                  backgroundColor: tableStyles.th_bg,
+                }} className="uppercase font-bold">
                   Quotation → SI
                   <span className="block text-[9px] font-normal text-gray-400">
                     (SI ÷ Quot. Amount)
@@ -163,27 +208,40 @@ export function QuotationCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow className="text-xs font-mono">
+              <TableRow style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}>
                 {/* Total Quotations */}
-                <TableCell className="text-center font-semibold text-gray-800">
+                <TableCell style={{
+                  color: tableStyles.td_text,
+                  fontSize: `${tableStyles.td_font_size}px`,
+                  padding: `${tableStyles.td_padding}px 12px`,
+                  borderColor: tableStyles.td_border,
+                }}>
                   {stats.totalQuoteDoneCount}
                 </TableCell>
 
                 {/* Quotation Amount */}
-                <TableCell className="text-center text-gray-700">
+                <TableCell style={{
+                  color: tableStyles.td_text,
+                  fontSize: `${tableStyles.td_font_size}px`,
+                  padding: `${tableStyles.td_padding}px 12px`,
+                  borderColor: tableStyles.td_border,
+                }}>
                   ₱ {fmt(stats.totalQuotationAmount)}
                 </TableCell>
 
                 {/* Quote → SO */}
-                <TableCell className="text-center">
+                <TableCell style={{
+                  color: tableStyles.td_text,
+                  fontSize: `${tableStyles.td_font_size}px`,
+                  padding: `${tableStyles.td_padding}px 12px`,
+                }}>
                   <span
-                    className={`font-semibold ${
-                      stats.quoteToSOVal >= 70
-                        ? "text-green-600"
-                        : stats.quoteToSOVal >= 40
+                    className={`font-semibold ${stats.quoteToSOVal >= 70
+                      ? "text-green-600"
+                      : stats.quoteToSOVal >= 40
                         ? "text-amber-500"
                         : "text-red-500"
-                    }`}
+                      }`}
                   >
                     {stats.quoteToSO}
                   </span>
@@ -193,15 +251,18 @@ export function QuotationCard({
                 </TableCell>
 
                 {/* Quotation → SI */}
-                <TableCell className="text-center">
+                <TableCell style={{
+                  color: tableStyles.td_text,
+                  fontSize: `${tableStyles.td_font_size}px`,
+                  padding: `${tableStyles.td_padding}px 12px`,
+                }}>
                   <span
-                    className={`font-semibold ${
-                      stats.quotationToSIVal >= 70
-                        ? "text-green-600"
-                        : stats.quotationToSIVal >= 40
+                    className={`font-semibold ${stats.quotationToSIVal >= 70
+                      ? "text-green-600"
+                      : stats.quotationToSIVal >= 40
                         ? "text-amber-500"
                         : "text-red-500"
-                    }`}
+                      }`}
                   >
                     {stats.quotationToSI}
                   </span>

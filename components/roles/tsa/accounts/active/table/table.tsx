@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   useReactTable,
   getCoreRowModel,
@@ -21,20 +22,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { MoreHorizontal, Edit } from "lucide-react";
+import { MoreHorizontal, PenIcon } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { type DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { AccountDialog } from "../../../activity/planner/dialog/active";
@@ -51,13 +45,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-import { AccountsActiveSearch } from "../search";
 import { AccountsActiveFilter } from "../filter";
-import { AccountsActivePagination } from "../pagination";
 import { AccountsActiveDeleteDialog } from "../../../activity/planner/dialog/delete";
 import { TransferDialog } from "../dialog/transfer";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Account {
@@ -78,6 +68,7 @@ interface Account {
   status?: string;
   next_available_date: string;
   tin_number?: string;
+  account_reference_number: string;
 }
 
 interface UserDetails {
@@ -102,12 +93,12 @@ const CLUSTER_CONFIG: Record<
   string,
   { color: string; bg: string; textColor: string }
 > = {
-  "top 50":    { color: "#f59e0b", bg: "#fef3c7", textColor: "#92400e" },
-  "next 30":   { color: "#3b82f6", bg: "#dbeafe", textColor: "#1e40af" },
-  "balance 20":{ color: "#8b5cf6", bg: "#ede9fe", textColor: "#5b21b6" },
-  "new client":{ color: "#10b981", bg: "#d1fae5", textColor: "#065f46" },
-  "tsa client":{ color: "#ef4444", bg: "#fee2e2", textColor: "#991b1b" },
-  "csr client":{ color: "#f97316", bg: "#ffedd5", textColor: "#9a3412" },
+  "top 50": { color: "#f59e0b", bg: "#fef3c7", textColor: "#92400e" },
+  "next 30": { color: "#3b82f6", bg: "#dbeafe", textColor: "#1e40af" },
+  "balance 20": { color: "#8b5cf6", bg: "#ede9fe", textColor: "#5b21b6" },
+  "new client": { color: "#10b981", bg: "#d1fae5", textColor: "#065f46" },
+  "tsa client": { color: "#ef4444", bg: "#fee2e2", textColor: "#991b1b" },
+  "csr client": { color: "#f97316", bg: "#ffedd5", textColor: "#9a3412" },
 };
 
 function getClusterStyle(typeClient: string) {
@@ -122,99 +113,11 @@ function getClusterStyle(typeClient: string) {
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 const STATUS_STYLES: Record<string, string> = {
-  active:   "bg-emerald-100 text-emerald-800 border-emerald-200",
-  pending:  "bg-amber-100 text-amber-800 border-amber-200",
+  active: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  pending: "bg-amber-100 text-amber-800 border-amber-200",
   inactive: "bg-red-100 text-red-800 border-red-200",
 };
 
-function StatusBadge({ value }: { value: string }) {
-  const key = value?.toLowerCase() ?? "";
-  const cls = STATUS_STYLES[key] ?? "bg-gray-100 text-gray-700 border-gray-200";
-  return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-none text-[11px] font-semibold border ${cls}`}
-    >
-      <span
-        className="w-1.5 h-1.5 rounded-none"
-        style={{
-          background:
-            key === "active"
-              ? "#10b981"
-              : key === "pending"
-              ? "#f59e0b"
-              : "#ef4444",
-        }}
-      />
-      {value ?? "—"}
-    </span>
-  );
-}
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  accent,
-  children,
-  trend,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value?: number;
-  accent: string;
-  children?: React.ReactNode;
-  trend?: { value: number; up: boolean };
-}) {
-  return (
-    <div
-      className="relative overflow-hidden rounded-none border bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-      style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
-    >
-      {/* Faint background circle */}
-      <div
-        className="absolute -right-4 -top-4 h-20 w-20 rounded-none opacity-10"
-        style={{ background: accent }}
-      />
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1">
-            {label}
-          </p>
-          {value !== undefined && (
-            <p className="text-3xl font-black" style={{ color: accent }}>
-              {value.toLocaleString()}
-            </p>
-          )}
-          {children && (
-            <div className="mt-2 space-y-0.5 text-[12px] text-slate-600">
-              {children}
-            </div>
-          )}
-        </div>
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-none"
-          style={{ background: accent + "1a" }}
-        >
-          <Icon className="h-5 w-5" style={{ color: accent }} />
-        </div>
-      </div>
-      {trend && (
-        <div className="mt-3 flex items-center gap-1 text-[11px]">
-          {trend.up ? (
-            <ChevronUp className="h-3 w-3 text-emerald-500" />
-          ) : (
-            <ChevronDown className="h-3 w-3 text-red-400" />
-          )}
-          <span className={trend.up ? "text-emerald-600" : "text-red-500"}>
-            {trend.value}
-          </span>
-          <span className="text-slate-400">vs last month</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function AccountsTable({
@@ -223,8 +126,127 @@ export function AccountsTable({
   onSaveAccountAction,
   onRefreshAccountsAction,
 }: AccountsTableProps) {
+  const router = useRouter();
   const [localPosts, setLocalPosts] = useState<Account[]>(posts);
   useEffect(() => setLocalPosts(posts), [posts]);
+
+  // ── Table styles from API ─────────────────────────────────────────────────
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f9fafb",
+    layout: "datatable",
+    td_text: "#111827",
+    th_text: "#374151",
+    table_bg: "#ffffff",
+    tfoot_bg: "#ffffff",
+    td_border: "#f3f4f6",
+    th_border: "#e5e7eb",
+    tr_border: "#f3f4f6",
+    td_padding: "12",
+    tfoot_text: "#6b7280",
+    th_padding: "12",
+    toolbar_bg: "#f9fafb",
+    tr_hover_bg: "#f9fafb",
+    table_border: "#e5e7eb",
+    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    td_font_size: "13",
+    tfoot_border: "#e5e7eb",
+    th_font_size: "12",
+    pagination_bg: "#ffffff",
+    tfoot_padding: "12",
+    th_font_weight: "600",
+    toolbar_border: "#e5e7eb",
+    toolbar_btn_bg: "#ffffff",
+    pagination_text: "#374151",
+    tfoot_font_size: "12",
+    toolbar_btn_text: "#374151",
+    toolbar_input_bg: "#ffffff",
+    pagination_border: "#d1d5db",
+    pagination_radius: "8",
+    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+    th_letter_spacing: "0.01em",
+    toolbar_btn_border: "#d1d5db",
+    toolbar_input_text: "#374151",
+    table_border_radius: "16",
+    pagination_active_bg: "#3b82f6",
+    toolbar_input_border: "#d1d5db",
+    pagination_active_text: "#ffffff"
+
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
+  // ─── Stat Card ────────────────────────────────────────────────────────────────
+  function StatCard({
+    icon: Icon,
+    label,
+    value,
+    accent,
+    children,
+    trend,
+  }: {
+    icon: React.ElementType;
+    label: string;
+    value?: number;
+    accent: string;
+    children?: React.ReactNode;
+    trend?: { value: number; up: boolean };
+  }) {
+    return (
+      <div
+        className="relative overflow-hidden border bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+        style={{ borderLeftColor: accent, borderLeftWidth: 3, borderRadius: `${tableStyles.table_border_radius}px`, }}
+
+      >
+        <div
+          className="absolute -right-4 -top-4 h-20 w-20 rounded-none opacity-10"
+          style={{ background: accent }}
+        />
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1">
+              {label}
+            </p>
+            {value !== undefined && (
+              <p className="text-3xl font-black" style={{ color: accent }}>
+                {value.toLocaleString()}
+              </p>
+            )}
+            {children && (
+              <div className="mt-2 space-y-0.5 text-[12px] text-slate-600">
+                {children}
+              </div>
+            )}
+          </div>
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-none"
+            style={{ background: accent + "1a" }}
+          >
+            <Icon className="h-5 w-5" style={{ color: accent }} />
+          </div>
+        </div>
+        {trend && (
+          <div className="mt-3 flex items-center gap-1 text-[11px]">
+            {trend.up ? (
+              <ChevronUp className="h-3 w-3 text-emerald-500" />
+            ) : (
+              <ChevronDown className="h-3 w-3 text-red-400" />
+            )}
+            <span className={trend.up ? "text-emerald-600" : "text-red-500"}>
+              {trend.value}
+            </span>
+            <span className="text-slate-400">vs last month</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const [globalFilter, setGlobalFilter] = useState("");
   const [isFiltering, setIsFiltering] = useState(false);
@@ -244,6 +266,30 @@ export function AccountsTable({
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [agents, setAgents] = useState<any[]>([]);
+  const [historicalData, setHistoricalData] = useState<any[]>([]);
+  const [loadingHistoricalData, setLoadingHistoricalData] = useState(false);
+  const [activityCounts, setActivityCounts] = useState<Record<string, number>>({});
+  const [searchInput, setSearchInput] = useState("");
+
+  function StatusBadge({ value }: { value: string }) {
+    const key = value?.toLowerCase() ?? "";
+    const cls = STATUS_STYLES[key] ?? "bg-gray-100 text-gray-700 border-gray-200";
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-1 uppercase text-[11px] font-semibold border ${cls}`}
+        style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+      >
+        <span
+          className="w-1.5 h-1.5 "
+          style={{
+            background:
+              key === "active" ? "#10b981" : key === "pending" ? "#f59e0b" : "#ef4444",
+          }}
+        />
+        {value ?? "—"}
+      </span>
+    );
+  }
 
   // ── Filtered + sorted data ────────────────────────────────────────────────
   const filteredData = useMemo(() => {
@@ -272,13 +318,10 @@ export function AccountsTable({
       const matchesStatus =
         statusFilter === "all" ||
         item.status?.toLowerCase() === statusFilter.toLowerCase();
-      // Industry multi-select filter
       const matchesIndustry =
         industryFilter.length === 0 || industryFilter.includes(item.industry);
-      // Region filter
       const matchesRegion =
         regionFilter === "all" || item.region === regionFilter;
-      // Next available date range filter
       let matchesNextAvailableDate = true;
       if (nextAvailableDateRange?.from) {
         const itemDate = item.next_available_date ? new Date(item.next_available_date) : null;
@@ -337,6 +380,8 @@ export function AccountsTable({
             checked={table.getIsAllPageRowsSelected()}
             onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
             aria-label="Select all"
+            className="h-5 w-5 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
+            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
           />
         ),
         cell: ({ row }) => (
@@ -344,6 +389,8 @@ export function AccountsTable({
             checked={row.getIsSelected()}
             onCheckedChange={(v) => row.toggleSelected(!!v)}
             aria-label={`Select ${row.original.company_name}`}
+            className="h-5 w-5 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
+            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
           />
         ),
         enableSorting: false,
@@ -353,27 +400,40 @@ export function AccountsTable({
         id: "actions",
         header: "",
         cell: ({ row }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="cursor-pointer h-7 w-7">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setEditingAccount(row.original);
-                  setIsEditDialogOpen(true);
-                }}
-                className="cursor-pointer text-xs"
-              >
-                <Edit className="mr-2 h-3.5 w-3.5" /> Edit Account
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
+            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+            onClick={() => {
+              setEditingAccount(row.original);
+              setIsEditDialogOpen(true);
+            }}
+          >
+            <PenIcon className="h-3.5 w-3.5 text-zinc-400" />
+          </Button>
         ),
+      },
+      {
+        id: "activities",
+        header: "Activities",
+        cell: ({ row }) => {
+          const count = activityCounts[row.original.id];
+          if (count === undefined) {
+            return <span className="text-[11px] text-slate-300 font-mono">—</span>;
+          }
+          return (
+            <span
+              className={`inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 text-[11px] font-bold border ${count > 0
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : "bg-zinc-50 text-zinc-400 border-zinc-200"
+                }`}
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+            >
+              {count}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "company_name",
@@ -384,6 +444,11 @@ export function AccountsTable({
               {row.original.company_name}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">{row.original.region}</p>
+            {row.original.account_reference_number && (
+              <p className="text-[10px] text-slate-300 font-mono mt-0.5 tracking-wide">
+                {row.original.account_reference_number}
+              </p>
+            )}
           </div>
         ),
       },
@@ -457,11 +522,12 @@ export function AccountsTable({
           const style = getClusterStyle(row.original.type_client);
           return (
             <span
-              className="inline-flex items-center px-2.5 py-1 rounded-none text-[11px] font-bold uppercase tracking-wide border"
+              className="inline-flex items-center px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide border"
               style={{
                 background: style.bg,
                 color: style.textColor,
                 borderColor: style.color + "40",
+                borderRadius: `${tableStyles.table_border_radius}px`
               }}
             >
               {row.original.type_client}
@@ -493,7 +559,8 @@ export function AccountsTable({
         header: "Industry",
         cell: ({ row }) => (
           <p className="text-[11px] text-slate-500 uppercase font-medium">
-            {row.original.industry?.replace(/_/g, " ") ?? "—"}</p>
+            {row.original.industry?.replace(/_/g, " ") ?? "—"}
+          </p>
         ),
       },
       {
@@ -501,7 +568,8 @@ export function AccountsTable({
         header: "TIN No.",
         cell: ({ row }) => (
           <p className="text-[11px] text-slate-500 font-mono">
-            {row.original.tin_number ?? "—"}</p>
+            {row.original.tin_number ?? "—"}
+          </p>
         ),
       },
       {
@@ -509,8 +577,27 @@ export function AccountsTable({
         header: "Status",
         cell: ({ row }) => <StatusBadge value={row.original.status ?? "—"} />,
       },
+      {
+        accessorKey: "date_created",
+        header: "Date Created",
+        cell: ({ row }) => {
+          const dateValue = row.original.date_created;
+          if (!dateValue || dateValue === "—") return <span className="text-[11px] text-slate-400">—</span>;
+          try {
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) return <span className="text-[11px] text-slate-400">—</span>;
+            return (
+              <p className="text-[11px] text-slate-500 uppercase font-medium">
+                {format(date, "MMM dd, yyyy")}
+              </p>
+            );
+          } catch {
+            return <span className="text-[11px] text-slate-400">—</span>;
+          }
+        },
+      },
     ],
-    [],
+    [activityCounts],
   );
 
   // ── Search debounce ───────────────────────────────────────────────────────
@@ -543,6 +630,94 @@ export function AccountsTable({
       .then(setAgents)
       .catch(console.error);
   }, [userDetails.referenceid]);
+
+  // ── Fetch activity counts for all visible accounts (debug column) ─────────
+  useEffect(() => {
+    if (!filteredData.length) return;
+    const counts: Record<string, number> = {};
+    Promise.all(
+      filteredData.map(async (acc) => {
+        const params = new URLSearchParams();
+        if (acc.account_reference_number) params.set("account_reference_number", acc.account_reference_number);
+        else if (acc.company_name) params.set("company_name", acc.company_name);
+        else return;
+        params.set("referenceid", userDetails.referenceid);
+        try {
+          const res = await fetch(`/api/activity/tsa/historical/fetch-by-account?${params}`);
+          if (res.ok) {
+            const json = await res.json();
+            counts[acc.id] = (json.activities || []).length;
+          } else {
+            counts[acc.id] = 0;
+          }
+        } catch {
+          counts[acc.id] = 0;
+        }
+      })
+    ).then(() => setActivityCounts({ ...counts }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPosts]);
+
+  // ── Fetch historical data ─────────────────────────────────────────────────
+  const fetchHistoricalData = async (accountIds: string[]) => {
+    if (!accountIds.length) {
+      setLoadingHistoricalData(false);
+      return;
+    }
+
+    // Snapshot accounts from localPosts at call time — passed in as IDs,
+    // resolved here before any re-render can change localPosts reference.
+    const snapshot = localPosts.filter((acc) => accountIds.includes(acc.id));
+    if (!snapshot.length) {
+      setLoadingHistoricalData(false);
+      return;
+    }
+
+    const allActivities: any[] = [];
+
+    try {
+      await Promise.all(
+        snapshot.map(async (acc) => {
+          const params = new URLSearchParams();
+          if (acc.account_reference_number) {
+            params.set("account_reference_number", acc.account_reference_number);
+          } else if (acc.company_name) {
+            params.set("company_name", acc.company_name);
+          } else {
+            return;
+          }
+          params.set("referenceid", userDetails.referenceid);
+
+          const response = await fetch(
+            `/api/activity/tsa/historical/fetch-by-account?${params}`
+          );
+          if (response.ok) {
+            const json = await response.json();
+            const tagged = (json.activities || []).map((a: any) => ({
+              ...a,
+              company_name: acc.company_name,
+            }));
+            allActivities.push(...tagged);
+          }
+        })
+      );
+
+      // Deduplicate by id
+      const seen = new Set<string>();
+      const deduped = allActivities.filter((a) => {
+        if (seen.has(String(a.id))) return false;
+        seen.add(String(a.id));
+        return true;
+      });
+
+      setHistoricalData(deduped);
+    } catch (error) {
+      console.error("Error fetching historical data:", error);
+      setHistoricalData([]);
+    } finally {
+      setLoadingHistoricalData(false);
+    }
+  };
 
   // ── Bulk remove ───────────────────────────────────────────────────────────
   async function handleBulkRemove() {
@@ -662,102 +837,182 @@ export function AccountsTable({
 
       </div>
 
-      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        {/* Left side: Add button + Search bar */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <AccountDialog
-            mode="create"
-            userDetails={userDetails}
-            onSaveAction={async (data) => {
-              await onSaveAccountAction(data);
-              setIsCreateDialogOpen(false);
-            }}
-            open={isCreateDialogOpen}
-            onOpenChangeAction={setIsCreateDialogOpen}
-          />
-          <Button
-            className="cursor-pointer rounded-none h-9 text-xs font-semibold"
-            onClick={() => setIsCreateDialogOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" /> Add Account
-          </Button>
-          <AccountsActiveSearch
-            globalFilter={globalFilter}
-            setGlobalFilterAction={setGlobalFilter}
-            isFiltering={isFiltering}
-          />
-        </div>
-
-        {/* Right side: Advanced Filter + Bulk actions */}
-        <div className="flex items-center gap-2">
-          <AccountsActiveFilter
-            typeFilter={typeFilter}
-            setTypeFilterAction={setTypeFilter}
-            dateCreatedFilter={dateCreatedFilter}
-            setDateCreatedFilterAction={setDateCreatedFilter}
-            alphabeticalFilter={alphabeticalFilter}
-            setAlphabeticalFilterAction={setAlphabeticalFilter}
-            regionFilter={regionFilter}
-            setRegionFilterAction={setRegionFilter}
-            industryFilter={industryFilter}
-            setIndustryFilterAction={setIndustryFilter}
-            nextAvailableDateRange={nextAvailableDateRange}
-            setNextAvailableDateRangeAction={setNextAvailableDateRange}
-            posts={posts}
-          />
-
-          {selectedAccountIds.length > 0 && (
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-              <span className="text-[11px] text-slate-500 font-medium">
-                {selectedAccountIds.length} selected
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="cursor-pointer rounded-none h-8 text-xs"
-                onClick={() => setIsTransferDialogOpen(true)}
-              >
-                <Repeat className="h-3.5 w-3.5 mr-1" /> Transfer
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                className="cursor-pointer rounded-none h-8 text-xs"
-                onClick={() => setIsRemoveDialogOpen(true)}
-              >
-                <Archive className="h-3.5 w-3.5 mr-1" /> Archive
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* ── Table ────────────────────────────────────────────────────────── */}
-      <div className="rounded-none border border-slate-200 bg-white shadow-sm overflow-hidden">
-
-        {/* Table header bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-slate-400" />
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-              Account Records
-            </span>
+      <div
+        className="overflow-hidden shadow-sm border"
+        style={{
+          borderColor: tableStyles.table_border,
+          borderRadius: `${tableStyles.table_border_radius}px`,
+          backgroundColor: tableStyles.table_bg,
+        }}
+      >
+        {/* ── Toolbar inside container ── */}
+        <div
+          className="flex flex-wrap items-center gap-3 px-4 py-2.5 border-b"
+          style={{ borderColor: tableStyles.toolbar_border ?? tableStyles.th_border, backgroundColor: tableStyles.toolbar_bg ?? tableStyles.th_bg }}
+        >
+          {/* Add Account + Search */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <AccountDialog
+              mode="create"
+              userDetails={userDetails}
+              onSaveAction={async (data) => {
+                await onSaveAccountAction(data);
+                setIsCreateDialogOpen(false);
+              }}
+              open={isCreateDialogOpen}
+              onOpenChangeAction={setIsCreateDialogOpen}
+            />
+            <Button
+              className="cursor-pointer h-8 text-xs font-semibold shrink-0 border"
+              onClick={() => setIsCreateDialogOpen(true)}
+              style={{
+                backgroundColor: tableStyles.toolbar_btn_bg,
+                color: tableStyles.toolbar_btn_text,
+                borderColor: tableStyles.toolbar_btn_border,
+                borderRadius: tableStyles.pagination_radius
+              }}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Account
+            </Button>
+            <Input
+              placeholder="Search records..."
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); setGlobalFilter(e.target.value); }}
+              onKeyDown={(e) => { if (e.key === "Escape") { setSearchInput(""); setGlobalFilter(""); } }}
+              className="h-8 text-[10px] rounded-none pl-8 uppercase tracking-widest border-0 focus-visible:ring-0"
+              style={{
+                color: tableStyles.toolbar_input_text,
+                fontSize: `${tableStyles.th_font_size}px`,
+                backgroundColor: tableStyles.toolbar_input_bg,
+                borderColor: tableStyles.toolbar_input_border,
+                borderRadius: `${tableStyles.table_border_radius}px`,
+              }}
+            />
           </div>
-          <Badge variant="outline" className="text-[11px] font-mono tabular-nums rounded-none">
-            {filteredData.length.toLocaleString()} results
-          </Badge>
+
+          {/* Filter + bulk actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <AccountsActiveFilter
+              typeFilter={typeFilter}
+              setTypeFilterAction={setTypeFilter}
+              dateCreatedFilter={dateCreatedFilter}
+              setDateCreatedFilterAction={setDateCreatedFilter}
+              alphabeticalFilter={alphabeticalFilter}
+              setAlphabeticalFilterAction={setAlphabeticalFilter}
+              regionFilter={regionFilter}
+              setRegionFilterAction={setRegionFilter}
+              industryFilter={industryFilter}
+              setIndustryFilterAction={setIndustryFilter}
+              nextAvailableDateRange={nextAvailableDateRange}
+              setNextAvailableDateRangeAction={setNextAvailableDateRange}
+              posts={posts}
+            />
+
+            {selectedAccountIds.length > 0 && (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {selectedAccountIds.length} selected
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer h-8 text-xs"
+                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+                  onClick={() => setIsTransferDialogOpen(true)}
+                >
+                  <Repeat className="h-3.5 w-3.5 mr-1" /> Transfer
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="cursor-pointer h-8 text-xs"
+                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+                  onClick={async () => {
+                    const ids = [...selectedAccountIds];
+                    const accountsToArchive = localPosts.filter((acc) => ids.includes(acc.id));
+                    setHistoricalData([]);
+                    setLoadingHistoricalData(true);
+                    setIsRemoveDialogOpen(true);
+                    const allActivities: any[] = [];
+                    try {
+                      await Promise.all(
+                        accountsToArchive.map(async (acc) => {
+                          const params = new URLSearchParams();
+                          if (acc.account_reference_number) {
+                            params.set("account_reference_number", acc.account_reference_number);
+                          } else if (acc.company_name) {
+                            params.set("company_name", acc.company_name);
+                          } else {
+                            return;
+                          }
+                          params.set("referenceid", userDetails.referenceid);
+                          const res = await fetch(`/api/activity/tsa/historical/fetch-by-account?${params}`);
+                          if (res.ok) {
+                            const json = await res.json();
+                            const tagged = (json.activities || []).map((a: any) => ({
+                              ...a,
+                              company_name: acc.company_name,
+                            }));
+                            allActivities.push(...tagged);
+                          }
+                        })
+                      );
+                      const seen = new Set<string>();
+                      const deduped = allActivities.filter((a) => {
+                        if (seen.has(String(a.id))) return false;
+                        seen.add(String(a.id));
+                        return true;
+                      });
+                      setHistoricalData(deduped);
+                    } catch (err) {
+                      console.error("Error fetching historical data:", err);
+                      setHistoricalData([]);
+                    } finally {
+                      setLoadingHistoricalData(false);
+                    }
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5 mr-1" /> Archive
+                </Button>
+              </div>
+            )}
+
+            {/* Record count */}
+            <div
+              className="flex items-center gap-2 px-3 py-1 border text-[10px] font-bold uppercase tracking-widest"
+              style={{
+                color: tableStyles.toolbar_btn_text ?? tableStyles.th_text,
+                borderColor: tableStyles.toolbar_btn_border ?? tableStyles.th_border,
+                backgroundColor: tableStyles.toolbar_btn_bg ?? "transparent",
+                borderRadius: `${tableStyles.table_border_radius}px`
+              }}
+            >
+              <Activity className="h-3.5 w-3.5 opacity-60" />
+              {filteredData.length.toLocaleString()} results
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="hover:bg-slate-50 border-b border-slate-100">
+                <TableRow
+                  key={hg.id}
+                  style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}
+                >
                   {hg.headers.map((header) => (
                     <TableHead
                       key={header.id}
-                      className="text-[11px] font-bold uppercase tracking-wider text-slate-400 py-3 px-4 whitespace-nowrap"
+                      className="font-bold uppercase tracking-wider whitespace-nowrap"
+                      style={{
+                        color: tableStyles.th_text,
+                        fontSize: `${tableStyles.th_font_size}px`,
+                        padding: `${tableStyles.th_padding}px 16px`,
+                        borderColor: tableStyles.th_border,
+                        backgroundColor: tableStyles.th_bg,
+                      }}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
@@ -771,7 +1026,8 @@ export function AccountsTable({
                 <TableRow>
                   <TableCell
                     colSpan={columns.length}
-                    className="text-center py-16 text-slate-400 text-sm"
+                    className="text-center py-16 text-sm"
+                    style={{ color: tableStyles.td_text }}
                   >
                     <div className="flex flex-col items-center gap-2">
                       <Building2 className="h-8 w-8 opacity-20" />
@@ -780,15 +1036,34 @@ export function AccountsTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                table.getRowModel().rows.map((row, idx) => (
+                table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className={`border-b border-slate-50 transition-colors hover:bg-slate-50 ${
-                      row.getIsSelected() ? "bg-blue-50 hover:bg-blue-50" : ""
-                    } ${idx % 2 === 0 ? "" : "bg-slate-50/30"}`}
+                    className="transition-colors"
+                    style={{
+                      borderColor: tableStyles.tr_border,
+                      backgroundColor: row.getIsSelected() ? "#eff6ff" : tableStyles.table_bg,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!row.getIsSelected())
+                        (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!row.getIsSelected())
+                        (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg;
+                    }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="py-3 px-4 align-top">
+                      <TableCell
+                        key={cell.id}
+                        className="align-top"
+                        style={{
+                          color: tableStyles.td_text,
+                          fontSize: `${tableStyles.td_font_size}px`,
+                          padding: `${tableStyles.td_padding}px 16px`,
+                          borderColor: tableStyles.td_border,
+                        }}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
@@ -799,18 +1074,65 @@ export function AccountsTable({
           </Table>
         </div>
 
-        {/* Pending warning */}
         {filteredData.some((a) => a.status === "Pending") && (
           <div className="mx-4 mb-4 mt-2 flex items-start gap-2 rounded-none border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <span className="mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-amber-500 mt-1.5" />
+            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-amber-500" />
             <span>
               Accounts with <strong>Pending</strong> status require TSM approval before they can be used in activity creation.
             </span>
           </div>
         )}
-      </div>
 
-      <AccountsActivePagination table={table} />
+        {/* ── Pagination inside container ── */}
+        {table.getPageCount() > 1 && (
+          <div
+            className="flex items-center justify-center border-t"
+            style={{ backgroundColor: tableStyles.pagination_bg, borderColor: tableStyles.toolbar_border ?? tableStyles.th_border }}
+          >
+            <div
+              className="flex items-center gap-4 justify-center text-xs"
+              style={{ padding: `${tableStyles.tfoot_padding}px 12px` }}
+            >
+              <button
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+                style={{
+                  color: tableStyles.pagination_text,
+                  borderColor: tableStyles.pagination_border,
+                  borderRadius: `${tableStyles.pagination_radius}px`,
+                  backgroundColor: "transparent",
+                }}
+              >
+                ← Prev
+              </button>
+              <span
+                className="font-mono text-[11px] font-bold select-none px-3 py-1 border"
+                style={{
+                  color: tableStyles.pagination_text,
+                  borderColor: tableStyles.pagination_border,
+                  borderRadius: `${tableStyles.pagination_radius}px`,
+                }}
+              >
+                {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+              </span>
+              <button
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+                style={{
+                  color: tableStyles.pagination_text,
+                  borderColor: tableStyles.pagination_border,
+                  borderRadius: `${tableStyles.pagination_radius}px`,
+                  backgroundColor: "transparent",
+                }}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── Edit dialog ───────────────────────────────────────────────────── */}
       {editingAccount && (
@@ -822,17 +1144,17 @@ export function AccountsTable({
             contact_person:
               typeof editingAccount.contact_person === "string"
                 ? tryParseJSON(editingAccount.contact_person) ??
-                  editingAccount.contact_person.split(",").map((v) => v.trim())
+                editingAccount.contact_person.split(",").map((v) => v.trim())
                 : editingAccount.contact_person || [""],
             contact_number:
               typeof editingAccount.contact_number === "string"
                 ? tryParseJSON(editingAccount.contact_number) ??
-                  editingAccount.contact_number.split(",").map((v) => v.trim())
+                editingAccount.contact_number.split(",").map((v) => v.trim())
                 : editingAccount.contact_number || [""],
             email_address:
               typeof editingAccount.email_address === "string"
                 ? tryParseJSON(editingAccount.email_address) ??
-                  editingAccount.email_address.split(",").map((v) => v.trim())
+                editingAccount.email_address.split(",").map((v) => v.trim())
                 : editingAccount.email_address || [""],
             address: editingAccount.address,
             region: editingAccount.region,
@@ -866,6 +1188,9 @@ export function AccountsTable({
         removeRemarks={removeRemarks}
         setRemoveRemarks={setRemoveRemarks}
         onConfirmRemove={handleBulkRemove}
+        selectedCount={selectedAccountIds.length}
+        historicalData={historicalData}
+        loadingHistoricalData={loadingHistoricalData}
       />
 
       <TransferDialog
