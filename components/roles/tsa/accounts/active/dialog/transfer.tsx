@@ -117,7 +117,7 @@ export function TransferDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="p-0 overflow-hidden max-w-md w-full gap-0"
+        className="p-0 overflow-hidden !w-[95vw] !max-w-[480px] gap-0 border-0 shadow-2xl"
         style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
 
         {/* ── Header ─────────────────────────────────────────────────────── */}

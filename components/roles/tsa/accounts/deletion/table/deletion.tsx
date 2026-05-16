@@ -12,7 +12,6 @@ import { sileo } from "sileo";
 
 import { AccountsActiveSearch } from "../../active/search";
 import { AccountsActiveFilter } from "../../active/filter";
-import { AccountsActivePagination } from "../../active/pagination";
 
 interface Account {
   id: string;
@@ -472,7 +471,58 @@ export function AccountsTable({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AccountsActivePagination table={table} />
+      {/* ── Pagination ── */}
+      {table.getPageCount() > 1 && (
+        <div
+          className="flex items-center justify-center border-t"
+          style={{
+            backgroundColor: tableStyles.pagination_bg,
+            borderColor: tableStyles.toolbar_border ?? tableStyles.th_border,
+          }}
+        >
+          <div
+            className="flex items-center gap-4 justify-center text-xs"
+            style={{ padding: `${tableStyles.tfoot_padding}px 12px` }}
+          >
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+                backgroundColor: "transparent",
+              }}
+            >
+              ← Prev
+            </button>
+            <span
+              className="font-mono text-[11px] font-bold select-none px-3 py-1 border"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+              }}
+            >
+              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+            </span>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
+              style={{
+                color: tableStyles.pagination_text,
+                borderColor: tableStyles.pagination_border,
+                borderRadius: `${tableStyles.pagination_radius}px`,
+                backgroundColor: "transparent",
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

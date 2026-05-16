@@ -99,8 +99,8 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
   const defaultCenter: [number, number] = [14.5995, 120.9842];
   const mapCenter: [number, number] =
     filteredVisits.length > 0 &&
-    filteredVisits[0].Latitude != null &&
-    filteredVisits[0].Longitude != null
+      filteredVisits[0].Latitude != null &&
+      filteredVisits[0].Longitude != null
       ? [Number(filteredVisits[0].Latitude), Number(filteredVisits[0].Longitude)]
       : defaultCenter;
 
@@ -179,11 +179,10 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
                       <div className="flex items-center justify-between">
                         {/* Status badge */}
                         <Badge
-                          className={`rounded-sm text-[10px] font-mono px-2 py-0.5 border-none ${
-                            visit.Status === "Login"
+                          className={`rounded-sm text-[10px] font-mono px-2 py-0.5 border-none ${visit.Status === "Login"
                               ? "bg-green-600 text-white"
                               : "bg-red-500 text-white"
-                          }`}
+                            }`}
                         >
                           {visit.Status === "Login" ? (
                             <LogIn size={10} className="mr-1" />
@@ -197,9 +196,9 @@ export function SiteVisitCard({ referenceid, dateRange }: SiteVisitCardProps) {
                         <span className="text-muted-foreground">
                           {visit.date_created
                             ? new Date(visit.date_created).toLocaleTimeString(
-                                "en-PH",
-                                { hour: "2-digit", minute: "2-digit" },
-                              )
+                              "en-PH",
+                              { hour: "2-digit", minute: "2-digit" },
+                            )
                             : "—"}
                         </span>
                       </div>

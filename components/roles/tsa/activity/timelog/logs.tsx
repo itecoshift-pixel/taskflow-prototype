@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Clock, MapPin, Camera, ChevronDown, ChevronUp } from "lucide-react";
@@ -36,8 +36,8 @@ function fmtDateTime(dateStr: string) {
 
 const isSameDay = (d1: Date, d2: Date) =>
   d1.getFullYear() === d2.getFullYear() &&
-  d1.getMonth()    === d2.getMonth()    &&
-  d1.getDate()     === d2.getDate();
+  d1.getMonth() === d2.getMonth() &&
+  d1.getDate() === d2.getDate();
 
 // Filter a log entry against a DateRange
 function inDateRange(dateStr: string, range: DateRange | undefined): boolean {
@@ -48,7 +48,7 @@ function inDateRange(dateStr: string, range: DateRange | undefined): boolean {
   if (isNaN(date.getTime())) return false;
 
   const from = range?.from ? new Date(range.from) : null;
-  const to   = range?.to   ? new Date(range.to)   : null;
+  const to = range?.to ? new Date(range.to) : null;
 
   // Single-day selection
   if (from && to && isSameDay(from, to)) return isSameDay(date, from);
@@ -71,8 +71,8 @@ function inDateRange(dateStr: string, range: DateRange | undefined): boolean {
 // ─── Type styles ──────────────────────────────────────────────────────────────
 
 const TYPE_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  "Time In":  { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
-  "Time Out": { bg: "bg-rose-50",    text: "text-rose-700",    dot: "bg-rose-400"    },
+  "Time In": { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
+  "Time Out": { bg: "bg-rose-50", text: "text-rose-700", dot: "bg-rose-400" },
 };
 
 function getTypeStyle(type: string) {
@@ -85,8 +85,22 @@ function LogRow({ log, onView }: { log: TimeLog; onView: (log: TimeLog) => void 
   const [expanded, setExpanded] = useState(false);
   const style = getTypeStyle(log.Type);
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden transition-shadow hover:shadow-sm">
+    <div className="border border-slate-200 overflow-hidden transition-shadow hover:shadow-sm"
+      style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       {/* Collapsed header */}
       <button
         type="button"
@@ -146,7 +160,7 @@ export function TimeLogComponent({
   dateCreatedFilterRange,
 }: TimeLogProps) {
   const [selectedLog, setSelectedLog] = useState<TimeLog | null>(null);
-  const [open, setOpen]               = useState(false);
+  const [open, setOpen] = useState(false);
 
   const handleView = (log: TimeLog) => {
     setSelectedLog(log);
@@ -159,10 +173,13 @@ export function TimeLogComponent({
     return timeLogs.filter((log) => inDateRange(log.date_created, dateCreatedFilterRange));
   }, [timeLogs, dateCreatedFilterRange]);
 
-  const timeInCount  = filteredLogs.filter((l) => l.Status === "Login").length;
+  const timeInCount = filteredLogs.filter((l) => l.Status === "Login").length;
   const timeOutCount = filteredLogs.filter((l) => l.Status === "Logout").length;
 
   const hasDateFilter = !!(dateCreatedFilterRange?.from || dateCreatedFilterRange?.to);
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
 
   return (
     <>
@@ -232,7 +249,7 @@ export function TimeLogComponent({
 
           {selectedLog && (
             <div className="space-y-3 py-1">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-100 overflow-hidden text-[11px]">
+              <div className="border border-slate-200 bg-slate-50 divide-y divide-slate-100 overflow-hidden text-[11px]" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                 <div className="flex items-center gap-3 px-4 py-2.5">
                   <span className="font-semibold text-slate-500 w-16 shrink-0">Type</span>
                   <span className={`font-bold uppercase ${getTypeStyle(selectedLog.Type).text}`}>

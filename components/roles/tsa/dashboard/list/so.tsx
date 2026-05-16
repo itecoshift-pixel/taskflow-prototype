@@ -111,7 +111,7 @@ export function SOCard({
   }, [activities]);
 
   return (
-    <Card className="rounded-xl border shadow-sm z-[20]">
+    <Card className="border shadow-sm z-[20]" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       {/* Header */}
       <CardHeader className="px-5 pt-5 pb-3 border-b">
         <div className="flex items-center justify-between mb-3">
@@ -131,7 +131,7 @@ export function SOCard({
               variant="outline"
               size="sm"
               onClick={() => setShowComputation(!showComputation)}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 rounded-lg"
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
             >
               <Info className="w-3.5 h-3.5" />
               {showComputation ? "Hide" : "Details"}
@@ -271,7 +271,7 @@ export function SOCard({
 
         {/* Computation Details */}
         {showComputation && (
-          <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5">
+          <div className="mt-3 p-4 rounded-xl border border-blue-100 bg-blue-50 text-xs text-blue-900 space-y-1.5" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
             <p className="font-semibold text-blue-800 mb-1">Computation Details</p>
             <p>
               <strong>Total SO Done:</strong> Count of activities where{" "}

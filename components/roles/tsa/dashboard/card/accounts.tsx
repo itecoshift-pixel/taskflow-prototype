@@ -40,6 +40,19 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   const searchParams = useSearchParams();
   const userId = searchParams?.get("id") ?? null;
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   useEffect(() => {
     if (!referenceid) {
       setTotalAccounts(null);
@@ -156,7 +169,8 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
   );
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col rounded-none">
+    <Card className="bg-white z-10 text-black flex flex-col"
+      style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       <CardContent className="flex-1 flex items-center justify-center p-6">
         {loading ? (
           <Spinner />
@@ -182,7 +196,11 @@ export const AccountCard: React.FC<AccountCardProps> = ({ referenceid }) => {
 
       <CardFooter className="flex justify-end gap-2 border-t">
         {totalAccounts !== null && totalAccounts > 0 && (
-          <Button className="rounded-none p-6" onClick={() => setOpen(true)} disabled={loading || !!error}>
+          <Button
+            className="p-6"
+            onClick={() => setOpen(true)}
+            disabled={loading || !!error}
+            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
             <ListTree /> Show Breakdown
           </Button>
         )}

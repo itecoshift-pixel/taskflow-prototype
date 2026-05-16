@@ -65,111 +65,27 @@ function toInputValue(dateStr: string) {
 // datetime-local format: "YYYY-MM-DDTHH:MM"
 function toUTCISOString(dateStr: string) {
   if (!dateStr) return "";
-  
+
   // Parse the datetime-local string components (local time)
   const [datePart, timePart] = dateStr.split('T');
   if (!datePart || !timePart) return "";
-  
+
   const [year, month, day] = datePart.split('-').map(Number);
   const [hours, minutes] = timePart.split(':').map(Number);
-  
+
   // Create date object assuming LOCAL time
   const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-  
+
   if (isNaN(localDate.getTime())) return "";
-  
+
   // Convert to UTC by subtracting timezone offset
   const tzOffset = localDate.getTimezoneOffset() * 60000; // offset in milliseconds
   const utcDate = new Date(localDate.getTime() - tzOffset);
-  
+
   // Return UTC ISO string
   const result = utcDate.toISOString();
   console.log(`[toUTCISOString] Input (local): ${dateStr} -> Output (UTC): ${result}`);
   return result;
-}
-
-// ─── Meeting Card ─────────────────────────────────────────────────────────────
-
-function MeetingCard({
-  meeting,
-  onDelete,
-  onEdit,
-}: {
-  meeting: MeetingItem;
-  onDelete: (id: number) => void;
-  onEdit: (meeting: MeetingItem) => void;
-}) {
-  return (
-    <Card className="border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-start justify-between pb-2 pt-4 px-4">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 shrink-0">
-            <CalendarClock size={14} className="text-indigo-500" />
-          </span>
-          <CardTitle className="text-xs font-bold text-slate-800 uppercase tracking-wide truncate">
-            {meeting.type_activity}
-          </CardTitle>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-          {/* Edit button */}
-          <button
-            onClick={() => onEdit(meeting)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-all"
-            title="Edit meeting"
-          >
-            <Pencil size={13} />
-          </button>
-
-          {/* Delete button */}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <button
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all"
-                title="Delete meeting"
-              >
-                <Trash2 size={13} />
-              </button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. The meeting will be permanently deleted.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-red-600 hover:bg-red-700"
-                  onClick={() => onDelete(meeting.id)}
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </CardHeader>
-
-      <CardContent className="text-[11px] space-y-1.5 px-4 pb-4 text-slate-600">
-        <div className="flex items-center gap-1.5">
-          <span className="font-semibold text-slate-500 w-10 shrink-0">Start</span>
-          <span>{formatDateTime(meeting.start_date)}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="font-semibold text-slate-500 w-10 shrink-0">End</span>
-          <span>{formatDateTime(meeting.end_date)}</span>
-        </div>
-        {meeting.remarks && (
-          <div className="flex items-start gap-1.5 pt-0.5">
-            <span className="font-semibold text-slate-500 w-10 shrink-0 pt-px">Note</span>
-            <span className="capitalize text-slate-500 leading-relaxed">{meeting.remarks}</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
 }
 
 // ─── Edit Dialog ──────────────────────────────────────────────────────────────
@@ -186,10 +102,10 @@ function EditMeetingDialog({
   onUpdated: (updated: MeetingItem) => void;
 }) {
   const [startDate, setStartDate] = useState("");
-  const [endDate,   setEndDate]   = useState("");
-  const [remarks,   setRemarks]   = useState("");
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
+  const [endDate, setEndDate] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Populate fields when meeting changes
   useEffect(() => {
@@ -226,14 +142,14 @@ function EditMeetingDialog({
     try {
       const startIso = toUTCISOString(startDate);
       const endIso = toUTCISOString(endDate);
-      
+
       console.log(`[handleSave] Converted to UTC ISO - start: ${startIso}, end: ${endIso}`);
 
       const { data, error: supaErr } = await supabase
         .from("meetings")
         .update({
-          start_date:   startIso,
-          end_date:     endIso,
+          start_date: startIso,
+          end_date: endIso,
           remarks,
           date_updated: new Date().toISOString(),
         })
@@ -354,13 +270,13 @@ function EditMeetingDialog({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
-  const [meetings,    setMeetings]    = useState<MeetingItem[]>([]);
-  const [loading,     setLoading]     = useState(false);
+  const [meetings, setMeetings] = useState<MeetingItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const [viewAllOpen, setViewAllOpen] = useState(false);
 
   // Edit dialog state
   const [editTarget, setEditTarget] = useState<MeetingItem | null>(null);
-  const [editOpen,   setEditOpen]   = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -391,6 +307,90 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
     fetchMeetings();
   }, [referenceid]);
+
+  // ─── Meeting Card ─────────────────────────────────────────────────────────────
+
+  function MeetingCard({
+    meeting,
+    onDelete,
+    onEdit,
+  }: {
+    meeting: MeetingItem;
+    onDelete: (id: number) => void;
+    onEdit: (meeting: MeetingItem) => void;
+  }) {
+    return (
+      <Card className="border border-slate-200 shadow-sm hover:shadow-md transition-shadow" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+        <CardHeader className="flex flex-row items-start justify-between pb-2 pt-4 px-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 shrink-0">
+              <CalendarClock size={14} className="text-indigo-500" />
+            </span>
+            <CardTitle className="text-xs font-bold text-slate-800 uppercase tracking-wide truncate">
+              {meeting.type_activity}
+            </CardTitle>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+            {/* Edit button */}
+            <button
+              onClick={() => onEdit(meeting)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-all"
+              title="Edit meeting"
+            >
+              <Pencil size={13} />
+            </button>
+
+            {/* Delete button */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all"
+                  title="Delete meeting"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Meeting?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. The meeting will be permanently deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={() => onDelete(meeting.id)}
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardHeader>
+
+        <CardContent className="text-[11px] space-y-1.5 px-4 pb-4 text-slate-600">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-500 w-10 shrink-0">Start</span>
+            <span>{formatDateTime(meeting.start_date)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-500 w-10 shrink-0">End</span>
+            <span>{formatDateTime(meeting.end_date)}</span>
+          </div>
+          {meeting.remarks && (
+            <div className="flex items-start gap-1.5 pt-0.5">
+              <span className="font-semibold text-slate-500 w-10 shrink-0 pt-px">Note</span>
+              <span className="capitalize text-slate-500 leading-relaxed">{meeting.remarks}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleDelete = async (id: number) => {
@@ -433,6 +433,19 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
   const latest = meetings.slice(0, 1);
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3">
@@ -446,7 +459,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           manager={manager}
           onMeetingCreated={handleMeetingCreated}
         >
-          <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5">
+          <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
             <Plus size={13} /> Create
           </Button>
         </MeetingDialog>
@@ -472,6 +485,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
                 variant="outline"
                 size="sm"
                 className="text-xs h-8 gap-1.5"
+                style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                 onClick={() => setViewAllOpen(true)}
               >
                 <List size={13} /> View All ({meetings.length})
@@ -493,7 +507,8 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
       {/* ── View All Dialog ── */}
       <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-        <DialogContent className="max-w-lg w-full max-h-[80vh] overflow-auto">
+        <DialogContent className="max-w-lg w-full max-h-[80vh] overflow-auto"
+          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-slate-800">
               All Meetings
@@ -522,6 +537,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
               variant="outline"
               size="sm"
               className="text-xs"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
               onClick={() => setViewAllOpen(false)}
             >
               Close

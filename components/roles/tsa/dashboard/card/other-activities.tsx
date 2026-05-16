@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Item, ItemContent, ItemTitle, ItemDescription, } from "@/components/ui/item";
 import { Card, CardFooter } from "@/components/ui/card";
@@ -70,6 +70,18 @@ export function ActivityCard({ activities, loading, error }: Props) {
   const searchParams = useSearchParams();
   const userId = searchParams?.get("id") ?? null;
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
 
   const hasAnyData =
     totalDeliveries > 0 ||
@@ -82,7 +94,8 @@ export function ActivityCard({ activities, loading, error }: Props) {
   /* ===================== RENDER ===================== */
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between"
+      style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       {!hasAnyData ? (
         /* ===================== EMPTY STATE UI ===================== */
         <div className="flex flex-col items-center justify-center text-center gap-3 mt-20">
@@ -100,7 +113,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
         <div className="flex flex-col gap-2 p-2">
           {/* Total Deliveries */}
           {totalDeliveries > 0 && (
-            <Item variant="outline" className="w-full rounded-none border border-gray-200">
+            <Item variant="outline" className="w-full border border-gray-200" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">
@@ -118,7 +131,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
 
           {/* Total Sales */}
           {totalSales > 0 && (
-            <Item variant="outline" className="w-full rounded-none border border-gray-200">
+            <Item variant="outline" className="w-full border border-gray-200" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-medium">
@@ -139,8 +152,9 @@ export function ActivityCard({ activities, loading, error }: Props) {
             {quotationCount > 0 && (
               <Item
                 variant="outline"
-                className={`rounded-none border border-gray-200 ${soCount === 0 ? "col-span-2" : ""
+                className={`border border-gray-200 ${soCount === 0 ? "col-span-2" : ""
                   }`}
+                style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
               >
                 <ItemContent>
                   <div className="flex justify-between w-full">
@@ -160,8 +174,9 @@ export function ActivityCard({ activities, loading, error }: Props) {
             {soCount > 0 && (
               <Item
                 variant="outline"
-                className={`rounded-none border border-gray-200 ${quotationCount === 0 ? "col-span-2" : ""
+                className={`border border-gray-200 ${quotationCount === 0 ? "col-span-2" : ""
                   }`}
+                style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
               >
                 <ItemContent>
                   <div className="flex justify-between w-full">
@@ -181,7 +196,8 @@ export function ActivityCard({ activities, loading, error }: Props) {
 
           {/* Cancelled */}
           {(cancelledSOCount > 0 || totalCancelledSOAmount > 0) && (
-            <Item variant="outline" className="rounded-none border border-gray-200">
+            <Item variant="outline" className="border border-gray-200"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent className="space-y-1">
                 {cancelledSOCount > 0 && (
                   <div className="flex justify-between w-full">
@@ -214,7 +230,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
         </div>
       )}
       <CardFooter className="flex justify-end border-t">
-        <Button asChild className="rounded-none p-6">
+        <Button asChild className="p-6" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
           <Link
             href={
               userId
@@ -222,7 +238,7 @@ export function ActivityCard({ activities, loading, error }: Props) {
                 : "/roles/tsa/activity/planner"
             }
           >
-           <Activity /> Add Activity
+            <Activity /> Add Activity
           </Link>
         </Button>
       </CardFooter>

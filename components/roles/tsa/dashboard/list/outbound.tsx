@@ -76,7 +76,7 @@ export function OutboundCallsCard({
     fetch("/api/table-styles")
       .then((res) => res.json())
       .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -259,7 +259,7 @@ export function OutboundCallsCard({
   }, [successfulOBCalls, historyByRefNum, obTarget, history]);
 
   return (
-    <Card className="relative rounded-xl border shadow-sm z-[20]">
+    <Card className="relative border shadow-sm z-[20]" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       <CardHeader className="px-5 pt-5 pb-3 border-b">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -270,7 +270,8 @@ export function OutboundCallsCard({
             variant="outline"
             size="sm"
             onClick={() => setShowComputation(!showComputation)}
-            className="flex items-center gap-1.5 text-xs text-blue-600 rounded-lg"
+            className="flex items-center gap-1.5 text-xs text-blue-600"
+            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
           >
             <Info className="w-3.5 h-3.5" />
             {showComputation ? "Hide" : "Details"}
@@ -352,7 +353,8 @@ export function OutboundCallsCard({
         </div>
 
         {showComputation && (
-          <div className="mt-3 p-3 text-xs bg-blue-50 rounded-lg">
+          <div className="mt-3 p-3 text-xs bg-blue-50"
+            style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
             Computation details here...
           </div>
         )}

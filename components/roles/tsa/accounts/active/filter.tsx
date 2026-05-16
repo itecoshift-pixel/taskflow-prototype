@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Select,
   SelectTrigger,
@@ -131,6 +131,57 @@ export function AccountsActiveFilter({
   const [industryPopoverOpen, setIndustryPopoverOpen] = useState(false);
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
 
+  const [tableStyles, setTableStyles] = useState({
+    th_bg: "#f9fafb",
+    layout: "datatable",
+    td_text: "#111827",
+    th_text: "#374151",
+    table_bg: "#ffffff",
+    tfoot_bg: "#ffffff",
+    td_border: "#f3f4f6",
+    th_border: "#e5e7eb",
+    tr_border: "#f3f4f6",
+    td_padding: "12",
+    tfoot_text: "#6b7280",
+    th_padding: "12",
+    toolbar_bg: "#f9fafb",
+    tr_hover_bg: "#f9fafb",
+    table_border: "#e5e7eb",
+    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
+    td_font_size: "13",
+    tfoot_border: "#e5e7eb",
+    th_font_size: "12",
+    pagination_bg: "#ffffff",
+    tfoot_padding: "12",
+    th_font_weight: "600",
+    toolbar_border: "#e5e7eb",
+    toolbar_btn_bg: "#ffffff",
+    pagination_text: "#374151",
+    tfoot_font_size: "12",
+    toolbar_btn_text: "#374151",
+    toolbar_input_bg: "#ffffff",
+    pagination_border: "#d1d5db",
+    pagination_radius: "8",
+    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
+    th_letter_spacing: "0.01em",
+    toolbar_btn_border: "#d1d5db",
+    toolbar_input_text: "#374151",
+    table_border_radius: "16",
+    pagination_active_bg: "#3b82f6",
+    toolbar_input_border: "#d1d5db",
+    pagination_active_text: "#ffffff"
+
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   // Dynamic options from posts data
   const regionOptions = useMemo(() => {
     const regions = new Set<string>();
@@ -200,7 +251,8 @@ export function AccountsActiveFilter({
           variant="outline"
           onClick={() => setOpen(true)}
           aria-label="Open filters"
-          className="relative flex items-center gap-1.5 cursor-pointer rounded-none h-9 px-3 text-xs font-semibold"
+          className="cursor-pointer h-8 text-xs font-semibold shrink-0 shadow-sm"
+          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
         >
           <Filter className="h-3.5 w-3.5" />
           Advanced Filter
@@ -216,7 +268,8 @@ export function AccountsActiveFilter({
 
       {/* ── Filter Dialog ─────────────────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-full max-w-sm rounded-none p-0 overflow-hidden gap-0">
+        <DialogContent className="p-0 overflow-hidden !w-[95vw] !max-w-[480px] gap-0 border-0 shadow-2xl"
+          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
 
           {/* Header */}
           <div className="bg-zinc-900 px-6 pt-5 pb-4">
@@ -246,7 +299,8 @@ export function AccountsActiveFilter({
                 Type Client
               </label>
               <Select value={typeFilter} onValueChange={setTypeFilterAction}>
-                <SelectTrigger className="w-full rounded-none text-xs">
+                <SelectTrigger className="w-full text-xs"
+                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -267,7 +321,7 @@ export function AccountsActiveFilter({
                 </span>
               </label>
               <Select value={regionFilter} onValueChange={setRegionFilterAction}>
-                <SelectTrigger className="w-full rounded-none text-xs">
+                <SelectTrigger className="w-full text-xs" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                   <SelectValue placeholder="Select region" />
                 </SelectTrigger>
                 <SelectContent>
@@ -291,7 +345,8 @@ export function AccountsActiveFilter({
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full rounded-none text-xs justify-between h-9"
+                    className="w-full  text-xs justify-between h-9"
+                    style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                   >
                     <span className={industryFilter.length > 0 ? "text-zinc-900" : "text-zinc-400"}>
                       {industryFilter.length > 0
@@ -301,7 +356,7 @@ export function AccountsActiveFilter({
                     <ChevronDown className="h-3 w-3 text-zinc-400" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0 rounded-none" align="start">
+                <PopoverContent className="w-full p-0" align="start" >
                   <Command>
                     <CommandInput placeholder="Search industries..." className="text-xs" />
                     <CommandList className="max-h-48">
@@ -315,11 +370,10 @@ export function AccountsActiveFilter({
                           >
                             <div className="flex items-center gap-2 w-full">
                               <div
-                                className={`h-4 w-4 border rounded flex items-center justify-center ${
-                                  industryFilter.includes(industry)
-                                    ? "bg-zinc-900 border-zinc-900"
-                                    : "border-zinc-300"
-                                }`}
+                                className={`h-4 w-4 border rounded flex items-center justify-center ${industryFilter.includes(industry)
+                                  ? "bg-zinc-900 border-zinc-900"
+                                  : "border-zinc-300"
+                                  }`}
                               >
                                 {industryFilter.includes(industry) && (
                                   <Check className="h-3 w-3 text-white" />
@@ -372,9 +426,9 @@ export function AccountsActiveFilter({
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={`w-full rounded-none text-xs justify-between h-9 ${
-                      nextAvailableDateRange?.from ? "text-zinc-900" : "text-zinc-400"
-                    }`}
+                    className={`w-full text-xs justify-between h-9 ${nextAvailableDateRange?.from ? "text-zinc-900" : "text-zinc-400"
+                      }`}
+                    style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                   >
                     <span>{formatDateRange()}</span>
                     <CalendarDays className="h-3 w-3 text-zinc-400" />
@@ -439,12 +493,13 @@ export function AccountsActiveFilter({
                           }
                           className={`
                             flex items-center justify-center gap-1.5 px-2 py-2
-                            text-[11px] font-medium border rounded-none transition-colors
+                            text-[11px] font-medium border transition-colors
                             ${isActive
                               ? "bg-zinc-900 text-white border-zinc-900"
                               : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
                             }
                           `}
+                          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                         >
                           {opt.icon}
                           {opt.label}
@@ -471,12 +526,13 @@ export function AccountsActiveFilter({
                           onClick={() => setDateCreatedFilterAction(opt.value)}
                           className={`
                             flex items-center justify-center gap-1.5 px-2 py-2
-                            text-[11px] font-medium border rounded-none transition-colors
+                            text-[11px] font-medium border transition-colors
                             ${isActive
                               ? "bg-zinc-900 text-white border-zinc-900"
                               : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
                             }
                           `}
+                          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                         >
                           {opt.icon}
                           {opt.label}
@@ -490,7 +546,8 @@ export function AccountsActiveFilter({
 
             {/* Active filters summary */}
             {hasActiveFilters && (
-              <div className="bg-zinc-50 border border-zinc-200 px-3 py-2 flex items-center gap-2">
+              <div className="bg-zinc-50 border border-zinc-200 px-3 py-2 flex items-center gap-2"
+                style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
                 <CheckCircle2 className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
                 <p className="text-xs text-zinc-600 flex-1">
                   {activeCount} filter{activeCount > 1 ? "s" : ""} active
@@ -511,7 +568,8 @@ export function AccountsActiveFilter({
             {hasActiveFilters && (
               <Button
                 variant="outline"
-                className="rounded-none flex-1 text-xs h-10 border-zinc-200"
+                className="flex-1 text-xs h-10 border-zinc-200"
+                style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
                 onClick={handleClearAll}
               >
                 <X className="h-3.5 w-3.5 mr-1.5" />
@@ -519,7 +577,8 @@ export function AccountsActiveFilter({
               </Button>
             )}
             <Button
-              className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+              className="flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
               onClick={() => setOpen(false)}
             >
               Apply Filters

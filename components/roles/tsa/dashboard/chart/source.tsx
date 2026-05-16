@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { TrendingUp, Info } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from "recharts";
 import { Spinner } from "@/components/ui/spinner"
@@ -35,6 +35,19 @@ const ALLOWED_SOURCES = [
 export function SourceCard({ activities, loading, error }: SourceCardProps) {
   const [showTooltip, setShowTooltip] = useState(false);
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   const data = useMemo(() => {
     if (!activities || activities.length === 0) {
       return [];
@@ -67,7 +80,7 @@ export function SourceCard({ activities, loading, error }: SourceCardProps) {
   } satisfies Record<string, { label: string; color: string }>;
 
   return (
-    <Card className="bg-white z-10 text-black rounded-none">
+    <Card className="bg-white z-10 text-black" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       <CardHeader className="flex justify-between items-center">
         <div>
           <CardTitle>Source Breakdown</CardTitle>

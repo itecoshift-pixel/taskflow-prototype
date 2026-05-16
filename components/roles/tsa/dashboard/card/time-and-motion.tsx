@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -21,6 +21,19 @@ interface Props {
 
 export function TimemotionCard({ activities, loading, error }: Props) {
   const [open, setOpen] = useState(false);
+
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
 
   const formatDuration = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -60,7 +73,8 @@ export function TimemotionCard({ activities, loading, error }: Props) {
   }, {} as Record<string, number>);
 
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between"
+      style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       <CardHeader>
         <CardTitle>Total Work Time</CardTitle>
         <CardDescription>Working Hours</CardDescription>
@@ -109,7 +123,11 @@ export function TimemotionCard({ activities, loading, error }: Props) {
       </Sheet>
 
       <CardFooter className="flex justify-end border-t">
-        <Button aria-label="Show Breakdown" className="cursor-pointer rounded-none p-6" onClick={() => setOpen(true)}>
+        <Button
+          aria-label="Show Breakdown"
+          className="cursor-pointer p-6"
+          onClick={() => setOpen(true)}
+          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
           <ListTree /> Show Breakdown
         </Button>
       </CardFooter>

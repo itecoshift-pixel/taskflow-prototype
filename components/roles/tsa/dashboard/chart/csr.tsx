@@ -93,6 +93,19 @@ export function CSRMetricsCard({
   const [avgQuotationHT, setAvgQuotationHT] = useState(0);
   const [avgSpfHT, setAvgSpfHT] = useState(0);
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   /* ================= EXACT SAME LOGIC AS breaches.tsx ================= */
   const fetchCSRMetrics = useCallback(async (refId: string, from: string, to: string) => {
     if (!refId) return;
@@ -174,7 +187,8 @@ export function CSRMetricsCard({
 
   /* ================= UI ================= */
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between"
+      style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       <CardHeader>
         <CardTitle>CSR Metrics Tickets</CardTitle>
       </CardHeader>

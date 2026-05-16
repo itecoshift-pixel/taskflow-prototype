@@ -49,6 +49,8 @@ import { AccountsActiveFilter } from "../filter";
 import { AccountsActiveDeleteDialog } from "../../../activity/planner/dialog/delete";
 import { TransferDialog } from "../dialog/transfer";
 
+// ─── Cluster config ───────────────────────────────────────────────────────────
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Account {
   id: string;
@@ -169,8 +171,7 @@ export function AccountsTable({
     table_border_radius: "16",
     pagination_active_bg: "#3b82f6",
     toolbar_input_border: "#d1d5db",
-    pagination_active_text: "#ffffff"
-
+    pagination_active_text: "#ffffff",
   });
 
   useEffect(() => {
@@ -864,13 +865,13 @@ export function AccountsTable({
               onOpenChangeAction={setIsCreateDialogOpen}
             />
             <Button
-              className="cursor-pointer h-8 text-xs font-semibold shrink-0 border"
+              className="cursor-pointer h-8 text-xs font-semibold shrink-0 shadow-sm"
               onClick={() => setIsCreateDialogOpen(true)}
               style={{
                 backgroundColor: tableStyles.toolbar_btn_bg,
                 color: tableStyles.toolbar_btn_text,
                 borderColor: tableStyles.toolbar_btn_border,
-                borderRadius: tableStyles.pagination_radius
+                borderRadius: `${tableStyles.table_border_radius}px`
               }}
             >
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Account

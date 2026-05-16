@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Item, ItemContent, ItemTitle, ItemDescription } from "@/components/ui/item";
 import { Card, CardFooter } from "@/components/ui/card";
@@ -77,8 +77,22 @@ export function OutboundTouchbaseCard({ activities }: Props) {
   const searchParams = useSearchParams();
   const userId = searchParams?.get("id") ?? null;
 
+  const [tableStyles, setTableStyles] = useState({
+    table_border_radius: "16",
+  });
+
+  useEffect(() => {
+    fetch("/api/table-styles")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.table_styles) setTableStyles(data.table_styles);
+      })
+      .catch(() => { }); // silently fall back to defaults
+  }, []);
+
   return (
-    <Card className="bg-white z-10 text-black flex flex-col justify-between rounded-none">
+    <Card className="bg-white z-10 text-black flex flex-col justify-between"
+      style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       {!hasAnyData ? (
         <div className="flex flex-col items-center justify-center text-center gap-3 mt-20">
           <div className="flex items-center justify-center w-24 h-24 mb-8">
@@ -98,7 +112,8 @@ export function OutboundTouchbaseCard({ activities }: Props) {
 
           {/* TOUCHBASE */}
           {touchbaseTotal > 0 && (
-            <Item variant="outline" className="border border-gray-200 rounded-none">
+            <Item variant="outline" className="border border-gray-200"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-semibold flex items-center gap-1">
@@ -131,7 +146,8 @@ export function OutboundTouchbaseCard({ activities }: Props) {
 
           {/* FOLLOW UP */}
           {followupTotal > 0 && (
-            <Item variant="outline" className="border border-gray-200 rounded-none">
+            <Item variant="outline" className="border border-gray-200"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-semibold flex items-center gap-1">
@@ -163,7 +179,7 @@ export function OutboundTouchbaseCard({ activities }: Props) {
 
           {/* VIBER */}
           {viberReplies > 0 && (
-            <Item variant="outline" className="border border-gray-200 rounded-none">
+            <Item variant="outline" className="border border-gray-200" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-semibold flex items-center gap-1">
@@ -179,7 +195,8 @@ export function OutboundTouchbaseCard({ activities }: Props) {
 
           {/* FB MARKETPLACE */}
           {fbMarketplace > 0 && (
-            <Item variant="outline" className="border border-gray-200 rounded-none">
+            <Item variant="outline" className="border border-gray-200"
+              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
               <ItemContent>
                 <div className="flex justify-between w-full">
                   <ItemTitle className="text-xs font-semibold flex items-center gap-1">
@@ -212,7 +229,7 @@ export function OutboundTouchbaseCard({ activities }: Props) {
       )}
 
       <CardFooter className="flex justify-end border-t">
-        <Button asChild className="rounded-none p-6">
+        <Button asChild className="p-6" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
           <Link
             href={
               userId
