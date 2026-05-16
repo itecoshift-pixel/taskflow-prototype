@@ -17,6 +17,7 @@ import { TicketEndorsed } from "@/components/popup/ticket-endorsed";
 import { ActivityToday } from "@/components/popup/activity-today";
 import { FollowUpToday } from "@/components/popup/followup-today";
 import { OfflineDialog } from "@/components/popup/offline";
+import { MaintenanceDialog } from "@/components/popup/maintenance";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
@@ -140,6 +141,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
         <Analytics />
         {children}
         <OfflineDialog />
+        <MaintenanceDialog />
       </ThemeProvider>
 
       <Toaster position="top-right" />

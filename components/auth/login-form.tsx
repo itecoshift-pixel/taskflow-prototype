@@ -22,11 +22,11 @@ import Link from "next/link";
 // Firestore
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
 // Supabase
 import { supabase } from "@/utils/supabase-ticket";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
 type Ticket = {
   ticket_id: string;
   department: string;
@@ -37,11 +37,45 @@ type Ticket = {
   date_created: string;
 };
 
-// ─── Loading overlay ──────────────────────────────────────────────────────────
+interface LoginFormStyles {
+  card_bg: string;
+  card_border: string;
+  card_shadow: string;
+  left_bg: string;
+  divider: string;
+  title_color: string;
+  subtitle_color: string;
+  label_color: string;
+  input_bg: string;
+  input_border: string;
+  input_text: string;
+  btn_bg: string;
+  btn_text: string;
+  tab_active: string;
+  link_color: string;
+}
 
+const DEFAULT_STYLES: LoginFormStyles = {
+  card_bg: "#ffffff",
+  card_border: "#e2e8f0",
+  card_shadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+  left_bg: "#ffffff",
+  divider: "#e2e8f0",
+  title_color: "#1e293b",
+  subtitle_color: "#94a3b8",
+  label_color: "#334155",
+  input_bg: "#f8fafc",
+  input_border: "#e2e8f0",
+  input_text: "#1e293b",
+  btn_bg: "#4f46e5",
+  btn_text: "#ffffff",
+  tab_active: "#4f46e5",
+  link_color: "#4f46e5",
+};
+
+// ─── Loading overlay ──────────────────────────────────────────────────────────
 function LoadingOverlay() {
   const [progress, setProgress] = useState(0);
-
   useEffect(() => {
     let val = 0;
     const id = setInterval(() => {
@@ -54,32 +88,22 @@ function LoadingOverlay() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      {/* Blurred backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      {/* Card */}
-      <div className="relative z-10 flex flex-col items-center gap-5 bg-white rounded-2xl shadow-2xl px-10 py-8 min-w-[260px]
-        animate-in fade-in-0 zoom-in-95 duration-300">
-        {/* Spinner */}
+      <div className="relative z-10 flex flex-col items-center gap-5 bg-white rounded-2xl shadow-2xl px-10 py-8 min-w-[260px] animate-in fade-in-0 zoom-in-95 duration-300">
         <div className="relative flex items-center justify-center">
           <span className="absolute w-14 h-14 rounded-full border-4 border-indigo-100" />
           <Loader2 size={32} className="text-indigo-600 animate-spin" />
         </div>
-
         <div className="text-center space-y-1">
           <p className="text-sm font-bold text-slate-800">Signing you in</p>
           <p className="text-[11px] text-slate-400">Please wait a moment...</p>
         </div>
-
-        {/* Progress bar */}
         <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
           <div
             className="h-full bg-indigo-500 rounded-full transition-all duration-200 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
-
-        {/* Bouncing dots */}
         <div className="flex items-center gap-1.5">
           {[0, 150, 300].map((delay) => (
             <span
@@ -95,7 +119,6 @@ function LoadingOverlay() {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const [Email,    setEmail]    = useState("");
   const [Password, setPassword] = useState("");
@@ -103,17 +126,28 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [activeTab, setActiveTab] = useState<"password" | "pin">("password");
-
   const [showLocationDialog, setShowLocationDialog] = useState(false);
   const [pendingLoginData,   setPendingLoginData]   = useState<any | null>(null);
   const [loadingRedirect,    setLoadingRedirect]    = useState(false);
-
   const [showTicketDialog, setShowTicketDialog] = useState(false);
   const [remarks,          setRemarks]          = useState("");
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketDone,       setTicketDone]       = useState(false);
-
   const [ticket, setTicket] = useState<Ticket[]>([]);
+
+  // ── Login form styles from API ─────────────────────────────────────────────
+  const [formStyles, setFormStyles] = useState<LoginFormStyles>(DEFAULT_STYLES);
+
+  useEffect(() => {
+    fetch("/api/login-styles")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.success && json.data) {
+          setFormStyles({ ...DEFAULT_STYLES, ...json.data });
+        }
+      })
+      .catch(() => { /* fall back to defaults */ });
+  }, []);
 
   const router    = useRouter();
   const { setUserId } = useUser();
@@ -130,8 +164,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     if (!navigator.geolocation) return null;
     try {
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej)
-      );
+        navigator.geolocation.getCurrentPosition(res, rej));
       return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
     } catch { return null; }
   };
@@ -139,8 +172,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   // ── Fetch tickets ──────────────────────────────────────────────────────────
   const fetchTicket = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("tickets").select("*").order("date_created", { ascending: false });
+      const { data, error } = await supabase.from("tickets").select("*").order("date_created", { ascending: false });
       if (error) throw error;
       setTicket(data ?? []);
     } catch (err: any) {
@@ -200,46 +232,31 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       sileo.warning({ title: "Invalid PIN", description: "Please enter a 4-digit PIN.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
-    
-    // Check if PIN exists in localStorage
     const storedPinData = localStorage.getItem("userPin");
     if (!storedPinData) {
       sileo.error({ title: "PIN Not Set", description: "No PIN found. Please use password login.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
-    
     const pinData = JSON.parse(storedPinData);
     if (pinData.pin !== pin) {
       sileo.error({ title: "Invalid PIN", description: "The PIN you entered is incorrect.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
     }
-    
     setLoading(true);
     try {
       const deviceId = getDeviceId();
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          pin: pin, 
-          email: pinData.email, 
-          deviceId,
-          isPinLogin: true 
-        }),
+        body: JSON.stringify({ pin, email: pinData.email, deviceId, isPinLogin: true }),
       });
       const result = await res.json();
-
       if (!res.ok) {
-        if (result.locked) {
-          setTicketDone(false);
-          setShowTicketDialog(true);
-        } else {
-          sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-        }
+        if (result.locked) { setTicketDone(false); setShowTicketDialog(true); }
+        else { sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } }); }
         setLoading(false);
         return;
       }
-
       setPendingLoginData({ Email: pinData.email, deviceId, result });
       setShowLocationDialog(true);
     } catch {
@@ -265,27 +282,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         body: JSON.stringify({ Email, Password, deviceId }),
       });
       const result = await res.json();
-
       if (!res.ok) {
-        if (result.locked) {
-          setTicketDone(false);
-          setShowTicketDialog(true);
-        } else {
-          sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-        }
+        if (result.locked) { setTicketDone(false); setShowTicketDialog(true); }
+        else { sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } }); }
         setLoading(false);
         return;
       }
-
       setPendingLoginData({ Email, deviceId, result });
       setShowLocationDialog(true);
-      
-      // Store PIN data for future PIN logins
-      localStorage.setItem("userPin", JSON.stringify({
-        email: Email,
-        password: Password,
-        pin: "1234" // Default PIN, user can change this later
-      }));
+      localStorage.setItem("userPin", JSON.stringify({ email: Email, password: Password, pin: "1234" }));
     } catch {
       sileo.error({ title: "Error", description: "An unexpected error occurred.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
     } finally {
@@ -298,7 +303,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     if (!pendingLoginData) return;
     setLoadingRedirect(true);
     const { Email, deviceId, result } = pendingLoginData;
-
     await addDoc(collection(db, "activity_logs"), {
       email: Email, status: "login", deviceId, location,
       browser: navigator.userAgent, os: navigator.platform,
@@ -306,34 +310,18 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       TSM: result.TSM ?? null, Manager: result.Manager ?? null,
       date_created: serverTimestamp(),
     });
-
     setUserId(result.userId);
     await new Promise((r) => setTimeout(r, 500));
-
-    if (result.Department === "CSR") {
-      router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`);
-      return;
-    }
-
-    if (result.Department === "Procurement") {
-      router.push(`/roles/admin/dashboard?id=${result.userId}`);
-      return;
-    }
-
+    if (result.Department === "CSR") { router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); return; }
+    if (result.Department === "Procurement") { router.push(`/roles/admin/dashboard?id=${result.userId}`); return; }
     switch (result.Role) {
-      case "Territory Sales Manager":
-        router.push(`/roles/tsm/dashboard?id=${result.userId}`); break;
-      case "Manager":
-        router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
+      case "Territory Sales Manager": router.push(`/roles/tsm/dashboard?id=${result.userId}`); break;
+      case "Manager":                 router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
       case "Staff":
-      case "Admin":
-        router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); break;
-      case "Super Admin":
-        router.push(`/roles/admin/dashboard?id=${result.userId}`); break;
-      default:
-        router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
+      case "Admin":                   router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); break;
+      case "Super Admin":             router.push(`/roles/admin/dashboard?id=${result.userId}`); break;
+      default:                        router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
     }
-
     setPendingLoginData(null);
     setLoadingRedirect(false);
   };
@@ -342,54 +330,73 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const onDenyLocation  = async () => { setShowLocationDialog(false); await handlePostLogin(null); };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const s = formStyles; // shorthand
+
   return (
     <>
       {/* Grid background */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] z-0 pointer-events-none" />
 
       <div className={cn("relative z-10 w-full max-w-4xl mx-auto", className)} {...props}>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-2xl bg-white grid md:grid-cols-2">
-
+        <div
+          className="overflow-hidden rounded-2xl grid md:grid-cols-2"
+          style={{
+            backgroundColor: s.card_bg,
+            border: `1px solid ${s.card_border}`,
+            boxShadow: s.card_shadow,
+          }}
+        >
           {/* ── Left: form ── */}
-          <form 
-            onSubmit={activeTab === "password" ? handlePasswordLogin : handlePinLogin} 
+          <form
+            onSubmit={activeTab === "password" ? handlePasswordLogin : handlePinLogin}
             className="flex flex-col justify-between p-8 gap-6"
+            style={{ backgroundColor: s.left_bg }}
           >
             {/* Tab Navigation */}
-            <div className="flex border-b border-slate-200 -mx-8 -mt-8 mb-6 px-8 pt-8">
+            <div
+              className="flex -mx-8 -mt-8 mb-6 px-8 pt-8"
+              style={{ borderBottom: `1px solid ${s.divider}` }}
+            >
               <button
                 type="button"
                 onClick={() => setActiveTab("password")}
-                className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 flex items-center justify-center ${
-                  activeTab === "password"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-400 hover:text-slate-600"
-                }`}
+                className="px-4 py-2 text-xs font-semibold transition-colors border-b-2 flex items-center justify-center"
+                style={{
+                  borderBottomColor: activeTab === "password" ? s.tab_active : "transparent",
+                  color: activeTab === "password" ? s.tab_active : "#94a3b8",
+                }}
               >
-               <Lock className="mr-1" /> Password
+                <Lock className="mr-1 h-3 w-3" /> Password
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("pin")}
-                className={`px-4 py-2 text-xs font-semibold transition-colors border-b-2 flex items-center justify-center ${
-                  activeTab === "pin"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-400 hover:text-slate-600"
-                }`}
+                className="px-4 py-2 text-xs font-semibold transition-colors border-b-2 flex items-center justify-center"
+                style={{
+                  borderBottomColor: activeTab === "pin" ? s.tab_active : "transparent",
+                  color: activeTab === "pin" ? s.tab_active : "#94a3b8",
+                }}
               >
-               <Grid3X3 className="mr-1" /> PIN
+                <Grid3X3 className="mr-1 h-3 w-3" /> PIN
               </button>
             </div>
+
             <div className="space-y-1">
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight">Welcome back</h1>
-              <p className="text-xs text-slate-400">Sign in to your Taskflow account to continue.</p>
+              <h1 className="text-2xl font-black tracking-tight" style={{ color: s.title_color }}>
+                Welcome back
+              </h1>
+              <p className="text-xs" style={{ color: s.subtitle_color }}>
+                Sign in to your Taskflow account to continue.
+              </p>
             </div>
 
             <div className="space-y-4">
-              {/* Email - Only show for password login */}
+              {/* Email */}
               {activeTab === "password" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-xs font-semibold text-slate-700">Email</Label>
+                  <Label htmlFor="email" className="text-xs font-semibold" style={{ color: s.label_color }}>
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     type="email"
@@ -397,17 +404,28 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     required
                     value={Email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 transition-all"
+                    className="h-10 text-sm transition-all"
+                    style={{
+                      backgroundColor: s.input_bg,
+                      borderColor: s.input_border,
+                      color: s.input_text,
+                    }}
                   />
                 </div>
               )}
 
-              {/* Password - Only show for password login */}
+              {/* Password */}
               {activeTab === "password" && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="password" className="text-xs font-semibold text-slate-700">Password</Label>
-                    <a href="/auth/forgot-password" className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline transition-colors">
+                    <Label htmlFor="password" className="text-xs font-semibold" style={{ color: s.label_color }}>
+                      Password
+                    </Label>
+                    <a
+                      href="/auth/forgot-password"
+                      className="text-[11px] hover:underline transition-colors"
+                      style={{ color: s.link_color }}
+                    >
                       Forgot password?
                     </a>
                   </div>
@@ -419,7 +437,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                       required
                       value={Password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 pr-10 transition-all"
+                      className="h-10 text-sm pr-10 transition-all"
+                      style={{
+                        backgroundColor: s.input_bg,
+                        borderColor: s.input_border,
+                        color: s.input_text,
+                      }}
                     />
                     <button
                       type="button"
@@ -432,23 +455,27 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                 </div>
               )}
 
-              {/* PIN Input - Only show for PIN login */}
+              {/* PIN */}
               {activeTab === "pin" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="pin" className="text-xs font-semibold text-slate-700">Enter 4-digit PIN</Label>
+                  <Label htmlFor="pin" className="text-xs font-semibold" style={{ color: s.label_color }}>
+                    Enter 4-digit PIN
+                  </Label>
                   <Input
                     id="pin"
                     type="password"
                     placeholder="••••"
                     maxLength={4}
                     value={pin}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9]/g, '');
-                      setPin(value);
+                    onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="h-10 text-sm text-center text-xl font-mono transition-all"
+                    style={{
+                      backgroundColor: s.input_bg,
+                      borderColor: s.input_border,
+                      color: s.input_text,
                     }}
-                    className="h-10 text-sm border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-indigo-300 text-center text-xl font-mono transition-all"
                   />
-                  <p className="text-[10px] text-slate-400 text-center">
+                  <p className="text-[10px] text-center" style={{ color: s.subtitle_color }}>
                     Enter your 4-digit terminal PIN
                   </p>
                 </div>
@@ -458,7 +485,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-10 text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all duration-150 gap-2"
+                className="w-full h-10 text-sm font-semibold rounded-xl transition-all duration-150 gap-2"
+                style={{ backgroundColor: s.btn_bg, color: s.btn_text }}
               >
                 {loading ? (
                   <><Loader2 size={14} className="animate-spin" /> Signing in...</>
@@ -470,14 +498,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             <div className="space-y-1.5 text-center">
               <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
                 <Globe size={12} />
-                <Link href="https://www.ecoshiftcorp.com/" className="text-emerald-600 hover:text-emerald-800 hover:underline transition-colors font-medium">
+                <Link href="https://www.ecoshiftcorp.com/" className="font-medium hover:underline transition-colors" style={{ color: s.link_color }}>
                   ecoshiftcorp.com
                 </Link>
               </p>
               <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
                 <Calendar size={12} />
-                Site & Client Visit:
-                <Link href="https://acculog-hris.vercel.app/" className="text-emerald-600 hover:text-emerald-800 hover:underline transition-colors font-medium">
+                Site &amp; Client Visit:{" "}
+                <Link href="https://acculog-hris.vercel.app/" className="font-medium hover:underline transition-colors" style={{ color: s.link_color }}>
                   Acculog
                 </Link>
               </p>
@@ -497,7 +525,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               alt="Ecoshift"
               className="absolute inset-0 h-full w-full object-cover"
             />
-            {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
             <div className="absolute bottom-6 left-6 right-6">
               <p className="text-white text-sm font-bold drop-shadow">Taskflow</p>
@@ -521,15 +548,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               Your account has been locked after 5 failed login attempts. Submit a ticket to unlock it.
             </DialogDescription>
           </DialogHeader>
-
           {ticketDone ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 size={40} className="text-emerald-500" />
               <p className="text-sm font-bold text-slate-800">Ticket Submitted!</p>
               <p className="text-xs text-slate-400">Our IT team will review your request shortly.</p>
-              <Button size="sm" variant="outline" className="text-xs mt-2" onClick={() => setShowTicketDialog(false)}>
-                Close
-              </Button>
+              <Button size="sm" variant="outline" className="text-xs mt-2" onClick={() => setShowTicketDialog(false)}>Close</Button>
             </div>
           ) : (
             <>
@@ -543,20 +567,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   className="text-xs resize-none border-slate-200 bg-slate-50 focus:border-indigo-400"
                 />
               </div>
-
               <DialogFooter className="gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs flex-1"
-                  onClick={() => setShowTicketDialog(false)}
-                  disabled={ticketSubmitting}
-                >
+                <Button variant="outline" size="sm" className="text-xs flex-1" onClick={() => setShowTicketDialog(false)} disabled={ticketSubmitting}>
                   Cancel
                 </Button>
                 <Button
                   size="sm"
-                  className="text-xs flex-1 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+                  className="text-xs flex-1 gap-1.5"
+                  style={{ backgroundColor: s.btn_bg, color: s.btn_text }}
                   onClick={submitTicket}
                   disabled={ticketSubmitting || !remarks.trim()}
                 >
@@ -586,27 +604,20 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               Your location will be recorded for login activity tracking and security purposes.
             </DialogDescription>
           </DialogHeader>
-
-          {/* Lottie animation */}
           <div className="flex justify-center my-2 rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
             <iframe
               src="https://lottie.host/embed/2cbdf7c4-ad28-4a75-8bfd-68e4cd759a26/9PTYn6qNh6.lottie"
               className="w-48 h-48"
             />
           </div>
-
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs flex-1 gap-1.5"
-              onClick={onDenyLocation}
-            >
+            <Button variant="outline" size="sm" className="text-xs flex-1 gap-1.5" onClick={onDenyLocation}>
               <MapPinOff size={13} /> Deny
             </Button>
             <Button
               size="sm"
-              className="text-xs flex-1 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5"
+              className="text-xs flex-1 gap-1.5"
+              style={{ backgroundColor: s.btn_bg, color: s.btn_text }}
               onClick={onAllowLocation}
             >
               <MapPin size={13} /> Allow
