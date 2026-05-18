@@ -2912,30 +2912,67 @@ ${payload.whtType && payload.whtType !== "none"
                                             specsHtml += `</table>`;
                                           });
                                         }
+
+                                        // Normalize all item code variants from itemCodes (object/array) + itemCode (string fallback)
+                                        const rawItemCodes = data.itemCodes;
+                                        const fallbackCode = data.itemCode || "";
+                                        const allCodes: string[] = [];
+
+                                        if (rawItemCodes && typeof rawItemCodes === "object" && !Array.isArray(rawItemCodes)) {
+                                          Object.values(rawItemCodes as Record<string, string>).forEach((c) => {
+                                            if (c && String(c).trim()) allCodes.push(String(c).trim());
+                                          });
+                                        } else if (Array.isArray(rawItemCodes)) {
+                                          rawItemCodes.forEach((entry: any) => {
+                                            const c = entry?.code ?? entry?.itemCode ?? entry;
+                                            if (c && String(c).trim()) allCodes.push(String(c).trim());
+                                          });
+                                        } else if (typeof rawItemCodes === "string" && rawItemCodes.trim()) {
+                                          rawItemCodes.split(",").forEach((c) => {
+                                            if (c.trim()) allCodes.push(c.trim());
+                                          });
+                                        }
+
+                                        if (allCodes.length === 0 && fallbackCode.trim()) {
+                                          allCodes.push(fallbackCode.trim());
+                                        }
+
+                                        const defaultSku = allCodes[0] || fallbackCode;
+                                        const allCodesText = allCodes.join(" ");
+
+                                        const tempSearchMetadata = (
+                                          data.name +
+                                          " " +
+                                          allCodesText +
+                                          " " +
+                                          rawSpecsText
+                                        ).toUpperCase();
+
                                         return {
                                           id: doc.id,
                                           title: data.name || "No Name",
-                                          price:
-                                            data.salePrice || data.regularPrice || 0,
+                                          price: data.salePrice || data.regularPrice || 0,
                                           description: specsHtml,
-                                          images: data.mainImage
-                                            ? [{ src: data.mainImage }]
-                                            : [],
-                                          skus: data.itemCode ? [data.itemCode] : [],
+                                          images: data.mainImage ? [{ src: data.mainImage }] : [],
+                                          skus: defaultSku ? [defaultSku] : [],
                                           discount: 0,
-                                          tempSearchMetadata: (
-                                            data.name +
-                                            " " +
-                                            (data.itemCode || "") +
-                                            " " +
-                                            rawSpecsText
-                                          ).toUpperCase(),
+                                          tempSearchMetadata,
                                         };
                                       })
                                       .filter((p) =>
                                         p.tempSearchMetadata.includes(searchUpper),
                                       );
-                                    setSearchResults(firebaseResults);
+
+                                    // Deduplicate by doc ID — same product can appear
+                                    // multiple times if Firebase returns duplicate snapshots
+                                    const seen = new Set<string>();
+                                    const dedupedResults = firebaseResults.filter((p) => {
+                                      if (seen.has(p.id)) return false;
+                                      seen.add(p.id);
+                                      return true;
+                                    });
+
+                                    setSearchResults(dedupedResults);
                                   }
                                 } catch (err) {
                                   console.error("Search error:", err);
