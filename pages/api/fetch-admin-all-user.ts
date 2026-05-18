@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let query = {};
 
-    const isSuperAdmin = role === "Super Admin";
+    const isSuperAdmin = role === "SuperAdmin";
     const isProcurement = department === "Procurement";
 
     if (!isSuperAdmin && !isProcurement) {
