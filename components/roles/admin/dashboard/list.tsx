@@ -196,56 +196,121 @@ export function AgentList({
     }, []);
 
     // ─── Filter history ──────────────────────────────────────────────────────
-    const filteredHistory = useMemo(() => {
-        if (!history.length) return [];
-        const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : new Date();
-        const to = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to) : new Date(from);
-        from.setHours(0, 0, 0, 0);
-        to.setHours(23, 59, 59, 999);
+    // ─── Filter history ──────────────────────────────────────────────────────
+const filteredHistory = useMemo(() => {
+    if (!history.length) return [];
 
-        const selectedAgentObj = selectedAgent === "all"
+    // Convert any date value into local date only (00:00:00)
+    const toLocalDateOnly = (val: any): Date => {
+        if (!val) return new Date();
+
+        const d = val instanceof Date ? val : new Date(val);
+
+        return new Date(
+            d.getFullYear(),
+            d.getMonth(),
+            d.getDate()
+        );
+    };
+
+    const from = dateCreatedFilterRange?.from
+        ? toLocalDateOnly(dateCreatedFilterRange.from)
+        : toLocalDateOnly(new Date());
+
+    const to = dateCreatedFilterRange?.to
+        ? toLocalDateOnly(dateCreatedFilterRange.to)
+        : toLocalDateOnly(from);
+
+    const selectedAgentObj =
+        selectedAgent === "all"
             ? null
-            : agents.find((a) => a.ReferenceID.toLowerCase() === selectedAgent.toLowerCase());
+            : agents.find(
+                (a) =>
+                    a.ReferenceID.toLowerCase() ===
+                    selectedAgent.toLowerCase()
+            );
 
-        // Helper to get all agent IDs under a hierarchy
-        const getAgentIdsUnder = (id: string, role: string) => {
-            const ids = new Set<string>();
-            if (role === "Manager") {
-                // Get all TSMs under this Manager
-                const tsms = agents.filter(a => a.Role === "Territory Sales Manager" && (a.Manager ?? "").toLowerCase() === id.toLowerCase());
-                tsms.forEach(tsm => {
-                    ids.add(tsm.ReferenceID.toLowerCase());
-                    // Get all TSAs under each TSM
-                    agents.filter(a => a.Role === "Territory Sales Associate" && (a.TSM ?? "").toLowerCase() === tsm.ReferenceID.toLowerCase())
-                        .forEach(tsa => ids.add(tsa.ReferenceID.toLowerCase()));
-                });
-            } else if (role === "Territory Sales Manager") {
-                // Get all TSAs under this TSM
-                agents.filter(a => a.Role === "Territory Sales Associate" && (a.TSM ?? "").toLowerCase() === id.toLowerCase())
-                    .forEach(tsa => ids.add(tsa.ReferenceID.toLowerCase()));
-            }
-            return ids;
-        };
+    // Helper to get hierarchy IDs
+    const getAgentIdsUnder = (id: string, role: string) => {
+        const ids = new Set<string>();
 
-        const hierarchyAgentIds = selectedAgentObj && (selectedAgentObj.Role === "Manager" || selectedAgentObj.Role === "Territory Sales Manager")
-            ? getAgentIdsUnder(selectedAgentObj.ReferenceID, selectedAgentObj.Role)
+        if (role === "Manager") {
+            const tsms = agents.filter(
+                (a) =>
+                    a.Role === "Territory Sales Manager" &&
+                    (a.Manager ?? "").toLowerCase() === id.toLowerCase()
+            );
+
+            tsms.forEach((tsm) => {
+                ids.add(tsm.ReferenceID.toLowerCase());
+
+                agents
+                    .filter(
+                        (a) =>
+                            a.Role === "Territory Sales Associate" &&
+                            (a.TSM ?? "").toLowerCase() ===
+                            tsm.ReferenceID.toLowerCase()
+                    )
+                    .forEach((tsa) =>
+                        ids.add(tsa.ReferenceID.toLowerCase())
+                    );
+            });
+        } else if (role === "Territory Sales Manager") {
+            agents
+                .filter(
+                    (a) =>
+                        a.Role === "Territory Sales Associate" &&
+                        (a.TSM ?? "").toLowerCase() === id.toLowerCase()
+                )
+                .forEach((tsa) =>
+                    ids.add(tsa.ReferenceID.toLowerCase())
+                );
+        }
+
+        return ids;
+    };
+
+    const hierarchyAgentIds =
+        selectedAgentObj &&
+        (selectedAgentObj.Role === "Manager" ||
+            selectedAgentObj.Role === "Territory Sales Manager")
+            ? getAgentIdsUnder(
+                selectedAgentObj.ReferenceID,
+                selectedAgentObj.Role
+            )
             : null;
 
-        return history.filter((item) => {
-            const createdAt = new Date(item.date_created);
-            if (isNaN(createdAt.getTime())) return false;
-            if (createdAt < from || createdAt > to) return false;
-            if (selectedAgent === "all") return true;
+    return history.filter((item) => {
+        if (!item.date_created) return false;
 
-            // If a Manager or TSM is selected, include their own records AND all records from agents under them.
-            if (hierarchyAgentIds) {
-                return item.referenceid.toLowerCase() === selectedAgent.toLowerCase() || hierarchyAgentIds.has(item.referenceid.toLowerCase());
-            }
+        // date_created is DATE only (YYYY-MM-DD)
+        const createdAt = toLocalDateOnly(item.date_created);
 
-            // If a specific TSA is selected, include only that agent's records.
-            return item.referenceid.toLowerCase() === selectedAgent.toLowerCase();
-        });
-    }, [history, selectedAgent, dateCreatedFilterRange, agents]);
+        if (isNaN(createdAt.getTime())) return false;
+
+        // Compare date only
+        if (createdAt < from || createdAt > to) return false;
+
+        if (selectedAgent === "all") return true;
+
+        // Include hierarchy records
+        if (hierarchyAgentIds) {
+            return (
+                item.referenceid.toLowerCase() ===
+                    selectedAgent.toLowerCase() ||
+                hierarchyAgentIds.has(
+                    item.referenceid.toLowerCase()
+                )
+            );
+        }
+
+        // Specific TSA only
+        return (
+            item.referenceid.toLowerCase() ===
+            selectedAgent.toLowerCase()
+        );
+    });
+}, [history, selectedAgent, dateCreatedFilterRange, agents]);
 
     useEffect(() => {
         if (!agents.length) return;

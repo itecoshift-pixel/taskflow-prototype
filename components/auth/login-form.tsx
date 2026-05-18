@@ -319,7 +319,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       case "Manager":                 router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
       case "Staff":
       case "Admin":                   router.push(`/roles/csr/activity/quotation/quotation-list?id=${result.userId}`); break;
-      case "Super Admin":             router.push(`/roles/admin/dashboard?id=${result.userId}`); break;
+      case "Super Admin":             router.push(`/roles/admin/sales-performance?id=${result.userId}`); break;
       default:                        router.push(`/roles/tsa/activity/planner?id=${result.userId}`);
     }
     setPendingLoginData(null);

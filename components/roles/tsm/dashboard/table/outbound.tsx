@@ -108,9 +108,12 @@ export function OutboundCallsTableCard({
     );
 
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const start = new Date(dateCreatedFilterRange.from);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(dateCreatedFilterRange.to);
+      const toLocalMidnight = (val: any): Date => {
+        const d = val instanceof Date ? val : new Date(val);
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      };
+      const start = toLocalMidnight(dateCreatedFilterRange.from);
+      const end = toLocalMidnight(dateCreatedFilterRange.to);
       end.setHours(23, 59, 59, 999);
       base = base.filter((h) => {
         const d = new Date(h.date_created);
