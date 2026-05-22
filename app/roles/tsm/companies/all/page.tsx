@@ -3,15 +3,16 @@
 import React, { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { type DateRange } from "react-day-picker";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
-  X, Search, History, FileText, Hash,
-  Phone, Mail, TrendingUp, User,
+  X, Search, History, FileText, Hash, Phone, Mail, TrendingUp, User,
+  ArrowLeft, MapPin, BarChart2, Building2,
 } from "lucide-react";
-
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, CartesianGrid,
+} from "recharts";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
@@ -23,77 +24,28 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { sileo } from "sileo";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
-/* ─── Types ───────────────────────────────────────────────────────── */
-
+/* ─── Types ─────────────────────────────────────────────────────── */
 interface Account {
-  id: string;
-  referenceid: string;
-  account_reference_number: string;
-  company_name: string;
-  type_client: string;
-  date_created: string;
-  contact_person: string;
-  contact_number: string;
-  email_address: string;
-  address?: string;
-  delivery_address?: string;
-  region: string;
-  industry: string;
-  status?: string;
+  id: string; referenceid: string; account_reference_number: string;
+  company_name: string; type_client: string; date_created: string;
+  contact_person: string; contact_number: string; email_address: string;
+  address?: string; delivery_address?: string; region: string; industry: string; status?: string;
 }
-
 interface Activity {
-  id?: string;
-  company_name?: string;
-  account_reference_number?: string;
-  type_activity?: string;
-  remarks?: string;
-  status?: string;
-  date_created?: string;
-  date_updated?: string;
-  referenceid?: string;
-  quotation_amount?: number;
-  quotation_number?: string;
-  quotation_status?: string;
-  so_amount?: number;
-  so_number?: string;
-  dr_number?: string;
-  delivery_date?: string;
-  type_client?: string;
-  source?: string;
-  call_status?: string;
-  call_type?: string;
-  actual_sales?: number;
-  ticket_reference_number?: string;
-  start_date?: string;
-  end_date?: string;
-  payment_terms?: string;
+  id?: string; company_name?: string; account_reference_number?: string;
+  type_activity?: string; remarks?: string; status?: string;
+  date_created?: string; date_updated?: string; referenceid?: string;
+  quotation_amount?: number; quotation_number?: string; quotation_status?: string;
+  so_amount?: number; so_number?: string; dr_number?: string; delivery_date?: string;
+  type_client?: string; source?: string; call_status?: string; call_type?: string;
+  actual_sales?: number; ticket_reference_number?: string;
+  start_date?: string; end_date?: string; payment_terms?: string;
 }
+interface UserDetails { referenceid: string; tsm: string; manager: string; firstname?: string; lastname?: string; }
+interface Agent { ReferenceID: string; FirstName?: string; LastName?: string; Email?: string; referenceid?: string; }
+interface AgentWithStats extends Agent { totalAccounts: number; withActivity: number; withoutActivity: number; }
 
-interface UserDetails {
-  referenceid: string;
-  tsm: string;
-  manager: string;
-  firstname?: string;
-  lastname?: string;
-}
-
-interface Agent {
-  ReferenceID: string;
-  FirstName?: string;
-  LastName?: string;
-  Email?: string;
-  referenceid?: string;
-}
-
-interface AgentWithStats extends Agent {
-  totalAccounts: number;
-  withActivity: number;
-  withoutActivity: number;
-}
-
-/* ─── Helpers ───────────────────────────────────────────────────────── */
-
+/* ─── Helpers ────────────────────────────────────────────────────── */
 const ITEMS_PER_PAGE = 20;
 const EXCLUDED_STATUSES = ["removed", "approved for deletion", "subject for transfer"];
 const ALLOWED_TYPES = ["top 50", "next 30", "balance 20", "tsa client", "csr client", "new client"];
@@ -114,71 +66,52 @@ const fmtDate = (s?: string | null) => {
   if (isNaN(d.getTime())) return null;
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
-
 const fmtCurrency = (n?: number | null) =>
   n != null ? n.toLocaleString("en-PH", { style: "currency", currency: "PHP" }) : null;
-
 const fmtDuration = (start?: string | null, end?: string | null): string | null => {
   if (!start || !end) return null;
   const s = new Date(start); const e = new Date(end);
   if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
-  const diffMs = e.getTime() - s.getTime();
-  const mins = Math.round(diffMs / 60000);
+  const mins = Math.round((e.getTime() - s.getTime()) / 60000);
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60); const m = mins % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
-
 const isDateInRange = (dateStr: string, range: DateRange | undefined): boolean => {
   if (!range?.from) return true;
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return false;
-  const from = new Date(range.from);
-  from.setHours(0, 0, 0, 0);
-  const to = range.to ? new Date(range.to) : new Date(range.from);
-  to.setHours(23, 59, 59, 999);
+  const from = new Date(range.from); from.setHours(0, 0, 0, 0);
+  const to = range.to ? new Date(range.to) : new Date(range.from); to.setHours(23, 59, 59, 999);
   return date >= from && date <= to;
 };
 
-/* ─── Type client color map ───────────────────────────────────────── */
-
+/* ─── Type client color map ──────────────────────────────────────── */
 const TYPE_CLIENT_STYLES: Record<string, { pill: string; dot: string }> = {
-  "TOP 50": { pill: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
-  "NEXT 30": { pill: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
-  "BALANCE 20": { pill: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500" },
-  "NEW CLIENT": { pill: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  "TSA CLIENT": { pill: "bg-rose-100 text-rose-700 border-rose-200", dot: "bg-rose-500" },
-  "CSR CLIENT": { pill: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
+  "TOP 50":    { pill: "bg-amber-100 text-amber-700 border-amber-200",   dot: "bg-amber-500" },
+  "NEXT 30":   { pill: "bg-blue-100 text-blue-700 border-blue-200",      dot: "bg-blue-500" },
+  "BALANCE 20":{ pill: "bg-violet-100 text-violet-700 border-violet-200",dot: "bg-violet-500" },
+  "NEW CLIENT":{ pill: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+  "TSA CLIENT":{ pill: "bg-rose-100 text-rose-700 border-rose-200",      dot: "bg-rose-500" },
+  "CSR CLIENT":{ pill: "bg-slate-100 text-slate-600 border-slate-200",   dot: "bg-slate-400" },
 };
-
 function getTypeClientStyle(type: string) {
-  return TYPE_CLIENT_STYLES[type?.toUpperCase()] ?? {
-    pill: "bg-indigo-50 text-indigo-600 border-indigo-200",
-    dot: "bg-indigo-400",
-  };
+  return TYPE_CLIENT_STYLES[type?.toUpperCase()] ?? { pill: "bg-indigo-50 text-indigo-600 border-indigo-200", dot: "bg-indigo-400" };
 }
 
-/* ─── Stat Card ───────────────────────────────────────────────────── */
-
-function StatCard({
-  label, value, accent, onClick, isActive, sublabel, showFraction, isNegative
-}: {
+/* ─── Stat Card ──────────────────────────────────────────────────── */
+function StatCard({ label, value, accent, onClick, isActive, sublabel, showFraction, isNegative }: {
   label: string; value: number | string; accent: string;
   onClick?: () => void; isActive?: boolean; sublabel?: string;
-  showFraction?: { count: number; total: number };
-  isNegative?: boolean;
+  showFraction?: { count: number; total: number }; isNegative?: boolean;
 }) {
   const percentage = showFraction && showFraction.total > 0
-    ? Math.round((showFraction.count / showFraction.total) * 100)
-    : null;
-
+    ? Math.round((showFraction.count / showFraction.total) * 100) : null;
   return (
-    <div
-      onClick={onClick}
+    <div onClick={onClick}
       className={`relative flex flex-col gap-1 rounded-xl border bg-white px-5 py-4 shadow-sm overflow-hidden transition-all cursor-pointer
         ${isActive ? "ring-2 ring-indigo-500 border-indigo-400" : "hover:shadow-md hover:-translate-y-0.5"}`}
-      style={{ borderLeft: `3px solid ${accent}` }}
-    >
+      style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{ background: `radial-gradient(circle at 80% 20%, ${accent}, transparent 70%)` }} />
       <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{label}</span>
@@ -196,18 +129,14 @@ function StatCard({
   );
 }
 
-/* ─── Agent Card ──────────────────────────────────────────────────── */
-
+/* ─── Agent Card ─────────────────────────────────────────────────── */
 function AgentCard({ agent, onClick }: { agent: AgentWithStats; onClick: () => void }) {
+  const fullName = `${agent.FirstName || ""} ${agent.LastName || ""}`.trim() || agent.ReferenceID;
   const withPct = agent.totalAccounts > 0 ? Math.round((agent.withActivity / agent.totalAccounts) * 100) : 0;
   const withoutPct = agent.totalAccounts > 0 ? Math.round((agent.withoutActivity / agent.totalAccounts) * 100) : 0;
-  const fullName = `${agent.FirstName || ""} ${agent.LastName || ""}`.trim() || agent.ReferenceID;
-
   return (
-    <div
-      onClick={onClick}
-      className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md cursor-pointer transition-all duration-150 group"
-    >
+    <div onClick={onClick}
+      className="flex items-center justify-between gap-4 px-5 py-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md cursor-pointer transition-all duration-150 group">
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
           <User size={16} className="text-slate-400" />
@@ -222,6 +151,14 @@ function AgentCard({ agent, onClick }: { agent: AgentWithStats; onClick: () => v
           <p className="text-lg font-bold text-slate-800 tabular-nums">{agent.totalAccounts.toLocaleString()}</p>
           <p className="text-[10px] text-slate-400 uppercase tracking-wide">accounts</p>
         </div>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{agent.withActivity} ({withPct}%)
+          </span>
+          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{agent.withoutActivity} ({withoutPct}%)
+          </span>
+        </div>
         <div className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
           <span className="text-slate-400 group-hover:text-indigo-600 text-xs">→</span>
         </div>
@@ -230,8 +167,73 @@ function AgentCard({ agent, onClick }: { agent: AgentWithStats; onClick: () => v
   );
 }
 
-/* ─── History Dialog ──────────────────────────────────────────────── */
+/* ─── Company Search Dialog ──────────────────────────────────────── */
+function CompanySearchDialog({ open, onClose, accounts, onSelect }: {
+  open: boolean; onClose: () => void; accounts: Account[]; onSelect: (a: Account) => void;
+}) {
+  const [query, setQuery] = useState("");
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return accounts.filter((a) => a.company_name.toLowerCase().includes(q)).slice(0, 30);
+  }, [query, accounts]);
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg w-full p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
+        <div className="px-5 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-rose-500/80" />
+            <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+            <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
+            <div className="ml-1">
+              <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">company_search</DialogTitle>
+              <DialogDescription className="text-slate-500 text-[10px] font-mono">Search by company name</DialogDescription>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-white/40 hover:text-white transition-all border border-white/5">
+            <X size={12} />
+          </button>
+        </div>
+        <div className="px-5 py-3 border-b border-white/5">
+          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+            <Search size={13} className="text-slate-500 shrink-0" />
+            <input autoFocus type="text" placeholder="Type company name..." value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono" />
+            {query && <button onClick={() => setQuery("")} className="text-slate-600 hover:text-slate-400"><X size={12} /></button>}
+          </div>
+        </div>
+        <div className="overflow-y-auto max-h-80 px-5 py-3 space-y-1.5">
+          {query.trim() === "" ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <Search size={20} className="text-slate-600" />
+              <p className="text-xs text-slate-600 font-mono">Start typing to search</p>
+            </div>
+          ) : results.length === 0 ? (
+            <p className="text-xs text-slate-600 font-mono text-center py-10">No companies found</p>
+          ) : results.map((account) => {
+            const typeStyle = getTypeClientStyle(account.type_client);
+            return (
+              <button key={account.id} onClick={() => { onSelect(account); onClose(); }}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all text-left group">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">{account.company_name}</p>
+                  <p className="text-[10px] text-slate-500 font-mono truncate">{account.contact_person || account.email_address || account.account_reference_number}</p>
+                </div>
+                <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} />{account.type_client?.toUpperCase()}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
+/* ─── Detail Field ───────────────────────────────────────────────── */
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) return null;
   return (
@@ -242,16 +244,18 @@ function DetailField({ label, value }: { label: string; value: string | null | u
   );
 }
 
+/* ─── History Dialog ─────────────────────────────────────────────── */
 function HistoryDialog({ open, onClose, companyName, loading, records, account }: {
   open: boolean; onClose: () => void; companyName: string | null;
   loading: boolean; records: Activity[]; account?: Account | null;
 }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | number | null>(null);
-
   useEffect(() => { if (!open) { setSearch(""); setExpanded(null); } }, [open]);
 
-  const totalActualSales = useMemo(() => records.reduce((sum, r) => sum + (r.actual_sales ?? 0), 0), [records]);
+  const totalActualSales = useMemo(() => records.reduce((s, r) => s + (r.actual_sales ?? 0), 0), [records]);
+  const totalQuotationAmount = useMemo(() => records.reduce((s, r) => s + (r.quotation_amount ?? 0), 0), [records]);
+  const totalSoAmount = useMemo(() => records.reduce((s, r) => s + (r.so_amount ?? 0), 0), [records]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -259,7 +263,10 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
     return records.filter((r) =>
       (r.type_activity ?? "").toLowerCase().includes(q) ||
       (r.remarks ?? "").toLowerCase().includes(q) ||
-      (r.status ?? "").toLowerCase().includes(q)
+      (r.status ?? "").toLowerCase().includes(q) ||
+      (r.call_status ?? "").toLowerCase().includes(q) ||
+      (r.quotation_number ?? "").toLowerCase().includes(q) ||
+      (r.so_number ?? "").toLowerCase().includes(q)
     );
   }, [search, records]);
 
@@ -278,16 +285,51 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
   };
   const getTypeStyle = (t?: string) => typeStyles[t ?? ""] ?? "bg-slate-700/60 text-slate-300 border-slate-600/30";
   const toggleExpand = (key: string | number | null) => setExpanded((prev) => (prev === key ? null : key));
+  const typeClientStyle = account ? getTypeClientStyle(account.type_client) : null;
+
+  /* ── Analytics ── */
+  const callCount      = records.filter(r => (r.type_activity ?? "").toLowerCase().includes("call")).length;
+  const quotationCount = records.filter(r => r.quotation_number).length;
+  const soCount        = records.filter(r => r.so_number).length;
+  const funnelData = [
+    { label: "Calls",        count: callCount,      amount: 0,                  color: "#38bdf8" },
+    { label: "Quotations",   count: quotationCount, amount: totalQuotationAmount, color: "#818cf8" },
+    { label: "Sales Orders", count: soCount,        amount: totalSoAmount,       color: "#a78bfa" },
+    { label: "Actual Sales", count: 0,              amount: totalActualSales,    color: "#34d399" },
+  ];
+  const monthlyMap: Record<string, number> = {};
+  records.forEach(r => {
+    if (!r.actual_sales || !r.date_created) return;
+    const d = new Date(r.date_created); if (isNaN(d.getTime())) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthlyMap[key] = (monthlyMap[key] ?? 0) + r.actual_sales;
+  });
+  const monthlyTrend = Object.entries(monthlyMap).sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6).map(([month, total]) => ({ month: month.slice(5), total }));
+  const lastActivity = records.filter(r => r.date_created).sort((a, b) => new Date(b.date_created!).getTime() - new Date(a.date_created!).getTime())[0];
+  const daysSinceLast = lastActivity?.date_created ? Math.floor((Date.now() - new Date(lastActivity.date_created).getTime()) / 86400000) : 999;
+  const conversionRate = callCount > 0 ? soCount / callCount : 0;
+  const prospectScore = Math.min(100, Math.round((conversionRate * 50) + (totalActualSales > 0 ? 30 : 0) + (daysSinceLast < 30 ? 20 : daysSinceLast < 60 ? 10 : 0)));
+  const prospectLabel = prospectScore >= 70 ? "High" : prospectScore >= 40 ? "Medium" : "Low";
+  const prospectColor = prospectScore >= 70 ? "#34d399" : prospectScore >= 40 ? "#fbbf24" : "#f87171";
+  const tooltipStyle = {
+    contentStyle: { background: "#1e293b", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10, color: "#cbd5e1" },
+    itemStyle: { color: "#94a3b8" }, cursor: { fill: "rgba(255,255,255,0.04)" },
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl w-full max-h-[85vh] flex flex-col p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117]">
+      <DialogContent showCloseButton={false}
+        className="!max-w-[95vw] !w-[95vw] !h-[90vh] p-0 gap-0 rounded-2xl border-0 shadow-2xl overflow-hidden bg-[#0d1117] flex flex-col"
+        style={{ maxWidth: "95vw", width: "95vw", height: "90vh" }}>
+
+        {/* Title bar */}
         <div className="px-6 py-4 bg-[#161b22] border-b border-white/5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-rose-500/80" />
             <span className="w-3 h-3 rounded-full bg-amber-400/80" />
             <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
-            <div className="ml-1">
+            <div className="ml-2">
               <DialogTitle className="text-white text-[11px] font-bold font-mono tracking-widest uppercase">activity_history</DialogTitle>
               <DialogDescription className="text-slate-500 text-[10px] font-mono">{companyName}</DialogDescription>
             </div>
@@ -297,157 +339,242 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account }
           </button>
         </div>
 
-        {!loading && records.length > 0 && (
-          <div className="px-6 py-3 flex flex-wrap gap-2 border-b border-white/5 bg-[#161b22]/50 shrink-0">
-            <span className="px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-bold font-mono border border-white/10">{records.length} records</span>
-            {Object.entries(grouped).map(([type, count]) => (
-              <span key={type} className={`px-3 py-1 rounded-full text-[11px] font-mono font-medium border ${getTypeStyle(type)}`}>
-                {type} · <strong>{count}</strong>
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Three-column body */}
+        <div className="flex flex-1 min-h-0">
 
-        <div className="px-6 py-3 border-b border-white/5 bg-[#0d1117] shrink-0">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
-              {account?.contact_person && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <User size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono truncate">{account.contact_person}</span>
-                </div>
-              )}
-              {account?.contact_number && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <Phone size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono">{account.contact_number}</span>
-                </div>
-              )}
-              {account?.email_address && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <Mail size={11} className="text-slate-500 shrink-0" />
-                  <span className="text-slate-300 font-mono truncate">{account.email_address}</span>
-                </div>
-              )}
-            </div>
-            {totalActualSales > 0 && (
-              <div className="shrink-0 flex flex-col items-end gap-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold font-mono uppercase tracking-wide">
-                  <TrendingUp size={10} /> Total Actual Sales
-                </div>
-                <span className="text-emerald-300 font-bold font-mono text-base tabular-nums">
-                  {totalActualSales.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+          {/* LEFT: Company info */}
+          <div className="w-72 shrink-0 flex flex-col border-r border-white/5 bg-[#0d1117] overflow-y-auto">
+            <div className="px-6 pt-6 pb-4 border-b border-white/5">
+              {typeClientStyle && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border mb-2 ${typeClientStyle.pill}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${typeClientStyle.dot}`} />{account?.type_client?.toUpperCase()}
                 </span>
+              )}
+              <h2 className="text-base font-bold text-white leading-snug">{companyName}</h2>
+              {account?.account_reference_number && <p className="text-[10px] font-mono text-slate-500 mt-0.5">{account.account_reference_number}</p>}
+            </div>
+            <div className="px-6 py-4 border-b border-white/5 space-y-2.5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Contact</p>
+              {account?.contact_person && <div className="flex items-center gap-2 text-[11px]"><User size={11} className="text-slate-500 shrink-0" /><span className="text-slate-300 font-mono">{account.contact_person}</span></div>}
+              {account?.contact_number && <div className="flex items-center gap-2 text-[11px]"><Phone size={11} className="text-slate-500 shrink-0" /><span className="text-slate-300 font-mono">{account.contact_number}</span></div>}
+              {account?.email_address && <div className="flex items-center gap-2 text-[11px]"><Mail size={11} className="text-slate-500 shrink-0" /><span className="text-slate-300 font-mono break-all">{account.email_address}</span></div>}
+              {(account?.address || account?.delivery_address) && <div className="flex items-start gap-2 text-[11px]"><MapPin size={11} className="text-slate-500 shrink-0 mt-px" /><span className="text-slate-300 font-mono">{account.address ?? account.delivery_address}</span></div>}
+            </div>
+            {(account?.region || account?.industry) && (
+              <div className="px-6 py-4 border-b border-white/5 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Details</p>
+                {account?.region && <div className="flex items-start gap-2 text-[11px]"><span className="text-slate-500 font-mono w-16 shrink-0">Region</span><span className="text-slate-300 font-mono">{account.region}</span></div>}
+                {account?.industry && <div className="flex items-start gap-2 text-[11px]"><span className="text-slate-500 font-mono w-16 shrink-0">Industry</span><span className="text-slate-300 font-mono">{account.industry}</span></div>}
+              </div>
+            )}
+            <div className="px-6 py-4 border-b border-white/5 space-y-3">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-1">Financials</p>
+              {totalActualSales > 0 && <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-3"><div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-semibold font-mono uppercase tracking-wide mb-1"><TrendingUp size={9} /> Total Actual Sales</div><span className="text-emerald-300 font-bold font-mono text-lg tabular-nums">{fmtCurrency(totalActualSales)}</span></div>}
+              {totalQuotationAmount > 0 && <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-3"><div className="text-[9px] text-blue-400 font-semibold font-mono uppercase tracking-wide mb-1">Total Quotation</div><span className="text-blue-300 font-bold font-mono text-base tabular-nums">{fmtCurrency(totalQuotationAmount)}</span></div>}
+              {totalSoAmount > 0 && <div className="rounded-xl bg-violet-500/10 border border-violet-500/20 px-4 py-3"><div className="text-[9px] text-violet-400 font-semibold font-mono uppercase tracking-wide mb-1">Total SO Amount</div><span className="text-violet-300 font-bold font-mono text-base tabular-nums">{fmtCurrency(totalSoAmount)}</span></div>}
+              {totalActualSales === 0 && totalQuotationAmount === 0 && totalSoAmount === 0 && <p className="text-[10px] text-slate-600 font-mono">No financial data</p>}
+            </div>
+            {!loading && records.length > 0 && (
+              <div className="px-6 py-4 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2">Activity Breakdown</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2.5 py-1 rounded-full bg-white/10 text-white text-[10px] font-bold font-mono border border-white/10">{records.length} total</span>
+                  {Object.entries(grouped).map(([type, count]) => (
+                    <span key={type} className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-medium border ${getTypeStyle(type)}`}>{type} · <strong>{count}</strong></span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="px-6 py-3 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
-            <Search size={13} className="text-slate-500 shrink-0" />
-            <input type="text" placeholder="Search activity..." value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono" />
-            {search && <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400"><X size={12} /></button>}
-          </div>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
-              <p className="text-xs text-slate-500 font-mono">Fetching records…</p>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-2">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
-                <History size={20} className="text-slate-600" />
+          {/* MIDDLE: Activity feed */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="px-6 py-3 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+                <Search size={13} className="text-slate-500 shrink-0" />
+                <input type="text" placeholder="Search activity, quotation, remarks, status..." value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="text-xs bg-transparent outline-none flex-1 text-slate-300 placeholder-slate-600 font-mono" />
+                {search && <button onClick={() => setSearch("")} className="text-slate-600 hover:text-slate-400"><X size={12} /></button>}
               </div>
-              <p className="text-xs text-slate-600 font-mono">no records found</p>
             </div>
-          ) : filtered.map((r, i) => {
-            const key = `${r.id ?? "no-id"}-${i}`;
-            const isOpen = expanded === key;
-            const duration = fmtDuration(r.start_date, r.end_date);
-            const hasExtra = !!(r.quotation_amount || r.quotation_number || r.actual_sales);
-
-            return (
-              <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all overflow-hidden">
-                <div className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`} onClick={() => hasExtra && toggleExpand(key)}>
-                  <div className="shrink-0 pt-0.5">
-                    <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase border font-mono ${getTypeStyle(r.type_activity)}`}>
-                      {r.type_activity ?? "—"}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-slate-300 font-mono uppercase">{r.remarks || <span className="text-slate-600 italic">no remarks</span>}</p>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                      {r.status && <span className="text-[10px] text-slate-500 font-mono">status: {r.status}</span>}
-                      {r.quotation_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />{r.quotation_number}</span>}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[10px] text-slate-400 font-mono">{fmtDate(r.date_created) ?? "—"}</p>
-                    <p className="text-[9px] text-slate-600 font-mono">created</p>
-                    {hasExtra && <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "▲ less" : "▼ more"}</span>}
-                  </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-2">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-green-400 animate-spin" />
+                  <p className="text-xs text-slate-500 font-mono">Fetching records…</p>
                 </div>
-
-                {isOpen && hasExtra && (
-                  <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
-                      <DetailField label="Quotation No." value={r.quotation_number} />
-                      <DetailField label="Quotation Status" value={r.quotation_status} />
-                      <DetailField label="Quotation Amount" value={fmtCurrency(r.quotation_amount)} />
-                      <DetailField label="SO Number" value={r.so_number} />
-                      <DetailField label="SO Amount" value={fmtCurrency(r.so_amount)} />
-                      <DetailField label="Actual Sales" value={fmtCurrency(r.actual_sales)} />
-                      <DetailField label="DR Number" value={r.dr_number} />
-                      <DetailField label="Delivery Date" value={fmtDate(r.delivery_date)} />
-                      <DetailField label="Payment Terms" value={r.payment_terms} />
-                      <DetailField label="Duration" value={duration} />
-                    </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                    <History size={20} className="text-slate-600" />
                   </div>
-                )}
+                  <p className="text-xs text-slate-600 font-mono">no records found</p>
+                </div>
+              ) : filtered.map((r, i) => {
+                const key = `${r.id ?? "no-id"}-${i}`;
+                const isOpen = expanded === key;
+                const duration = fmtDuration(r.start_date, r.end_date);
+                const hasExtra = !!(r.quotation_amount || r.quotation_number || r.quotation_status ||
+                  r.so_amount || r.so_number || r.dr_number || r.delivery_date ||
+                  r.type_client || r.source || r.call_status || r.call_type ||
+                  r.actual_sales || r.ticket_reference_number || duration || r.payment_terms);
+                return (
+                  <div key={key} className="rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all overflow-hidden">
+                    <div className={`flex gap-3 p-3 ${hasExtra ? "cursor-pointer" : ""}`} onClick={() => hasExtra && toggleExpand(key)}>
+                      <div className="shrink-0 pt-0.5">
+                        <span className={`inline-block px-2 py-1 rounded-lg text-[9px] font-bold uppercase border font-mono ${getTypeStyle(r.type_activity)}`}>
+                          {r.type_activity ?? "—"}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-300 font-mono uppercase">
+                          {r.remarks || <span className="text-slate-600 italic">no remarks</span>}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {r.status && <span className="text-[10px] text-slate-500 font-mono">status: {r.status}</span>}
+                          {r.call_status && <span className="text-[10px] text-slate-500 font-mono">· {r.call_status}</span>}
+                          {r.quotation_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />{r.quotation_number}</span>}
+                          {r.so_number && <span className="flex items-center gap-0.5 text-[10px] text-slate-500 font-mono"><Hash size={9} />SO {r.so_number}</span>}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right flex flex-col items-end gap-1">
+                        <p className="text-[10px] text-slate-400 font-mono">{fmtDate(r.date_created) ?? "—"}</p>
+                        {hasExtra && <span className="text-[9px] text-slate-600 font-mono">{isOpen ? "▲ less" : "▼ more"}</span>}
+                      </div>
+                    </div>
+                    {isOpen && hasExtra && (
+                      <div className="px-4 pb-4 pt-1 border-t border-white/5 bg-white/[0.02] space-y-1.5">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 uppercase">
+                          <DetailField label="Quotation No."    value={r.quotation_number} />
+                          <DetailField label="Quotation Status" value={r.quotation_status} />
+                          <DetailField label="Quotation Amount" value={fmtCurrency(r.quotation_amount)} />
+                          <DetailField label="SO Number"        value={r.so_number} />
+                          <DetailField label="SO Amount"        value={fmtCurrency(r.so_amount)} />
+                          <DetailField label="Actual Sales"     value={fmtCurrency(r.actual_sales)} />
+                          <DetailField label="DR Number"        value={r.dr_number} />
+                          <DetailField label="Delivery Date"    value={fmtDate(r.delivery_date)} />
+                          <DetailField label="Payment Terms"    value={r.payment_terms} />
+                          <DetailField label="Ticket Ref."      value={r.ticket_reference_number} />
+                          <DetailField label="Type Client"      value={r.type_client} />
+                          <DetailField label="Source"           value={r.source} />
+                          <DetailField label="Call Status"      value={r.call_status} />
+                          <DetailField label="Call Type"        value={r.call_type} />
+                          <DetailField label="Duration"         value={duration} />
+                          <DetailField label="Start Date"       value={fmtDate(r.start_date)} />
+                          <DetailField label="End Date"         value={fmtDate(r.end_date)} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* RIGHT: Analytics */}
+          <div className="w-64 shrink-0 flex flex-col border-l border-white/5 bg-[#0a0f16] overflow-y-auto">
+            <div className="px-5 pt-5 pb-3 border-b border-white/5">
+              <div className="flex items-center gap-2 mb-0.5">
+                <BarChart2 size={12} className="text-indigo-400" />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-400">Analytics</p>
               </div>
-            );
-          })}
+              <p className="text-[10px] text-slate-500 font-mono">Sales pipeline</p>
+            </div>
+            {/* Prospect score */}
+            <div className="px-5 py-4 border-b border-white/5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Prospect Score</p>
+              <div className="flex items-center gap-3">
+                <div className="relative w-14 h-14 shrink-0">
+                  <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="3" />
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke={prospectColor} strokeWidth="3"
+                      strokeDasharray={`${prospectScore} ${100 - prospectScore}`} strokeLinecap="round" />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums" style={{ color: prospectColor }}>{prospectScore}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: prospectColor }}>{prospectLabel}</p>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">{daysSinceLast < 999 ? `${daysSinceLast}d ago` : "No activity"}</p>
+                  <p className="text-[10px] text-slate-500 font-mono">Conv: {callCount > 0 ? `${Math.round(conversionRate * 100)}%` : "—"}</p>
+                </div>
+              </div>
+            </div>
+            {/* Sales funnel */}
+            <div className="px-5 py-4 border-b border-white/5">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Sales Funnel</p>
+              <div className="space-y-2.5">
+                {funnelData.map((item) => {
+                  const maxCount = Math.max(...funnelData.map(f => f.count), 1);
+                  const pct = item.count > 0 ? Math.round((item.count / maxCount) * 100) : 0;
+                  return (
+                    <div key={item.label}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] text-slate-400 font-mono">{item.label}</span>
+                        <div className="text-right">
+                          {item.count > 0 && <span className="text-[10px] font-bold tabular-nums" style={{ color: item.color }}>{item.count}x</span>}
+                          {item.amount > 0 && <span className="text-[9px] text-slate-500 font-mono ml-1">{item.amount.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 })}</span>}
+                        </div>
+                      </div>
+                      <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: item.color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Monthly trend */}
+            {monthlyTrend.length > 0 && (
+              <div className="px-5 py-4">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-3">Monthly Sales Trend</p>
+                <ResponsiveContainer width="100%" height={80}>
+                  <LineChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 9, fill: "#64748b" }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                    <Tooltip {...tooltipStyle} formatter={(v: number) => [v.toLocaleString("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }), "Sales"]} />
+                    <Line type="monotone" dataKey="total" stroke="#34d399" strokeWidth={2} dot={{ fill: "#34d399", r: 3 }} activeDot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-/* ─── Main Dashboard Content ───────────────────────────────────────── */
-
+/* ─── Main Dashboard Content ─────────────────────────────────────── */
 function DashboardContent() {
   const searchParams = useSearchParams();
   const { userId, setUserId } = useUser();
+  const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "", tsm: "", manager: "" });
 
-  const [userDetails, setUserDetails] = useState<UserDetails>({
-    referenceid: "", tsm: "", manager: "",
-  });
-  // TSM-level data (for agents overview)
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  // Agent-level data (for drill-down — fetched fresh per agent)
   const [agentAccounts, setAgentAccounts] = useState<Account[]>([]);
   const [agentActivities, setAgentActivities] = useState<Activity[]>([]);
   const [loadingAgentData, setLoadingAgentData] = useState(false);
-
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState<"all" | "with" | "without">("all");
+
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyCompany, setHistoryCompany] = useState<string | null>(null);
   const [historyAccount, setHistoryAccount] = useState<Account | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<Activity[]>([]);
+
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+
   const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = useState<DateRange | undefined>(undefined);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [drillLevel, setDrillLevel] = useState<"agents" | "accounts">("agents");
@@ -455,178 +582,110 @@ function DashboardContent() {
   const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
 
   const queryUserId = searchParams?.get("id") ?? "";
-
-  useEffect(() => {
-    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
-  }, [queryUserId, userId, setUserId]);
+  useEffect(() => { if (queryUserId && queryUserId !== userId) setUserId(queryUserId); }, [queryUserId, userId, setUserId]);
 
   useEffect(() => {
     if (!userId) { setLoadingUser(false); return; }
     const fetchUserData = async () => {
-      setError(null);
-      setLoadingUser(true);
+      setError(null); setLoadingUser(true);
       try {
         const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
         if (!response.ok) throw new Error("Failed to fetch user data");
         const data = await response.json();
-        setUserDetails({
-          referenceid: data.ReferenceID || "",
-          tsm: data.TSM || "",
-          manager: data.Manager || "",
-          firstname: data.FirstName || "",
-          lastname: data.LastName || "",
-        });
+        setUserDetails({ referenceid: data.ReferenceID || "", tsm: data.TSM || "", manager: data.Manager || "", firstname: data.FirstName || "", lastname: data.LastName || "" });
         sileo.success({ title: "Success", description: "User data loaded successfully!", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-      } catch (err) {
-        sileo.error({ title: "Failed", description: "Failed to fetch user data. Please try again.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
-      } finally {
-        setLoadingUser(false);
-      }
+      } catch {
+        sileo.error({ title: "Failed", description: "Failed to fetch user data.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+      } finally { setLoadingUser(false); }
     };
     fetchUserData();
   }, [userId]);
 
-  // ─── TSM-level fetch (agents overview) ───
   useEffect(() => {
     if (!userDetails.referenceid) return;
     const fetchData = async () => {
       setLoadingData(true);
       try {
         const accRes = await fetch(`/api/accounts-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}`);
-        if (accRes.ok) {
-          const accData = await accRes.json();
-          setAccounts(Array.isArray(accData) ? accData : accData.data ?? []);
-        }
-
+        if (accRes.ok) { const d = await accRes.json(); setAccounts(Array.isArray(d) ? d : d.data ?? []); }
         const agentsRes = await fetch(`/api/fetch-all-user?id=${encodeURIComponent(userDetails.referenceid)}`);
         if (agentsRes.ok) {
-          const agentsData = await agentsRes.json();
-          const raw = Array.isArray(agentsData) ? agentsData : [];
-          const normalized = raw.map((a: any) => ({
-            ...a,
-            ReferenceID: a.ReferenceID || a.referenceid || "",
-            FirstName: a.FirstName || a.Firstname || a.firstname || a.first_name || "",
-            LastName: a.LastName || a.Lastname || a.lastname || a.last_name || "",
-          }));
-          setAgents(normalized);
+          const raw = await agentsRes.json();
+          const arr = Array.isArray(raw) ? raw : [];
+          setAgents(arr.map((a: any) => ({ ...a, ReferenceID: a.ReferenceID || a.referenceid || "", FirstName: a.FirstName || a.Firstname || a.firstname || a.first_name || "", LastName: a.LastName || a.Lastname || a.lastname || a.last_name || "" })));
         }
-
-        const fetchActivitiesSmart = async () => {
+        const fetchActivities = async () => {
           if (dateCreatedFilterRange?.from) {
-            const fromDate = dateCreatedFilterRange.from.toISOString().split("T")[0];
-            const toDate = dateCreatedFilterRange.to?.toISOString().split("T")[0] || fromDate;
-            const actRes = await fetch(`/api/activities-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}&from=${fromDate}&to=${toDate}&fetchAll=true`);
-            if (actRes.ok) {
-              const actData = await actRes.json();
-              return Array.isArray(actData) ? actData : actData.data ?? [];
-            }
+            const from = dateCreatedFilterRange.from.toISOString().split("T")[0];
+            const to = dateCreatedFilterRange.to?.toISOString().split("T")[0] || from;
+            const r = await fetch(`/api/activities-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}&from=${from}&to=${to}&fetchAll=true`);
+            if (r.ok) { const d = await r.json(); return Array.isArray(d) ? d : d.data ?? []; }
           }
-          const actRes = await fetch(`/api/activities-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true`);
-          if (actRes.ok) {
-            const actData = await actRes.json();
-            return Array.isArray(actData) ? actData : actData.data ?? [];
-          }
-          const fallbackRes = await fetch(`/api/activities-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}&limit=1000`);
-          if (fallbackRes.ok) {
-            const fallbackData = await fallbackRes.json();
-            return Array.isArray(fallbackData) ? fallbackData : fallbackData.data ?? [];
-          }
+          const r = await fetch(`/api/activities-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true`);
+          if (r.ok) { const d = await r.json(); return Array.isArray(d) ? d : d.data ?? []; }
+          const r2 = await fetch(`/api/activities-tsm?tsm=${encodeURIComponent(userDetails.referenceid)}&limit=1000`);
+          if (r2.ok) { const d = await r2.json(); return Array.isArray(d) ? d : d.data ?? []; }
           return [];
         };
-
-        setActivities(await fetchActivitiesSmart());
-      } catch (err) {
-        console.error("Fetch error:", err);
-        setError("Failed to load data");
-      } finally {
-        setLoadingData(false);
-      }
+        setActivities(await fetchActivities());
+      } catch (err) { console.error("Fetch error:", err); setError("Failed to load data"); }
+      finally { setLoadingData(false); }
     };
     fetchData();
   }, [userDetails.referenceid, dateCreatedFilterRange]);
 
-  // ─── TSM-level derived data ───
   const allActiveAccounts = useMemo(() => filterActiveAccounts(accounts), [accounts]);
-
   const filteredActivitiesByDate = useMemo(() => {
     if (!dateCreatedFilterRange?.from) return activities;
     return activities.filter((a) => a.date_created && isDateInRange(a.date_created, dateCreatedFilterRange));
   }, [activities, dateCreatedFilterRange]);
 
-  // ─── Agent stats for overview cards (TSM-level, using account_reference_number matching) ───
-  const agentStats = useMemo(() => {
+  const agentStats = useMemo<AgentWithStats[]>(() => {
     return agents.map((agent) => {
-      const agentAccs = allActiveAccounts.filter(
-        (a) => a.referenceid?.toLowerCase() === agent.ReferenceID?.toLowerCase()
-      );
-      const agentAccRefs = new Set(agentAccs.map((a) => a.account_reference_number));
+      const agentAccs = allActiveAccounts.filter((a) => a.referenceid?.toLowerCase() === agent.ReferenceID?.toLowerCase());
+      const agentAccRefs = new Set(agentAccs.map((a) => a.account_reference_number?.toLowerCase()));
       const withActivitySet = new Set(
         filteredActivitiesByDate
-          .filter((act) => act.account_reference_number && agentAccRefs.has(act.account_reference_number))
-          .map((act) => act.account_reference_number as string)
+          .filter((act) => act.account_reference_number && agentAccRefs.has(act.account_reference_number.toLowerCase()))
+          .map((act) => act.account_reference_number!.toLowerCase())
       );
-      const withActivity = agentAccs.filter((a) => withActivitySet.has(a.account_reference_number)).length;
-      return {
-        ...agent,
-        totalAccounts: agentAccs.length,
-        withActivity,
-        withoutActivity: agentAccs.length - withActivity,
-      };
+      const withActivity = agentAccs.filter((a) => withActivitySet.has(a.account_reference_number?.toLowerCase() ?? "")).length;
+      return { ...agent, totalAccounts: agentAccs.length, withActivity, withoutActivity: agentAccs.length - withActivity };
     }).sort((a, b) => b.totalAccounts - a.totalAccounts);
   }, [agents, allActiveAccounts, filteredActivitiesByDate]);
 
-  // ─── TSM-level stat card totals (agents overview) ───
   const tsmStatCards = useMemo(() => {
-    const withActivity = allActiveAccounts.filter((a) => {
-      const s = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number));
-      return s.has(a.account_reference_number);
-    }).length;
+    const activitySet = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number?.toLowerCase()).filter(Boolean));
     const typeStats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
-    const activitySet = new Set(filteredActivitiesByDate.map((act) => act.account_reference_number));
+    let withActivity = 0;
     allActiveAccounts.forEach((a) => {
+      const hasAct = activitySet.has(a.account_reference_number?.toLowerCase() ?? "");
+      if (hasAct) withActivity++;
       const t = (a.type_client ?? "Unknown").toUpperCase();
-      const hasAct = activitySet.has(a.account_reference_number);
       if (!typeStats[t]) typeStats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       typeStats[t].total += 1;
-      if (hasAct) typeStats[t].withActivity += 1;
-      else typeStats[t].withoutActivity += 1;
+      if (hasAct) typeStats[t].withActivity += 1; else typeStats[t].withoutActivity += 1;
     });
-    return {
-      total: allActiveAccounts.length,
-      withActivity,
-      withoutActivity: allActiveAccounts.length - withActivity,
-      typeStats: Object.entries(typeStats)
-        .map(([type, data]) => ({ type, ...data }))
-        .sort((a, b) => b.total - a.total),
-    };
+    return { total: allActiveAccounts.length, withActivity, withoutActivity: allActiveAccounts.length - withActivity, typeStats: Object.entries(typeStats).map(([type, data]) => ({ type, ...data })).sort((a, b) => b.total - a.total) };
   }, [allActiveAccounts, filteredActivitiesByDate]);
 
-  // ─── Agent drill-down: scoped data from fresh per-agent fetch ───
   const scopedActivities = useMemo(() => {
     if (drillLevel !== "accounts") return filteredActivitiesByDate;
-    // Apply date filter on agent activities
     if (!dateCreatedFilterRange?.from) return agentActivities;
     return agentActivities.filter((a) => a.date_created && isDateInRange(a.date_created, dateCreatedFilterRange));
   }, [drillLevel, agentActivities, filteredActivitiesByDate, dateCreatedFilterRange]);
 
-  const scopedAccounts = useMemo(() => {
-    if (drillLevel !== "accounts") return allActiveAccounts;
-    return agentAccounts;
-  }, [drillLevel, agentAccounts, allActiveAccounts]);
+  const scopedAccounts = useMemo(() => drillLevel !== "accounts" ? allActiveAccounts : agentAccounts, [drillLevel, agentAccounts, allActiveAccounts]);
 
-  // ─── Scoped computations (used for drill-down stat cards + table) ───
   const scopedAccountsWithActivity = useMemo(() => {
     const s = new Set<string>();
-    scopedActivities.forEach((a) => { if (a.account_reference_number) s.add(a.account_reference_number); });
+    scopedActivities.forEach((a) => { if (a.account_reference_number) s.add(a.account_reference_number.toLowerCase()); });
     return s;
   }, [scopedActivities]);
 
   const activityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
-    scopedActivities.forEach((a) => {
-      if (a.account_reference_number)
-        m[a.account_reference_number] = (m[a.account_reference_number] ?? 0) + 1;
-    });
+    scopedActivities.forEach((a) => { if (a.account_reference_number) { const k = a.account_reference_number.toLowerCase(); m[k] = (m[k] ?? 0) + 1; } });
     return m;
   }, [scopedActivities]);
 
@@ -634,8 +693,8 @@ function DashboardContent() {
     const m: Record<string, string> = {};
     scopedActivities.forEach((a) => {
       if (a.account_reference_number && a.date_created) {
-        const key = a.account_reference_number;
-        if (!m[key] || new Date(a.date_created) > new Date(m[key])) m[key] = a.date_created;
+        const k = a.account_reference_number.toLowerCase();
+        if (!m[k] || new Date(a.date_created) > new Date(m[k])) m[k] = a.date_created;
       }
     });
     return m;
@@ -645,52 +704,30 @@ function DashboardContent() {
     const stats: Record<string, { total: number; withActivity: number; withoutActivity: number }> = {};
     scopedAccounts.forEach((a) => {
       const t = (a.type_client ?? "Unknown").toUpperCase();
-      const hasActivity = scopedAccountsWithActivity.has(a.account_reference_number);
+      const hasActivity = scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? "");
       if (!stats[t]) stats[t] = { total: 0, withActivity: 0, withoutActivity: 0 };
       stats[t].total += 1;
-      if (hasActivity) stats[t].withActivity += 1;
-      else stats[t].withoutActivity += 1;
+      if (hasActivity) stats[t].withActivity += 1; else stats[t].withoutActivity += 1;
     });
-    return Object.entries(stats)
-      .map(([type, data]) => ({ type, ...data }))
-      .sort((a, b) => b.total - a.total);
+    return Object.entries(stats).map(([type, data]) => ({ type, ...data })).sort((a, b) => b.total - a.total);
   }, [scopedAccounts, scopedAccountsWithActivity]);
 
   const filteredAccounts = useMemo(() => {
     let list = scopedAccounts;
-    if (activityFilter === "with") list = list.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number));
-    else if (activityFilter === "without") list = list.filter((a) => !scopedAccountsWithActivity.has(a.account_reference_number));
+    if (activityFilter === "with") list = list.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? ""));
+    else if (activityFilter === "without") list = list.filter((a) => !scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? ""));
     if (typeFilter) list = list.filter((a) => a.type_client?.toUpperCase() === typeFilter);
     const q = search.toLowerCase();
     if (!q) return list;
-    return list.filter((a) =>
-      a.company_name.toLowerCase().includes(q) ||
-      a.contact_person.toLowerCase().includes(q) ||
-      a.email_address.toLowerCase().includes(q)
-    );
+    return list.filter((a) => a.company_name.toLowerCase().includes(q) || a.contact_person.toLowerCase().includes(q) || a.email_address.toLowerCase().includes(q));
   }, [scopedAccounts, search, typeFilter, activityFilter, scopedAccountsWithActivity]);
 
-  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number)).length;
+  const withActivityCount = scopedAccounts.filter((a) => scopedAccountsWithActivity.has(a.account_reference_number?.toLowerCase() ?? "")).length;
   const withoutActivityCount = scopedAccounts.length - withActivityCount;
 
-  // ─── TSM-level: Cross-agent account search (for searching from agents view) ───
-  const tsmLevelSearchedAccounts = useMemo(() => {
-    if (!search || drillLevel !== "agents") return [];
-    const q = search.toLowerCase();
-    return allActiveAccounts.filter((a) =>
-      a.company_name.toLowerCase().includes(q) ||
-      a.contact_person.toLowerCase().includes(q) ||
-      a.email_address.toLowerCase().includes(q)
-    );
-  }, [allActiveAccounts, search, drillLevel]);
-
-  // TSM-level activity lookups for searched accounts display
   const tsmLevelActivityCountMap = useMemo(() => {
     const m: Record<string, number> = {};
-    filteredActivitiesByDate.forEach((a) => {
-      if (a.account_reference_number)
-        m[a.account_reference_number] = (m[a.account_reference_number] ?? 0) + 1;
-    });
+    filteredActivitiesByDate.forEach((a) => { if (a.account_reference_number) { const k = a.account_reference_number.toLowerCase(); m[k] = (m[k] ?? 0) + 1; } });
     return m;
   }, [filteredActivitiesByDate]);
 
@@ -698,8 +735,8 @@ function DashboardContent() {
     const m: Record<string, string> = {};
     filteredActivitiesByDate.forEach((a) => {
       if (a.account_reference_number && a.date_created) {
-        const key = a.account_reference_number;
-        if (!m[key] || new Date(a.date_created) > new Date(m[key])) m[key] = a.date_created;
+        const k = a.account_reference_number.toLowerCase();
+        if (!m[k] || new Date(a.date_created) > new Date(m[k])) m[k] = a.date_created;
       }
     });
     return m;
@@ -707,7 +744,6 @@ function DashboardContent() {
 
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ITEMS_PER_PAGE));
   const paginatedAccounts = filteredAccounts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
   useEffect(() => setCurrentPage(1), [search, typeFilter, activityFilter, drillLevel, selectedAgentId]);
 
   const openHistory = (account: Account) => {
@@ -715,10 +751,9 @@ function DashboardContent() {
     setHistoryAccount(account);
     setHistoryOpen(true);
     setLoadingHistory(true);
-    // Use agentActivities (unfiltered by date) when in drill-down so history shows all records
     const sourceActivities = drillLevel === "accounts" ? agentActivities : activities;
     const records = sourceActivities.filter((a) => {
-      if (a.account_reference_number !== account.account_reference_number) return false;
+      if (a.account_reference_number?.toLowerCase() !== account.account_reference_number?.toLowerCase()) return false;
       if (!dateCreatedFilterRange?.from) return true;
       if (!a.date_created) return false;
       return isDateInRange(a.date_created, dateCreatedFilterRange);
@@ -727,56 +762,38 @@ function DashboardContent() {
     setLoadingHistory(false);
   };
 
+  const openHistoryFromSearch = (account: Account) => {
+    setSearchDialogOpen(false);
+    openHistory(account);
+  };
+
   const accentColors = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6"];
   const loading = loadingUser || loadingData;
 
   const goToAgents = () => {
-    setDrillLevel("agents");
-    setSelectedAgentId(null);
-    setSelectedAgentName(null);
-    setAgentAccounts([]);
-    setAgentActivities([]);
-    setSearch("");
-    setActivityFilter("all");
-    setTypeFilter(null);
+    setDrillLevel("agents"); setSelectedAgentId(null); setSelectedAgentName(null);
+    setAgentAccounts([]); setAgentActivities([]); setSearch(""); setActivityFilter("all"); setTypeFilter(null);
   };
 
-  // ─── Select agent: fetch fresh data using agent's own referenceid ───
   const selectAgent = async (agentId: string, agentName: string) => {
-    setSelectedAgentId(agentId);
-    setSelectedAgentName(agentName);
-    setDrillLevel("accounts");
-    setSearch("");
-    setCurrentPage(1);
-    setActivityFilter("all");
-    setTypeFilter(null);
+    setSelectedAgentId(agentId); setSelectedAgentName(agentName);
+    setDrillLevel("accounts"); setSearch(""); setCurrentPage(1); setActivityFilter("all"); setTypeFilter(null);
     setLoadingAgentData(true);
     try {
       const dateParams = dateCreatedFilterRange?.from
-        ? `&from=${dateCreatedFilterRange.from.toISOString().split("T")[0]}&to=${(dateCreatedFilterRange.to ?? dateCreatedFilterRange.from).toISOString().split("T")[0]}`
-        : "";
-
+        ? `&from=${dateCreatedFilterRange.from.toISOString().split("T")[0]}&to=${(dateCreatedFilterRange.to ?? dateCreatedFilterRange.from).toISOString().split("T")[0]}` : "";
       const [accRes, actRes] = await Promise.all([
         fetch(`/api/accounts?referenceid=${encodeURIComponent(agentId)}`),
         fetch(`/api/activities?referenceid=${encodeURIComponent(agentId)}&fetchAll=true${dateParams}`),
       ]);
-
-      if (accRes.ok) {
-        const accData = await accRes.json();
-        const raw = Array.isArray(accData) ? accData : accData.data ?? [];
-        setAgentAccounts(filterActiveAccounts(raw));
-      }
-
-      if (actRes.ok) {
-        const actData = await actRes.json();
-        setAgentActivities(Array.isArray(actData) ? actData : actData.data ?? []);
-      }
-    } catch (err) {
-      console.error("Agent data fetch error:", err);
-    } finally {
-      setLoadingAgentData(false);
-    }
+      if (accRes.ok) { const d = await accRes.json(); setAgentAccounts(filterActiveAccounts(Array.isArray(d) ? d : d.data ?? [])); }
+      if (actRes.ok) { const d = await actRes.json(); setAgentActivities(Array.isArray(d) ? d : d.data ?? []); }
+    } catch (err) { console.error("Agent data fetch error:", err); }
+    finally { setLoadingAgentData(false); }
   };
+
+  /* All accounts for search dialog (TSM-level) */
+  const allAccountsForSearch = useMemo(() => allActiveAccounts, [allActiveAccounts]);
 
   return (
     <>
@@ -790,9 +807,7 @@ function DashboardContent() {
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
-                      My Account Management
-                    </BreadcrumbPage>
+                    <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">My Account Management</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
@@ -800,12 +815,12 @@ function DashboardContent() {
           </header>
 
           <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
+            {/* Dialogs */}
             <HistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} companyName={historyCompany} loading={loadingHistory} records={historyRecords} account={historyAccount} />
+            <CompanySearchDialog open={searchDialogOpen} onClose={() => setSearchDialogOpen(false)} accounts={allAccountsForSearch} onSelect={openHistoryFromSearch} />
 
             {loading ? (
-              <div className="flex justify-center items-center py-10">
-                <Spinner className="size-10" />
-              </div>
+              <div className="flex justify-center items-center py-10"><Spinner className="size-10" /></div>
             ) : (
               <div className="space-y-5">
                 {/* Header */}
@@ -813,85 +828,50 @@ function DashboardContent() {
                   <div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
                       {drillLevel === "accounts" && selectedAgentName ? (
-                        <>
-                          <button onClick={goToAgents} className="hover:text-indigo-600">
-                            <span className="hover:underline">All Agents</span>
-                            <span className="text-gray-400 ml-1">/</span>
-                          </button>
-                          <span className="font-semibold text-gray-800">{selectedAgentName}</span>
-                        </>
-                      ) : (
-                        <span className="font-semibold text-gray-800">All Agents</span>
-                      )}
+                        <><button onClick={goToAgents} className="hover:text-indigo-600"><span className="hover:underline">All Agents</span><span className="text-gray-400 ml-1">/</span></button><span className="font-semibold text-gray-800">{selectedAgentName}</span></>
+                      ) : <span className="font-semibold text-gray-800">All Agents</span>}
                     </div>
-                    <h1 className="text-lg font-bold text-gray-900">
-                      {drillLevel === "accounts" && selectedAgentName
-                        ? `${selectedAgentName}'s Accounts`
-                        : "My Account Management"}
-                    </h1>
-                    <p className="text-xs text-gray-500">
-                      {drillLevel === "accounts" && selectedAgentName
-                        ? `Viewing accounts assigned to ${selectedAgentName}`
-                        : "Manage your assigned accounts and view activity history"}
-                    </p>
+                    <h1 className="text-lg font-bold text-gray-900">{drillLevel === "accounts" && selectedAgentName ? `${selectedAgentName}'s Accounts` : "My Account Management"}</h1>
+                    <p className="text-xs text-gray-500">{drillLevel === "accounts" && selectedAgentName ? `Viewing accounts assigned to ${selectedAgentName}` : "Manage your assigned accounts and view activity history"}</p>
                   </div>
-                  {drillLevel === "accounts" && (
-                    <button onClick={goToAgents} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
-                      <X size={12} /> Back to Agents
+                  <div className="flex items-center gap-2">
+                    {/* Search Company button */}
+                    <button onClick={() => setSearchDialogOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-lg transition-all shadow-sm">
+                      <Search size={12} /> Search Company
                     </button>
-                  )}
+                    {drillLevel === "accounts" && (
+                      <button onClick={goToAgents} className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                        <X size={12} /> Back to Agents
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Stats — agents overview uses tsmStatCards, drill-down uses scoped */}
+                {/* Stat cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   {drillLevel === "agents" ? (
                     <>
-                      <StatCard label="Total Accounts" value={tsmStatCards.total} accent="#1e293b"
-                        onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
-                        isActive={activityFilter === "all" && !typeFilter}
-                        sublabel="valid type_client accounts" />
-                      <StatCard label="With Activity" value={tsmStatCards.withActivity} accent="#10b981"
-                        showFraction={{ count: tsmStatCards.withActivity, total: tsmStatCards.total }}
-                        sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
-                      <StatCard label="No Activity" value={tsmStatCards.withoutActivity} accent="#f59e0b"
-                        isNegative
-                        showFraction={{ count: tsmStatCards.withoutActivity, total: tsmStatCards.total }}
-                        sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
+                      <StatCard label="Total Accounts" value={tsmStatCards.total} accent="#1e293b" onClick={() => { setActivityFilter("all"); setTypeFilter(null); }} isActive={activityFilter === "all" && !typeFilter} sublabel="valid type_client accounts" />
+                      <StatCard label="With Activity" value={tsmStatCards.withActivity} accent="#10b981" showFraction={{ count: tsmStatCards.withActivity, total: tsmStatCards.total }} sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
+                      <StatCard label="No Activity" value={tsmStatCards.withoutActivity} accent="#f59e0b" isNegative showFraction={{ count: tsmStatCards.withoutActivity, total: tsmStatCards.total }} sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
                       {tsmStatCards.typeStats.map((stat, i) => (
-                        <StatCard key={stat.type} label={stat.type} value={stat.total}
-                          accent={accentColors[i % accentColors.length]}
-                          sublabel={`${stat.withActivity} with / ${stat.withoutActivity} without`} />
+                        <StatCard key={stat.type} label={stat.type} value={stat.total} accent={accentColors[i % accentColors.length]} sublabel={`${stat.withActivity} with / ${stat.withoutActivity} without`} />
                       ))}
                     </>
                   ) : (
                     <>
-                      <StatCard label="Total Accounts" value={scopedAccounts.length} accent="#1e293b"
-                        onClick={() => { setActivityFilter("all"); setTypeFilter(null); }}
-                        isActive={activityFilter === "all" && !typeFilter}
-                        sublabel={`assigned to ${selectedAgentName}`} />
-                      <StatCard label="With Activity" value={withActivityCount} accent="#10b981"
-                        onClick={() => setActivityFilter(activityFilter === "with" ? "all" : "with")}
-                        isActive={activityFilter === "with"}
-                        showFraction={{ count: withActivityCount, total: scopedAccounts.length }}
-                        sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
-                      <StatCard label="No Activity" value={withoutActivityCount} accent="#f59e0b"
-                        onClick={() => setActivityFilter(activityFilter === "without" ? "all" : "without")}
-                        isActive={activityFilter === "without"}
-                        isNegative
-                        showFraction={{ count: withoutActivityCount, total: scopedAccounts.length }}
-                        sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
+                      <StatCard label="Total Accounts" value={scopedAccounts.length} accent="#1e293b" onClick={() => { setActivityFilter("all"); setTypeFilter(null); }} isActive={activityFilter === "all" && !typeFilter} sublabel={`assigned to ${selectedAgentName}`} />
+                      <StatCard label="With Activity" value={withActivityCount} accent="#10b981" onClick={() => setActivityFilter(activityFilter === "with" ? "all" : "with")} isActive={activityFilter === "with"} showFraction={{ count: withActivityCount, total: scopedAccounts.length }} sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
+                      <StatCard label="No Activity" value={withoutActivityCount} accent="#f59e0b" onClick={() => setActivityFilter(activityFilter === "without" ? "all" : "without")} isActive={activityFilter === "without"} isNegative showFraction={{ count: withoutActivityCount, total: scopedAccounts.length }} sublabel={dateCreatedFilterRange?.from ? "in date range" : "all time"} />
                       {typeClientStats.map((stat, i) => (
-                        <StatCard key={stat.type} label={stat.type} value={stat.total}
-                          accent={accentColors[i % accentColors.length]}
-                          onClick={() => setTypeFilter(typeFilter === stat.type ? null : stat.type)}
-                          isActive={typeFilter === stat.type}
-                          sublabel={`${stat.withActivity} with / ${stat.withoutActivity} without`} />
+                        <StatCard key={stat.type} label={stat.type} value={stat.total} accent={accentColors[i % accentColors.length]} onClick={() => setTypeFilter(typeFilter === stat.type ? null : stat.type)} isActive={typeFilter === stat.type} sublabel={`${stat.withActivity} with / ${stat.withoutActivity} without`} />
                       ))}
                     </>
                   )}
                 </div>
 
-                {/* Active Filters */}
+                {/* Active filters */}
                 {(activityFilter !== "all" || typeFilter || dateCreatedFilterRange?.from) && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-500">Active filters:</span>
@@ -903,8 +883,7 @@ function DashboardContent() {
                     )}
                     {typeFilter && (
                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        {typeFilter}
-                        <button onClick={() => setTypeFilter(null)} className="text-indigo-400 hover:text-indigo-700"><X size={10} /></button>
+                        {typeFilter}<button onClick={() => setTypeFilter(null)} className="text-indigo-400 hover:text-indigo-700"><X size={10} /></button>
                       </span>
                     )}
                     {dateCreatedFilterRange?.from && (
@@ -914,128 +893,43 @@ function DashboardContent() {
                         <button onClick={() => setDateCreatedFilterRangeAction(undefined)} className="text-amber-400 hover:text-amber-700"><X size={10} /></button>
                       </span>
                     )}
-                    <button
-                      onClick={() => { setActivityFilter("all"); setTypeFilter(null); setDateCreatedFilterRangeAction(undefined); }}
-                      className="text-[11px] text-gray-400 hover:text-gray-600 underline"
-                    >
-                      Clear all
-                    </button>
+                    <button onClick={() => { setActivityFilter("all"); setTypeFilter(null); setDateCreatedFilterRangeAction(undefined); }} className="text-[11px] text-gray-400 hover:text-gray-600 underline">Clear all</button>
                   </div>
                 )}
 
-                {/* Search - visible at all drill levels */}
-                <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
-                  <Search size={13} className="text-slate-400" />
-                  <input type="text" placeholder="Search company, contact, email..."
-                    value={search} onChange={(e) => setSearch(e.target.value)}
-                    className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
-                  {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
-                </div>
-
-                {/* Agents List or Accounts Table */}
-                {drillLevel === "agents" ? (
-                  search ? (
-                    // Cross-agent search results table
-                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                      <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                        <p className="text-xs text-gray-600">
-                          Found <strong>{tsmLevelSearchedAccounts.length}</strong> matching account{tsmLevelSearchedAccounts.length !== 1 ? 's' : ''} across all agents
-                        </p>
-                        <button onClick={() => setSearch("")} className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium">Clear search</button>
-                      </div>
-                      <div className="overflow-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-gray-50 border-b border-gray-100">
-                              {["Actions", "Activities", "Last Touch", "Company", "Type", "Assigned To"].map((h) => (
-                                <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-gray-400 py-3">{h}</TableHead>
-                              ))}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {tsmLevelSearchedAccounts.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center py-14 text-sm text-gray-400">
-                                  No accounts match your search
-                                </TableCell>
-                              </TableRow>
-                            ) : tsmLevelSearchedAccounts.map((account) => {
-                              const actCount = tsmLevelActivityCountMap[account.account_reference_number] ?? 0;
-                              const hasAct = actCount > 0;
-                              const typeStyle = getTypeClientStyle(account.type_client);
-                              const assignedAgent = agents.find(a => a.ReferenceID?.toLowerCase() === account.referenceid?.toLowerCase());
-                              const agentName = assignedAgent ? `${assignedAgent.FirstName || ""} ${assignedAgent.LastName || ""}`.trim() : account.referenceid;
-                              const lastActDate = tsmLevelLastActivityMap[account.account_reference_number];
-                              return (
-                                <TableRow key={account.id} className="hover:bg-indigo-50/20 transition-colors">
-                                  <TableCell>
-                                    <button onClick={() => openHistory(account)} className="flex items-center gap-1 text-[11px] font-mono font-semibold text-indigo-500 hover:text-indigo-700">
-                                      <History size={11} /> history
-                                    </button>
-                                  </TableCell>
-                                  <TableCell>
-                                    <button onClick={() => openHistory(account)}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}>
-                                      <FileText size={9} /> {actCount}
-                                    </button>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className={`text-[10px] font-mono ${hasAct ? "text-gray-500" : "text-amber-600"}`}>
-                                      {fmtDate(lastActDate ?? account.date_created) ?? "—"}
-                                      {!hasAct && account.date_created && <span className="text-[9px] text-amber-500 ml-1">(created)</span>}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="font-semibold text-gray-800 text-sm">{account.company_name}</TableCell>
-                                  <TableCell>
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${typeStyle.pill}`}>
-                                      <span className={`w-1.5 h-1.5 rounded-full ${typeStyle.dot}`} /> {account.type_client?.toUpperCase()}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <span className="text-[11px] text-gray-600 capitalize">{agentName || "—"}</span>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  ) : (
-                    // Agent cards view (no search)
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-gray-500">Click on an agent to view their accounts</p>
-                        <span className="text-xs text-gray-400">{agentStats.length} agents</span>
-                      </div>
-                      {agentStats.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
-                          <User size={32} strokeWidth={1} />
-                          <p className="text-sm font-medium">No agents found</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 gap-3">
-                          {agentStats.map((agent) => (
-                          <AgentCard
-                            key={agent.ReferenceID}
-                            agent={agent}
-                            onClick={() => selectAgent(
-                              agent.ReferenceID,
-                              `${agent.FirstName || ""} ${agent.LastName || ""}`.trim() || agent.ReferenceID
-                            )}
-                          />
-                        ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                ) : loadingAgentData ? (
-                  <div className="flex justify-center items-center py-16">
-                    <Spinner className="size-8" />
+                {/* Search bar (accounts drill-down only) */}
+                {drillLevel === "accounts" && (
+                  <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200">
+                    <Search size={13} className="text-slate-400" />
+                    <input type="text" placeholder="Search company, contact, email..." value={search} onChange={(e) => setSearch(e.target.value)} className="text-xs bg-transparent outline-none flex-1 text-slate-700 placeholder-slate-400" />
+                    {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600"><X size={12} /></button>}
                   </div>
+                )}
+
+                {/* Agents list or Accounts table */}
+                {drillLevel === "agents" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">Click on an agent to view their accounts</p>
+                      <span className="text-xs text-gray-400">{agentStats.length} agents</span>
+                    </div>
+                    {agentStats.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-300">
+                        <User size={32} strokeWidth={1} /><p className="text-sm font-medium">No agents found</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3">
+                        {agentStats.map((agent) => (
+                          <AgentCard key={agent.ReferenceID} agent={agent}
+                            onClick={() => selectAgent(agent.ReferenceID, `${agent.FirstName || ""} ${agent.LastName || ""}`.trim() || agent.ReferenceID)} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : loadingAgentData ? (
+                  <div className="flex justify-center items-center py-16"><Spinner className="size-8" /></div>
                 ) : (
                   <>
-                    {/* Table */}
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                       <div className="overflow-auto">
                         <Table>
@@ -1048,13 +942,9 @@ function DashboardContent() {
                           </TableHeader>
                           <TableBody>
                             {filteredAccounts.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center py-14 text-sm text-gray-400">
-                                  {search || typeFilter ? "No accounts match your filters" : "No accounts found"}
-                                </TableCell>
-                              </TableRow>
+                              <TableRow><TableCell colSpan={5} className="text-center py-14 text-sm text-gray-400">{search || typeFilter ? "No accounts match your filters" : "No accounts found"}</TableCell></TableRow>
                             ) : paginatedAccounts.map((account) => {
-                              const actCount = activityCountMap[account.account_reference_number] ?? 0;
+                              const actCount = activityCountMap[account.account_reference_number?.toLowerCase() ?? ""] ?? 0;
                               const hasAct = actCount > 0;
                               const typeStyle = getTypeClientStyle(account.type_client);
                               return (
@@ -1065,17 +955,15 @@ function DashboardContent() {
                                     </button>
                                   </TableCell>
                                   <TableCell>
-                                    <button onClick={() => openHistory(account)}
-                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}>
+                                    <button onClick={() => openHistory(account)} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity ${hasAct ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-slate-100 text-slate-400"}`}>
                                       <FileText size={9} /> {actCount}
                                     </button>
                                   </TableCell>
                                   <TableCell>
                                     {(() => {
-                                      const lastActDate = lastActivityDateMap[account.account_reference_number];
-                                      const fallbackDate = account.date_created;
+                                      const lastActDate = lastActivityDateMap[account.account_reference_number?.toLowerCase() ?? ""];
                                       const hasActivity = !!lastActDate;
-                                      const displayDate = hasActivity ? lastActDate : fallbackDate;
+                                      const displayDate = hasActivity ? lastActDate : account.date_created;
                                       return (
                                         <span className={`text-[10px] font-mono ${hasActivity ? "text-gray-500" : "text-amber-600"}`}>
                                           {fmtDate(displayDate) ?? "—"}
@@ -1096,7 +984,6 @@ function DashboardContent() {
                           </TableBody>
                         </Table>
                       </div>
-
                       {filteredAccounts.length > 0 && (
                         <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50/50 text-xs text-gray-500">
                           <span>Showing <span className="font-semibold">{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredAccounts.length)}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredAccounts.length)}</span> of <span className="font-semibold">{filteredAccounts.length}</span></span>
@@ -1119,10 +1006,7 @@ function DashboardContent() {
             )}
           </main>
         </SidebarInset>
-        <SidebarRight
-          dateCreatedFilterRange={dateCreatedFilterRange}
-          setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
-        />
+        <SidebarRight dateCreatedFilterRange={dateCreatedFilterRange} setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
       </ProtectedPageWrapper>
     </>
   );
