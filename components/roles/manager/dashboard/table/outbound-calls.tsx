@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Card, CardContent, CardHeader,
 } from "@/components/ui/card";
@@ -90,6 +90,7 @@ const loadConfig = () => {
       columns: ColumnConfig[];
       obTargetPerDay: number;
       hiddenAgents: string[];
+      agentColumnOverrides: Record<string, string[]>;
     };
   } catch {
     return null;
@@ -100,6 +101,7 @@ const saveConfig = (cfg: {
   columns: ColumnConfig[];
   obTargetPerDay: number;
   hiddenAgents: string[];
+  agentColumnOverrides: Record<string, string[]>;
 }) => {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch {}
 };
@@ -112,6 +114,11 @@ const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }
     <span>{title}</span>
   </div>
 );
+
+/* ================= VALIDATION ================= */
+
+const isFinitePositive = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0;
 
 /* ================= COMPONENT ================= */
 
@@ -127,26 +134,59 @@ export function OutboundCallsTableCard({
   const initConfig = useCallback(() => {
     const saved = loadConfig();
     return {
-      columns:        saved?.columns        ?? DEFAULT_COLUMNS.map((c) => ({ ...c })),
-      obTargetPerDay: saved?.obTargetPerDay ?? 20,
-      hiddenAgents:   saved?.hiddenAgents   ?? ([] as string[]),
+      columns:              saved?.columns              ?? DEFAULT_COLUMNS.map((c) => ({ ...c })),
+      obTargetPerDay:       saved?.obTargetPerDay       ?? null,
+      hiddenAgents:         saved?.hiddenAgents         ?? ([] as string[]),
+      agentColumnOverrides: saved?.agentColumnOverrides ?? ({} as Record<string, string[]>),
     };
   }, []);
 
   /* ---- Committed state (drives table) ---- */
-  const [columns,        setColumns]        = useState<ColumnConfig[]>(() => initConfig().columns);
-  const [obTargetPerDay, setObTargetPerDay] = useState<number>(()        => initConfig().obTargetPerDay);
-  const [hiddenAgents,   setHiddenAgents]   = useState<string[]>(()      => initConfig().hiddenAgents);
+  const [columns,              setColumns]              = useState<ColumnConfig[]>(() => initConfig().columns);
+  const [obTargetPerDay,       setObTargetPerDay]       = useState<number>(()        => initConfig().obTargetPerDay ?? 20);
+  const [hiddenAgents,         setHiddenAgents]         = useState<string[]>(()      => initConfig().hiddenAgents);
+  // agentColumnOverrides: { [agentId]: string[] } — columns in the array render as "—" for that agent
+  const [agentColumnOverrides, setAgentColumnOverrides] = useState<Record<string, string[]>>(() => initConfig().agentColumnOverrides);
+  const [quotaLoading,         setQuotaLoading]         = useState<boolean>(() => initConfig().obTargetPerDay === null);
+
+  /* ---- Fetch quota from API on mount (only if not already saved in localStorage) ---- */
+  useEffect(() => {
+    if (initConfig().obTargetPerDay !== null) return; // user has a saved override, respect it
+    fetch("/api/outbound-quota")
+      .then((res) => res.json())
+      .then((data) => {
+        if (isFinitePositive(data?.outbound_quota)) {
+          setObTargetPerDay(data.outbound_quota);
+          setDraftObTarget(data.outbound_quota);
+        } else {
+          console.warn("outbound-quota: received invalid value, falling back to 20", data);
+        }
+      })
+      .catch((err) => {
+        console.warn("outbound-quota: fetch failed, falling back to 20", err);
+      })
+      .finally(() => {
+        setQuotaLoading(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ---- Draft state (panel, committed on Save) ---- */
-  const [draftColumns,      setDraftColumns]      = useState<ColumnConfig[]>([]);
-  const [draftObTarget,     setDraftObTarget]     = useState<number>(20);
-  const [draftHiddenAgents, setDraftHiddenAgents] = useState<string[]>([]);
+  const [draftColumns,              setDraftColumns]              = useState<ColumnConfig[]>([]);
+  const [draftObTarget,             setDraftObTarget]             = useState<number>(20);
+  const [draftHiddenAgents,         setDraftHiddenAgents]         = useState<string[]>([]);
+  const [draftAgentColumnOverrides, setDraftAgentColumnOverrides] = useState<Record<string, string[]>>({});
+  // track which agent's override panel is expanded
+  const [expandedOverrideAgent, setExpandedOverrideAgent] = useState<string | null>(null);
 
   const openPanel = () => {
     setDraftColumns(columns.map((c) => ({ ...c })));
     setDraftObTarget(obTargetPerDay);
     setDraftHiddenAgents([...hiddenAgents]);
+    setDraftAgentColumnOverrides(
+      Object.fromEntries(Object.entries(agentColumnOverrides).map(([k, v]) => [k, [...v]]))
+    );
+    setExpandedOverrideAgent(null);
     setShowSettings(true);
   };
 
@@ -154,14 +194,33 @@ export function OutboundCallsTableCard({
     setColumns(draftColumns);
     setObTargetPerDay(draftObTarget);
     setHiddenAgents(draftHiddenAgents);
-    saveConfig({ columns: draftColumns, obTargetPerDay: draftObTarget, hiddenAgents: draftHiddenAgents });
+    setAgentColumnOverrides(draftAgentColumnOverrides);
+    saveConfig({
+      columns: draftColumns,
+      obTargetPerDay: draftObTarget,
+      hiddenAgents: draftHiddenAgents,
+      agentColumnOverrides: draftAgentColumnOverrides,
+    });
+    setQuotaLoading(false);
     setShowSettings(false);
   };
 
   const resetPanel = () => {
     setDraftColumns(DEFAULT_COLUMNS.map((c) => ({ ...c })));
-    setDraftObTarget(20);
+    setDraftObTarget(obTargetPerDay);
     setDraftHiddenAgents([]);
+    setDraftAgentColumnOverrides({});
+  };
+
+  // helper: toggle a column override for an agent in draft state
+  const toggleDraftOverride = (agentId: string, colKey: string, zeroed: boolean) => {
+    setDraftAgentColumnOverrides((prev) => {
+      const current = prev[agentId] ?? [];
+      const next = zeroed
+        ? current.includes(colKey) ? current : [...current, colKey]
+        : current.filter((k) => k !== colKey);
+      return { ...prev, [agentId]: next };
+    });
   };
 
   /* ---- Agent map ---- */
@@ -203,10 +262,17 @@ export function OutboundCallsTableCard({
   /* ---- Days count & OB target ---- */
   const daysCount = useMemo(() => {
     if (dateCreatedFilterRange?.from && dateCreatedFilterRange?.to) {
-      const diff = dateCreatedFilterRange.to.getTime() - dateCreatedFilterRange.from.getTime();
-      return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+      const start = new Date(dateCreatedFilterRange.from);
+      const end = new Date(dateCreatedFilterRange.to);
+      let count = 0;
+      const current = new Date(start);
+      while (current <= end) {
+        if (current.getDay() !== 0) count++; // exclude Sundays
+        current.setDate(current.getDate() + 1);
+      }
+      return count || 1;
     }
-    return 26;
+    return 22; // default working days per month (excluding Sundays)
   }, [dateCreatedFilterRange]);
 
   const obTarget = obTargetPerDay * daysCount;
@@ -307,6 +373,10 @@ export function OutboundCallsTableCard({
 
   /* ---- Column helper (committed state) ---- */
   const col = (key: string) => columns.find((c) => c.key === key)?.visible ?? true;
+
+  /* ---- Cell override helper: returns true if this agent+column should show "—" ---- */
+  const isZeroed = (agentId: string, colKey: string) =>
+    (agentColumnOverrides[agentId] ?? []).includes(colKey);
 
   /* ---- Excel Export ---- */
   const exportToExcel = async () => {
@@ -558,6 +628,84 @@ export function OutboundCallsTableCard({
                   </div>
                 )}
               </div>
+
+              <hr className="border-gray-100" />
+
+              {/* Per-Agent Column Overrides */}
+              <div className="space-y-2">
+                <SectionHeader icon={<EyeOff className="w-3.5 h-3.5" />} title="Zero Out Columns per Agent" />
+                <p className="text-[10px] text-gray-400 leading-relaxed">
+                  Select columns to show as <span className="font-mono font-semibold">—</span> for a specific agent row.
+                </p>
+                {allKnownAgents.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No agents with data yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {allKnownAgents.map((stat) => {
+                      const info = agentMap.get(stat.agentId)!;
+                      const overrides = draftAgentColumnOverrides[stat.agentId] ?? [];
+                      const isExpanded = expandedOverrideAgent === stat.agentId;
+                      const visibleCols = draftColumns.filter((c) => c.visible);
+                      return (
+                        <div key={stat.agentId} className="rounded-lg border border-gray-100 overflow-hidden">
+                          {/* Agent row — click to expand */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedOverrideAgent(isExpanded ? null : stat.agentId)}
+                            className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              {info.picture ? (
+                                <img src={info.picture} alt={info.name} className="w-5 h-5 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[9px] text-gray-400 flex-shrink-0">
+                                  {info.name[0]}
+                                </div>
+                              )}
+                              <span className="text-xs text-gray-600 capitalize">{info.name}</span>
+                              {overrides.length > 0 && (
+                                <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                                  {overrides.length} zeroed
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-gray-400">{isExpanded ? "▲" : "▼"}</span>
+                          </button>
+                          {/* Expanded column list */}
+                          {isExpanded && (
+                            <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2 space-y-1.5">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] text-gray-400">Toggle to zero out a column for this agent</span>
+                                {overrides.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="text-[10px] text-red-400 hover:underline"
+                                    onClick={() => setDraftAgentColumnOverrides((prev) => ({ ...prev, [stat.agentId]: [] }))}
+                                  >
+                                    Clear all
+                                  </button>
+                                )}
+                              </div>
+                              {visibleCols.map((c) => {
+                                const zeroed = overrides.includes(c.key);
+                                return (
+                                  <div key={c.key} className="flex items-center justify-between rounded border border-gray-100 bg-white px-2.5 py-1.5">
+                                    <span className="text-[11px] text-gray-600">{c.label}</span>
+                                    <Switch
+                                      checked={zeroed}
+                                      onCheckedChange={(checked) => toggleDraftOverride(stat.agentId, c.key, checked)}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Panel Footer */}
@@ -609,6 +757,7 @@ export function OutboundCallsTableCard({
               <TableBody>
                 {visibleStats.map((stat) => {
                   const info = agentMap.get(stat.agentId)!;
+                  const z = (colKey: string) => isZeroed(stat.agentId, colKey);
                   return (
                     <TableRow key={stat.agentId} className="text-xs hover:bg-gray-50/50 font-mono">
                       <TableCell>
@@ -623,24 +772,26 @@ export function OutboundCallsTableCard({
                           <span className="capitalize text-gray-700">{info.name}</span>
                         </div>
                       </TableCell>
-                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{obTarget}</TableCell>}
-                      {col("totalCalls")   && <TableCell className="text-center font-semibold text-gray-800">{stat.totalCalls}</TableCell>}
+                      {col("obTarget")     && <TableCell className="text-center text-gray-600">{z("obTarget")     ? "—" : quotaLoading ? "…" : obTarget}</TableCell>}
+                      {col("totalCalls")   && <TableCell className="text-center font-semibold text-gray-800">{z("totalCalls")   ? "—" : stat.totalCalls}</TableCell>}
                       {col("achievement")  && (
                         <TableCell className="text-center">
-                          <span className={`font-semibold ${stat.achievement >= 100 ? "text-green-600" : stat.achievement >= 70 ? "text-amber-500" : "text-red-500"}`}>
-                            {stat.achievement.toFixed(2)}%
-                          </span>
+                          {z("achievement") ? "—" : (
+                            <span className={`font-semibold ${stat.achievement >= 100 ? "text-green-600" : stat.achievement >= 70 ? "text-amber-500" : "text-red-500"}`}>
+                              {stat.achievement.toFixed(2)}%
+                            </span>
+                          )}
                         </TableCell>
                       )}
-                      {col("numQuotes")    && <TableCell className="text-center font-bold">{convBadge(stat.numQuotes)}</TableCell>}
-                      {col("callsToQuote") && <TableCell className="text-center"><span className="text-gray-700">{stat.callsToQuote}</span></TableCell>}
-                      {col("quoteAmount")  && <TableCell className="text-gray-700 text-center">{stat.quoteAmount.toLocaleString()}</TableCell>}
-                      {col("numSO")        && <TableCell className="text-center font-bold">{convBadge(stat.numSO)}</TableCell>}
-                      {col("soAmount")     && <TableCell className="text-center font-semibold text-blue-600">₱{stat.soAmount.toLocaleString()}</TableCell>}
-                      {col("quoteToSO")    && <TableCell className="text-center"><span className="text-gray-700">{stat.quoteToSO}</span></TableCell>}
-                      {col("numSI")        && <TableCell className="text-center font-bold">{convBadge(stat.numSI)}</TableCell>}
-                      {col("actualSales")  && <TableCell className="text-center font-semibold text-emerald-600">₱{stat.actualSales.toLocaleString()}</TableCell>}
-                      {col("soToSI")       && <TableCell className="text-center"><span className="text-gray-700">{stat.soToSI}</span></TableCell>}
+                      {col("numQuotes")    && <TableCell className="text-center font-bold">{z("numQuotes")    ? "—" : convBadge(stat.numQuotes)}</TableCell>}
+                      {col("callsToQuote") && <TableCell className="text-center"><span className="text-gray-700">{z("callsToQuote") ? "—" : stat.callsToQuote}</span></TableCell>}
+                      {col("quoteAmount")  && <TableCell className="text-gray-700 text-center">{z("quoteAmount")  ? "—" : stat.quoteAmount.toLocaleString()}</TableCell>}
+                      {col("numSO")        && <TableCell className="text-center font-bold">{z("numSO")        ? "—" : convBadge(stat.numSO)}</TableCell>}
+                      {col("soAmount")     && <TableCell className="text-center font-semibold text-blue-600">{z("soAmount")     ? "—" : `₱${stat.soAmount.toLocaleString()}`}</TableCell>}
+                      {col("quoteToSO")    && <TableCell className="text-center"><span className="text-gray-700">{z("quoteToSO")    ? "—" : stat.quoteToSO}</span></TableCell>}
+                      {col("numSI")        && <TableCell className="text-center font-bold">{z("numSI")        ? "—" : convBadge(stat.numSI)}</TableCell>}
+                      {col("actualSales")  && <TableCell className="text-center font-semibold text-emerald-600">{z("actualSales")  ? "—" : `₱${stat.actualSales.toLocaleString()}`}</TableCell>}
+                      {col("soToSI")       && <TableCell className="text-center"><span className="text-gray-700">{z("soToSI")       ? "—" : stat.soToSI}</span></TableCell>}
                     </TableRow>
                   );
                 })}
@@ -649,7 +800,7 @@ export function OutboundCallsTableCard({
               <TableFooter>
                 <TableRow className="bg-gray-50 text-xs font-semibold font-mono">
                   <TableCell className="text-gray-700">Total</TableCell>
-                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{obTarget * visibleStats.length}</TableCell>}
+                  {col("obTarget")     && <TableCell className="text-center text-gray-600">{quotaLoading ? "…" : obTarget * visibleStats.length}</TableCell>}
                   {col("totalCalls")   && <TableCell className="text-center text-gray-800">{totals.totalCalls}</TableCell>}
                   {col("achievement")  && <TableCell className="text-center text-gray-700">{totals.achievement}</TableCell>}
                   {col("numQuotes")    && <TableCell className="text-center">{convBadge(totals.numQuotes)}</TableCell>}
