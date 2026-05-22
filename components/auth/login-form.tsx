@@ -322,17 +322,10 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       router.push(`/roles/accounting/activity/quotation/quotation-list?id=${result.userId}`);
       return;
     }
-
-    if (result.Department === "Procurement") {
-      router.push(`/roles/admin/dashboard?id=${result.userId}`);
-      return;
-    }
-
+    if (result.Department === "Procurement") { router.push(`/roles/admin/dashboard?id=${result.userId}`); return; }
     switch (result.Role) {
-      case "Territory Sales Manager":
-        router.push(`/roles/tsm/dashboard?id=${result.userId}`); break;
-      case "Manager":
-        router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
+      case "Territory Sales Manager": router.push(`/roles/tsm/dashboard?id=${result.userId}`); break;
+      case "Manager":                 router.push(`/roles/manager/dashboard?id=${result.userId}`); break;
       // case "User":
       //   router.push(`/roles/accounting/activity/quotation/quotation-list?id=${result.userId}`); break;
       case "Staff":
