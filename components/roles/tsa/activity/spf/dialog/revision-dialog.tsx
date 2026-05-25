@@ -336,7 +336,7 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
                             </div>
                         )}
 
-                        {/* STEP 1: Select Revision Type */}
+                        {/* STEP 1: Select Revision Typeas */}
                         {step === "select-type" && !loading && !error && (
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 mb-4">
