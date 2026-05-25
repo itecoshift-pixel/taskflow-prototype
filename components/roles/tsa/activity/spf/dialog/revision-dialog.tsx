@@ -258,21 +258,9 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
                 <div className="grid grid-cols-2 gap-2">
                     <Field label="Item Code" value={itemCodes[i]} />
                     <Field label="Qty" value={qtys[i]} />
-                    <Field label="Company" value={companies[i]} />
-                    <Field label="Brand" value={brands[i]} />
-                    <Field label="Contact Name" value={contactNames[i]} />
-                    <Field label="Contact Number" value={contactNumbers[i]} />
-                    <Field label="Unit Cost" value={unitCosts[i]} />
-                    <Field label="Subtotal" value={subtotals[i]} />
-                    <Field label="Final Unit Cost" value={finalUnitCosts[i]} />
-                    <Field label="Final Subtotal" value={finalSubtotals[i]} />
-                    <Field label="Final Selling Cost" value={finalSellingCosts[i]} />
-                    <Field label="Lead Time" value={leadTimes[i]} />
                     <Field label="Price Validity" value={priceValidities[i]} />
                     <Field label="TDS" value={tdss[i]} />
-                    <Field label="Pcs Per Carton" value={pcsPerCartons[i]} />
                     <Field label="Packaging" value={packagings[i]} />
-                    <Field label="Factory Address" value={factoryAddresses[i]} />
                     <Field label="Port of Discharge" value={ports[i]} />
                 </div>
 
