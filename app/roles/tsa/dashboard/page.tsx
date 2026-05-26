@@ -269,7 +269,7 @@ function DashboardContent() {
               referenceid={userDetails.referenceid}
               dateRange={dateCreatedFilterRange}
             />
-            <ActivityCard {...cardProps} />
+            <ActivityCard {...cardProps} dateRange={dateCreatedFilterRange} />
           </div>
 
           {/* Row 2 — Charts */}
