@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
 import { sileo } from "sileo";
@@ -91,11 +91,27 @@ interface Activity {
     si_date?: string;
     so_status?: string;
     payment_status?: string;
+    po_number?: string;
+    mode?: string;
+    so_type?: string;
+    invoice_type?: string;
+    withholding_agent?: string;
+    sales_group?: string;
+    industry?: string;
+    conforme?: string;
+    payment_terms?: string;
+    delivery_date?: string;
+    io_dept?: string;
+    tpc_ref?: string;
+    tpc_amount?: string;
+    tpc_type?: string;
+    discount_flag?: string;
+    freight_flag?: string;
+    inland_flag?: string;
+    restocking_flag?: string;
 
     actual_sales?: string;
     dr_number?: string;
-    payment_terms?: string;
-    delivery_date?: string;
 
     date_followup?: string;
     remarks: string;
@@ -200,6 +216,24 @@ export function CreateActivityDialog({
     signature
 
 }: CreateActivityDialogProps) {
+    const STORAGE_KEY = `create-activity-${company_name}-${referenceid}`;
+    
+    const saveStateToLocalStorage = useCallback((state: any) => {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+            console.error("Failed to save state to localStorage:", e);
+        }
+    }, [STORAGE_KEY]);
+
+    const clearLocalStorage = useCallback(() => {
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {
+            console.error("Failed to clear localStorage:", e);
+        }
+    }, [STORAGE_KEY]);
+
     const [sheetOpen, setSheetOpen] = useState(false);
     // Confirmation dialog state
     const [showConfirmCancel, setShowConfirmCancel] = useState(false);
@@ -247,6 +281,22 @@ export function CreateActivityDialog({
     const [soStatus, setSoStatus] = useState("");
     const [paymentStatus, setPaymentStatus] = useState("");
     const [siDate, setSiDate] = useState("");
+    const [poNumber, setPoNumber] = useState("");
+    const [mode, setMode] = useState("");
+    const [soType, setSoType] = useState("");
+    const [invoiceType, setInvoiceType] = useState("");
+    const [withholdingAgent, setWithholdingAgent] = useState("");
+    const [salesGroup, setSalesGroup] = useState("");
+    const [industry, setIndustry] = useState("");
+    const [conforme, setConforme] = useState("");
+    const [ioDept, setIoDept] = useState("");
+    const [tpcRef, setTpcRef] = useState("");
+    const [tpcAmount, setTpcAmount] = useState("");
+    const [tpcType, setTpcType] = useState("");
+    const [discountFlag, setDiscountFlag] = useState("");
+    const [freightFlag, setFreightFlag] = useState("");
+    const [inlandFlag, setInlandFlag] = useState("");
+    const [restockingFlag, setRestockingFlag] = useState("");
 
     const [drNumber, setDrNumber] = useState("");
     const [siAmount, setSiAmount] = useState("");
@@ -287,6 +337,272 @@ export function CreateActivityDialog({
     const [productViewMode, setProductViewMode] = useState('list');
     const [visibleColumns, setVisibleColumns] = useState(null);
 
+    // Restore state from localStorage on mount
+    useEffect(() => {
+        try {
+            const savedState = localStorage.getItem(STORAGE_KEY);
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                
+                setSheetOpen(parsed.sheetOpen ?? false);
+                setStep(parsed.step ?? 1);
+                setActivityRef(parsed.activityRef ?? activityReferenceNumber ?? "");
+                setAccountRef(parsed.accountRef ?? accountReferenceNumber ?? "");
+                setTypeClient(parsed.typeClient ?? type_client ?? "");
+                setTypeActivity(parsed.typeActivity ?? "");
+                setSource(parsed.source ?? "");
+                setCallback(parsed.callback ?? "");
+                setCallStatus(parsed.callStatus ?? "");
+                setCallType(parsed.callType ?? "");
+                setProductCat(parsed.productCat ?? "");
+                setProductAmount(parsed.productAmount ?? "");
+                setProductQuantity(parsed.productQuantity ?? "");
+                setProductDescription(parsed.productDescription ?? "");
+                setProductPhoto(parsed.productPhoto ?? "");
+                setProductSku(parsed.productSku ?? "");
+                setProductTitle(parsed.productTitle ?? "");
+                setProductDiscountedPrice(parsed.productDiscountedPrice ?? "");
+                setProductDiscountedAmount(parsed.productDiscountedAmount ?? "");
+                setProductIsPromo(parsed.productIsPromo ?? "");
+                setProductIsHidden(parsed.productIsHidden ?? "");
+                setProductRowDisplayMode(parsed.productRowDisplayMode ?? "");
+                setVatType(parsed.vatType ?? "");
+                setDeliveryFee(parsed.deliveryFee ?? "");
+                setDeliveryAddress(parsed.deliveryAddress ?? "");
+                setRestockingFee(parsed.restockingFee ?? "");
+                setWhtType(parsed.whtType ?? "none");
+                setItemRemarks(parsed.itemRemarks ?? "");
+                setProjectType(parsed.projectType ?? "");
+                setProjectName(parsed.projectName ?? "");
+                setQuotationNumber(parsed.quotationNumber ?? "");
+                setQuotationAmount(parsed.quotationAmount ?? "");
+                setQuotationType(parsed.quotationType ?? "");
+                setQuotationStatus(parsed.quotationStatus ?? "");
+                setTsmApprovalStatus(parsed.tsmApprovalStatus ?? "");
+                setSoNumber(parsed.soNumber ?? "");
+                setSoAmount(parsed.soAmount ?? "");
+                setSoStatus(parsed.soStatus ?? "");
+                setPaymentStatus(parsed.paymentStatus ?? "");
+                setSiDate(parsed.siDate ?? "");
+                setPoNumber(parsed.poNumber ?? "");
+                setMode(parsed.mode ?? "");
+                setSoType(parsed.soType ?? "");
+                setInvoiceType(parsed.invoiceType ?? "");
+                setWithholdingAgent(parsed.withholdingAgent ?? "");
+                setSalesGroup(parsed.salesGroup ?? "");
+                setIndustry(parsed.industry ?? "");
+                setConforme(parsed.conforme ?? "");
+                setIoDept(parsed.ioDept ?? "");
+                setTpcRef(parsed.tpcRef ?? "");
+                setTpcAmount(parsed.tpcAmount ?? "");
+                setTpcType(parsed.tpcType ?? "");
+                setDiscountFlag(parsed.discountFlag ?? "");
+                setFreightFlag(parsed.freightFlag ?? "");
+                setInlandFlag(parsed.inlandFlag ?? "");
+                setRestockingFlag(parsed.restockingFlag ?? "");
+                setDrNumber(parsed.drNumber ?? "");
+                setSiAmount(parsed.siAmount ?? "");
+                setPaymentTerms(parsed.paymentTerms ?? "");
+                setDeliveryDate(parsed.deliveryDate ?? "");
+                setFollowUpDate(parsed.followUpDate ?? "");
+                setStatus(parsed.status ?? "");
+                setRemarks(parsed.remarks ?? "");
+                setStartDate(parsed.startDate ?? "");
+                setDateCreated(parsed.dateCreated ?? "");
+                setTSMState(parsed.tsmState ?? tsm ?? "");
+                setSelectedContactPerson(parsed.selectedContactPerson ?? contact_person);
+                setSelectedContactNumber(parsed.selectedContactNumber ?? contact_number);
+                setSelectedEmailAddress(parsed.selectedEmailAddress ?? email_address);
+                setEditableContactPerson(parsed.editableContactPerson ?? contact_person);
+                setEditableContactNumber(parsed.editableContactNumber ?? contact_number);
+                setEditableEmailAddress(parsed.editableEmailAddress ?? email_address);
+                setQuotationSubject(parsed.quotationSubject ?? "For Quotation");
+                setHideDiscountInPreview(parsed.hideDiscountInPreview ?? false);
+                setShowDiscountColumns(parsed.showDiscountColumns ?? false);
+                setShowSummaryDiscounts(parsed.showSummaryDiscounts ?? false);
+                setShowProfitMargins(parsed.showProfitMargins ?? false);
+                setMarginAlertThreshold(parsed.marginAlertThreshold ?? 0);
+                setShowMarginAlerts(parsed.showMarginAlerts ?? false);
+                setProductViewMode(parsed.productViewMode ?? 'list');
+                setVisibleColumns(parsed.visibleColumns ?? null);
+            }
+        } catch (e) {
+            console.error("Failed to restore state from localStorage:", e);
+        }
+    }, [STORAGE_KEY, activityReferenceNumber, accountReferenceNumber, type_client, contact_person, contact_number, email_address, tsm]);
+
+    // Save state to localStorage whenever any state changes
+    useEffect(() => {
+        if (sheetOpen) {
+            saveStateToLocalStorage({
+                sheetOpen,
+                step,
+                activityRef,
+                accountRef,
+                typeClient,
+                typeActivity,
+                source,
+                callback,
+                callStatus,
+                callType,
+                productCat,
+                productAmount,
+                productQuantity,
+                productDescription,
+                productPhoto,
+                productSku,
+                productTitle,
+                productDiscountedPrice,
+                productDiscountedAmount,
+                productIsPromo,
+                productIsHidden,
+                productRowDisplayMode,
+                vatType,
+                deliveryFee,
+                deliveryAddress,
+                restockingFee,
+                whtType,
+                itemRemarks,
+                projectType,
+                projectName,
+                quotationNumber,
+                quotationAmount,
+                quotationType,
+                quotationStatus,
+                tsmApprovalStatus,
+                soNumber,
+                soAmount,
+                soStatus,
+                paymentStatus,
+                siDate,
+                poNumber,
+                mode,
+                soType,
+                invoiceType,
+                withholdingAgent,
+                salesGroup,
+                industry,
+                conforme,
+                ioDept,
+                tpcRef,
+                tpcAmount,
+                tpcType,
+                discountFlag,
+                freightFlag,
+                inlandFlag,
+                restockingFlag,
+                drNumber,
+                siAmount,
+                paymentTerms,
+                deliveryDate,
+                followUpDate,
+                status,
+                remarks,
+                startDate,
+                dateCreated,
+                tsmState,
+                selectedContactPerson,
+                selectedContactNumber,
+                selectedEmailAddress,
+                editableContactPerson,
+                editableContactNumber,
+                editableEmailAddress,
+                quotationSubject,
+                hideDiscountInPreview,
+                showDiscountColumns,
+                showSummaryDiscounts,
+                showProfitMargins,
+                marginAlertThreshold,
+                showMarginAlerts,
+                productViewMode,
+                visibleColumns,
+            });
+        }
+    }, [
+        sheetOpen,
+        step,
+        activityRef,
+        accountRef,
+        typeClient,
+        typeActivity,
+        source,
+        callback,
+        callStatus,
+        callType,
+        productCat,
+        productAmount,
+        productQuantity,
+        productDescription,
+        productPhoto,
+        productSku,
+        productTitle,
+        productDiscountedPrice,
+        productDiscountedAmount,
+        productIsPromo,
+        productIsHidden,
+        productRowDisplayMode,
+        vatType,
+        deliveryFee,
+        deliveryAddress,
+        restockingFee,
+        whtType,
+        itemRemarks,
+        projectType,
+        projectName,
+        quotationNumber,
+        quotationAmount,
+        quotationType,
+        quotationStatus,
+        tsmApprovalStatus,
+        soNumber,
+        soAmount,
+        soStatus,
+        paymentStatus,
+        siDate,
+        poNumber,
+        mode,
+        soType,
+        invoiceType,
+        withholdingAgent,
+        salesGroup,
+        industry,
+        conforme,
+        ioDept,
+        tpcRef,
+        tpcAmount,
+        tpcType,
+        discountFlag,
+        freightFlag,
+        inlandFlag,
+        restockingFlag,
+        drNumber,
+        siAmount,
+        paymentTerms,
+        deliveryDate,
+        followUpDate,
+        status,
+        remarks,
+        startDate,
+        dateCreated,
+        tsmState,
+        selectedContactPerson,
+        selectedContactNumber,
+        selectedEmailAddress,
+        editableContactPerson,
+        editableContactNumber,
+        editableEmailAddress,
+        quotationSubject,
+        hideDiscountInPreview,
+        showDiscountColumns,
+        showSummaryDiscounts,
+        showProfitMargins,
+        marginAlertThreshold,
+        showMarginAlerts,
+        productViewMode,
+        visibleColumns,
+        saveStateToLocalStorage,
+    ]);
+
     // AUTO SET DATE CREATED
     useEffect(() => {
         setDateCreated(new Date().toISOString());
@@ -325,6 +641,7 @@ export function CreateActivityDialog({
     };
 
     function resetForm() {
+        clearLocalStorage();
         setActivityRef(initialState.activityRef);
         setAccountRef(initialState.accountRef);
         setSource(initialState.source);
@@ -475,6 +792,7 @@ export function CreateActivityDialog({
     }, []);
 
     const handleSave = async () => {
+        clearLocalStorage();
         setLoading(true);
 
         const agent_name = `${firstname ?? ""} ${lastname ?? ""}`.trim();
@@ -1128,6 +1446,39 @@ export function CreateActivityDialog({
                                     handleBack={handleBack}
                                     handleNext={handleNext}
                                     handleSave={handleSave}
+
+                                    // Quotation data
+                                    quotationNumber={quotationNumber}
+                                    quotationAmount={quotationAmount}
+                                    productCat={productCat}
+                                    productQuantity={productQuantity}
+                                    productSku={productSku}
+                                    productTitle={productTitle}
+                                    productDescription={productDescription}
+                                    productPhoto={productPhoto}
+                                    productDiscountedPrice={productDiscountedPrice}
+                                    productDiscountedAmount={productDiscountedAmount}
+                                    productIsPromo={productIsPromo}
+                                    vatType={vatType}
+                                    deliveryFee={deliveryFee}
+                                    deliveryAddress={deliveryAddress}
+                                    restockingFee={restockingFee}
+                                    whtType={whtType}
+                                    quotationSubject={quotationSubject}
+                                    itemRemarks={itemRemarks}
+                                    projectType={projectType}
+                                    projectName={projectName}
+
+                                    // Client details
+                                    company_name={company_name}
+                                    address={address}
+                                    contact_person={contact_person}
+                                    contact_number={contact_number}
+                                    email_address={email_address}
+
+                                    // Enhanced SO features
+                                    soRevisions={[]}
+                                    quotationType={quotationType}
                                 />
                             )}
 

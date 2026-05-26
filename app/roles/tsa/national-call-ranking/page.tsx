@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 
 import {
@@ -20,6 +21,7 @@ import { sileo } from "sileo";
 import { NationalRanking } from "@/components/national-ranking";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 interface UserDetails {
   referenceid: string;
@@ -141,6 +143,9 @@ function DashboardContent() {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
+            <div className="flex items-center px-3">
+              <UnifiedNotificationBellLazy />
+            </div>
           </header>
 
           <NationalRanking
@@ -156,13 +161,15 @@ function DashboardContent() {
 export default function Page() {
   return (
     <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
+      <NotificationProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </NotificationProvider>
     </UserProvider>
   );
 }

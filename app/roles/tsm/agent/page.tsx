@@ -16,6 +16,7 @@ import { type DateRange } from "react-day-picker";
 
 import { AgentList } from "@/components/roles/tsm/dashboard/list";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 interface UserDetails {
     referenceid: string;
@@ -128,6 +129,9 @@ function DashboardContent() {
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
+                        </div>
+                        <div className="flex items-center px-3">
+                            <UnifiedNotificationBellLazy />
                         </div>
                     </header>
 

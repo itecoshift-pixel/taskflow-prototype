@@ -1,36 +1,56 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Item, ItemContent, ItemTitle, ItemDescription, } from "@/components/ui/item";
 import { Card, CardFooter } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { useSearchParams } from "next/navigation";
 import { TruckElectric, Coins, ReceiptText, PackageCheck, PackageX, CircleOff, Activity } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
+import { type DateRange } from "react-day-picker";
 
-interface Activity {
+interface ActivityItem {
   type_activity?: string;
   actual_sales?: number | string;
   quotation_number?: string | null;
   so_number?: string | null;
   status?: string;
   so_amount?: number | string;
+  delivery_date?: string | null;
 }
 
 interface Props {
-  activities: Activity[];
+  activities: ActivityItem[];
   loading: boolean;
   error: string | null;
+  dateRange?: DateRange;
 }
 
-export function ActivityCard({ activities, loading, error }: Props) {
+export function ActivityCard({ activities, loading, error, dateRange }: Props) {
   /* ===================== CALCULATIONS ===================== */
 
-  const deliveredActivities = activities.filter(
-    (a) => a.type_activity === "Delivered / Closed Transaction"
-  );
+  // Build a strict date range from the dateRange prop for delivery_date filtering
+  const deliveryFrom = dateRange?.from
+    ? new Date(new Date(dateRange.from).setHours(0, 0, 0, 0))
+    : null;
+  const deliveryTo = dateRange?.to
+    ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999))
+    : deliveryFrom
+    ? new Date(new Date(dateRange!.from!).setHours(23, 59, 59, 999))
+    : null;
+
+  const deliveredActivities = activities.filter((a) => {
+    if (a.type_activity !== "Delivered / Closed Transaction") return false;
+    // If no date range set, include all
+    if (!deliveryFrom) return true;
+    // Must have a delivery_date to be counted in the range
+    if (!a.delivery_date) return false;
+    const d = new Date(a.delivery_date);
+    if (d < deliveryFrom) return false;
+    if (deliveryTo && d > deliveryTo) return false;
+    return true;
+  });
 
   const totalDeliveries = deliveredActivities.length;
 

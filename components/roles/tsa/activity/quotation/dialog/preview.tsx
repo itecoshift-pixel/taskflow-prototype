@@ -31,6 +31,7 @@ type Item = {
 
 type Payload = {
     referenceNo: string;
+    version?: string;
     date: string;
     companyName: string;
     address: string;
@@ -355,7 +356,15 @@ export const Preview: React.FC<PreviewProps> = ({
                 <div className="text-right text-[11px] font-medium uppercase space-y-1">
                     <p className="flex justify-end gap-2">
                         <span className="font-black text-[#121212]">Reference No:</span>
-                        <span className="text-gray-600">{payload.referenceNo}</span>
+                        <span className="text-gray-600">
+                            {payload.referenceNo}
+                            {payload.version && (() => {
+                                // Extract revision number from version string
+                                const match = payload.version.match(/-(\d+)-/);
+                                const revNum = match ? match[1] : null;
+                                return revNum ? ` (Rev ${revNum})` : ` (${payload.version})`;
+                            })()}
+                        </span>
                     </p>
                     <p className="flex justify-end gap-2">
                         <span className="font-black text-[#121212]">Date:</span>

@@ -13,36 +13,24 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
 
-import { CCG } from "@/components/roles/tsm/activity/ccg/ccg";
+import SPF from "@/components/roles/accounting/activity/spf/request-spf";
 
 import { type DateRange } from "react-day-picker";
-
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
-
-interface Account {
-    id: string;
-    referenceid: string;
-    company_name: string;
-    type_client: string;
-    date_created: string;
-    date_updated: string;
-    contact_person: string;
-    contact_number: string;
-    email_address: string;
-    address: string;
-    delivery_address: string;
-    region: string;
-    industry: string;
-    status?: string;
-    company_group?: string;
-}
 
 interface UserDetails {
     referenceid: string;
     tsm: string;
     manager: string;
     target_quota: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    contact: string;
+    tsmname: string;
+    managername: string;
+    profilePicture: string;
+    signature: string;
 }
 
 function DashboardContent() {
@@ -54,18 +42,21 @@ function DashboardContent() {
         tsm: "",
         manager: "",
         target_quota: "",
+        firstname: "",
+        lastname: "",
+        email: "",
+        contact: "",
+        tsmname: "",
+        managername: "",
+        profilePicture: "",
+        signature: "",
     });
 
-    const [posts, setPosts] = useState<Account[]>([]);
     const [loadingUser, setLoadingUser] = useState(true);
-    const [loadingAccounts, setLoadingAccounts] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] = React.useState<
         DateRange | undefined
     >(undefined);
-
-    // NEW: State to toggle completed card visibility
-    const [showCompleted, setShowCompleted] = useState(false);
 
     const queryUserId = searchParams?.get("id") ?? "";
 
@@ -96,6 +87,14 @@ function DashboardContent() {
                     tsm: data.TSM || "",
                     manager: data.Manager || "",
                     target_quota: data.TargetQuota || "",
+                    firstname: data.Firstname || "",
+                    lastname: data.Lastname || "",
+                    email: data.Email || "",
+                    contact: data.ContactNumber || "",
+                    tsmname: data.TSMName || "",
+                    managername: data.ManagerName || "",
+                    profilePicture: data.profilePicture || "",
+                    signature: data.signatureImage || "",
                 });
 
                 sileo.success({
@@ -110,7 +109,17 @@ function DashboardContent() {
                     },
                 });
             } catch (err) {
-                console.error("Error fetching user data:", err);
+                sileo.warning({
+                    title: "Failed",
+                    description: "Error fetching user data:",
+                    duration: 4000,
+                    position: "top-right",
+                    fill: "black",
+                    styles: {
+                        title: "text-white!",
+                        description: "text-white",
+                    },
+                });
                 sileo.error({
                     title: "Failed",
                     description: "Failed to connect to server. Please try again later or refresh your network connection",
@@ -130,27 +139,6 @@ function DashboardContent() {
         fetchUserData();
     }, [userId]);
 
-    const loading = loadingUser || loadingAccounts;
-
-    // Filter accounts by created date range (optional)
-    const filteredData = useMemo(() => {
-        if (
-            !dateCreatedFilterRange ||
-            !dateCreatedFilterRange.from ||
-            !dateCreatedFilterRange.to
-        ) {
-            return posts;
-        }
-
-        const fromTime = dateCreatedFilterRange.from.setHours(0, 0, 0, 0);
-        const toTime = dateCreatedFilterRange.to.setHours(23, 59, 59, 999);
-
-        return posts.filter((item) => {
-            const createdDate = new Date(item.date_created).getTime();
-            return createdDate >= fromTime && createdDate <= toTime;
-        });
-    }, [posts, dateCreatedFilterRange]);
-
     return (
         <>
             <ProtectedPageWrapper>
@@ -163,23 +151,19 @@ function DashboardContent() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage className="line-clamp-1">Daily Activity Logs</BreadcrumbPage>
+                                        <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">SPF Records</BreadcrumbPage>
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
-                        </div>
-                        <div className="flex items-center px-3">
-                            <UnifiedNotificationBellLazy />
                         </div>
                     </header>
 
                     <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
                         <div>
-                            <CCG
-                                referenceid={userDetails.referenceid}
-                                target_quota={userDetails.target_quota}
+                            <SPF 
                                 dateCreatedFilterRange={dateCreatedFilterRange}
-                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction} />
+                                setDateCreatedFilterRangeAction={setDateCreatedFilterRangeAction}
+                            />
                         </div>
                     </main>
                 </SidebarInset>

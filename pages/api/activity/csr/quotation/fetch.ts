@@ -50,8 +50,17 @@ const SIGNATORY_COLUMNS = [
   "agent_contact_number",
   "agent_email_address",
   "tsm_name",
+  "tsm_signature",
+  "tsm_contact_number",
+  "tsm_email_address",
   "tsm_approval_date",
   "tsm_remarks",
+  "manager_name",
+  "manager_signature",
+  "manager_contact_number",
+  "manager_email_address",
+  "manager_approval_date",
+  "manager_remarks",
 ];
 
 // ─── Explicit row types (avoids GenericStringError from Supabase inference) ───
@@ -103,8 +112,17 @@ interface SignatoryRow {
   agent_contact_number: string | null;
   agent_email_address: string | null;
   tsm_name: string | null;
+  tsm_signature: string | null;
+  tsm_contact_number: string | null;
+  tsm_email_address: string | null;
   tsm_approval_date: string | null;
   tsm_remarks: string | null;
+  manager_name: string | null;
+  manager_signature: string | null;
+  manager_contact_number: string | null;
+  manager_email_address: string | null;
+  manager_approval_date: string | null;
+  manager_remarks: string | null;
 }
 
 interface MergedRow extends HistoryRow {
@@ -113,8 +131,17 @@ interface MergedRow extends HistoryRow {
   agent_contact_number: string | null;
   agent_email_address: string | null;
   tsm_name: string | null;
+  tsm_signature: string | null;
+  tsm_contact_number: string | null;
+  tsm_email_address: string | null;
   tsm_approval_date: string | null;
   tsm_remarks: string | null;
+  manager_name: string | null;
+  manager_signature: string | null;
+  manager_contact_number: string | null;
+  manager_email_address: string | null;
+  manager_approval_date: string | null;
+  manager_remarks: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,7 +172,7 @@ export default async function handler(
     return res.status(405).json({ message: "Method not allowed" });
   }
 
-  const { from, to, page = "1", search = "", limit = "10" } = req.query;
+  const { from, to, page = "1", limit = "10", search = "", status, minAmount, maxAmount, company, agentName, tsmName, quotationType, projectType, source } = req.query;
 
   const fromDate =
     typeof from === "string" && from ? toDateStr(new Date(from)) : undefined;
@@ -154,6 +181,15 @@ export default async function handler(
   const pageNum = Math.max(1, parseInt(String(page), 10));
   const pageSize = Math.max(1, Math.min(100, parseInt(String(limit), 10)));
   const searchTerm = typeof search === "string" ? search.trim() : "";
+  const statusFilter = typeof status === "string" ? status.trim() : "";
+  const minAmountFilter = typeof minAmount === "string" ? parseFloat(minAmount) : undefined;
+  const maxAmountFilter = typeof maxAmount === "string" ? parseFloat(maxAmount) : undefined;
+  const companyFilter = typeof company === "string" ? company.trim() : "";
+  const agentNameFilter = typeof agentName === "string" ? agentName.trim() : "";
+  const tsmNameFilter = typeof tsmName === "string" ? tsmName.trim() : "";
+  const quotationTypeFilter = typeof quotationType === "string" ? quotationType.trim() : "";
+  const projectTypeFilter = typeof projectType === "string" ? projectType.trim() : "";
+  const sourceFilter = typeof source === "string" ? source.trim() : "";
   const offset = (pageNum - 1) * pageSize;
 
   try {
@@ -166,6 +202,41 @@ export default async function handler(
     if (fromDate) countQuery = countQuery.gte("date_created", fromDate);
     if (toDate)   countQuery = countQuery.lte("date_created", toDate);
     if (searchTerm) countQuery = countQuery.or(buildSearchFilter(searchTerm));
+    if (statusFilter) countQuery = countQuery.eq("tsm_approved_status", statusFilter);
+    if (minAmountFilter !== undefined && !isNaN(minAmountFilter)) countQuery = countQuery.gte("quotation_amount", minAmountFilter);
+    if (maxAmountFilter !== undefined && !isNaN(maxAmountFilter)) countQuery = countQuery.lte("quotation_amount", maxAmountFilter);
+    if (companyFilter) countQuery = countQuery.ilike("company_name", `%${companyFilter}%`);
+    if (quotationTypeFilter) countQuery = countQuery.ilike("quotation_type", `%${quotationTypeFilter}%`);
+    if (projectTypeFilter) countQuery = countQuery.ilike("project_type", `%${projectTypeFilter}%`);
+    if (sourceFilter) countQuery = countQuery.ilike("source", `%${sourceFilter}%`);
+
+    if (agentNameFilter || tsmNameFilter) {
+      let sigQuery = supabase
+        .from("signatories")
+        .select("quotation_number");
+
+      if (agentNameFilter) sigQuery = sigQuery.ilike("agent_name", `%${agentNameFilter}%`);
+      if (tsmNameFilter) sigQuery = sigQuery.ilike("tsm_name", `%${tsmNameFilter}%`);
+
+      const { data: sigData, error: sigError } = await sigQuery;
+
+      if (!sigError && sigData && sigData.length > 0) {
+        const quoteNumbers = sigData
+          .map((s: any) => s.quotation_number)
+          .filter((q: string | null) => q);
+        if (quoteNumbers.length > 0) {
+          countQuery = countQuery.in("quotation_number", quoteNumbers);
+        } else {
+          return res
+            .status(200)
+            .json({ activities: [], total: 0, totalPages: 1, page: pageNum });
+        }
+      } else if (agentNameFilter || tsmNameFilter) {
+        return res
+          .status(200)
+          .json({ activities: [], total: 0, totalPages: 1, page: pageNum });
+      }
+    }
 
     const { count, error: countError } = await countQuery;
 
@@ -194,6 +265,41 @@ export default async function handler(
     if (fromDate) dataQuery = dataQuery.gte("date_created", fromDate);
     if (toDate)   dataQuery = dataQuery.lte("date_created", toDate);
     if (searchTerm) dataQuery = dataQuery.or(buildSearchFilter(searchTerm));
+    if (statusFilter) dataQuery = dataQuery.eq("tsm_approved_status", statusFilter);
+    if (minAmountFilter !== undefined && !isNaN(minAmountFilter)) dataQuery = dataQuery.gte("quotation_amount", minAmountFilter);
+    if (maxAmountFilter !== undefined && !isNaN(maxAmountFilter)) dataQuery = dataQuery.lte("quotation_amount", maxAmountFilter);
+    if (companyFilter) dataQuery = dataQuery.ilike("company_name", `%${companyFilter}%`);
+    if (quotationTypeFilter) dataQuery = dataQuery.ilike("quotation_type", `%${quotationTypeFilter}%`);
+    if (projectTypeFilter) dataQuery = dataQuery.ilike("project_type", `%${projectTypeFilter}%`);
+    if (sourceFilter) dataQuery = dataQuery.ilike("source", `%${sourceFilter}%`);
+
+    if (agentNameFilter || tsmNameFilter) {
+      let sigQuery = supabase
+        .from("signatories")
+        .select("quotation_number");
+
+      if (agentNameFilter) sigQuery = sigQuery.ilike("agent_name", `%${agentNameFilter}%`);
+      if (tsmNameFilter) sigQuery = sigQuery.ilike("tsm_name", `%${tsmNameFilter}%`);
+
+      const { data: sigData, error: sigError } = await sigQuery;
+
+      if (!sigError && sigData && sigData.length > 0) {
+        const quoteNumbers = sigData
+          .map((s: any) => s.quotation_number)
+          .filter((q: string | null) => q);
+        if (quoteNumbers.length > 0) {
+          dataQuery = dataQuery.in("quotation_number", quoteNumbers);
+        } else {
+          return res
+            .status(200)
+            .json({ activities: [], total, totalPages, page: pageNum });
+        }
+      } else if (agentNameFilter || tsmNameFilter) {
+        return res
+          .status(200)
+          .json({ activities: [], total, totalPages, page: pageNum });
+      }
+    }
 
     const { data: rawHistory, error: historyError } = await dataQuery;
 
@@ -247,8 +353,17 @@ export default async function handler(
         agent_contact_number: sig?.agent_contact_number ?? null,
         agent_email_address:  sig?.agent_email_address  ?? null,
         tsm_name:             sig?.tsm_name             ?? null,
+        tsm_signature:        sig?.tsm_signature        ?? null,
+        tsm_contact_number:   sig?.tsm_contact_number   ?? null,
+        tsm_email_address:    sig?.tsm_email_address    ?? null,
         tsm_approval_date:    sig?.tsm_approval_date    ?? null,
         tsm_remarks:          sig?.tsm_remarks          ?? null,
+        manager_name:         sig?.manager_name         ?? null,
+        manager_signature:    sig?.manager_signature    ?? null,
+        manager_contact_number: sig?.manager_contact_number ?? null,
+        manager_email_address: sig?.manager_email_address ?? null,
+        manager_approval_date: sig?.manager_approval_date ?? null,
+        manager_remarks:      sig?.manager_remarks      ?? null,
       };
     });
 

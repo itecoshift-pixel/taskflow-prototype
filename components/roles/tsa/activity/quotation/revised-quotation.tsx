@@ -12,7 +12,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
-  DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -23,6 +22,7 @@ import {
   Trash2,
   Filter,
   Search,
+  FileText,
   LoaderPinwheel
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,6 +69,7 @@ const QUOTATION_STATUS_OPTIONS = {
 
 import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
+import { GenerateSODialog } from "./dialog/generate-so";
 import { AccountsActiveDeleteDialog } from "../planner/dialog/delete";
 
 interface SupervisorDetails {
@@ -113,6 +114,7 @@ interface Completed {
   vat_type: string;
   delivery_fee: string;
   restocking_fee?: string;
+  delivery_address?: string;
   quotation_vatable?: string;
   quotation_subject?: string;
   agent_signature: string;
@@ -331,6 +333,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [pwDialogOpen, setPwDialogOpen] = useState(false);
   const [pwInput, setPwInput] = useState("");
   const [pwError, setPwError] = useState(false);
+
+  // ── Generate SO dialog ────────────────────────────────────────────────────
+  const [soDialogOpen, setSoDialogOpen] = useState(false);
+  const [soQuotationData, setSoQuotationData] = useState<Completed | null>(null);
 
   useEffect(() => {
     if (tsmDetailsProp !== undefined) setTsmDetails(tsmDetailsProp);
@@ -607,6 +613,36 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     fetchActivities();
     closeEditDialog();
   };
+
+  const generateToken = (ref: string, total: string): string => {
+  const raw = `${ref}|${total}|TF-SECURE-2024-DS-EC`;
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+};
+
+const generateQrDataUrl = async (url: string): Promise<string | null> => {
+  try {
+    const QRCode = await import("qrcode");
+    return await QRCode.toDataURL(url, {
+      width: 128,
+      margin: 1,
+      color: { dark: PRIMARY_CHARCOAL, light: OFF_WHITE },
+      errorCorrectionLevel: "H",
+    });
+  } catch (err) {
+    console.error("QR Generation failed", err);
+    return null;
+  }
+};
+
+// Constants for PDF generation
+const PRIMARY_CHARCOAL = "#121212";
+const OFF_WHITE = "#F9FAFA";
 
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
@@ -1340,6 +1376,20 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
         removeRemarks={removeRemarks}
         setRemoveRemarks={setRemoveRemarks}
         onConfirmRemove={onConfirmRemove}
+      />
+
+      {/* ── Generate SO Dialog ── */}
+      <GenerateSODialog
+        open={soDialogOpen}
+        onClose={() => setSoDialogOpen(false)}
+        onSaved={fetchActivities}
+        quotationData={soQuotationData}
+        firstname={firstname}
+        lastname={lastname}
+        email={email}
+        contact={contact}
+        tsmname={tsmname}
+        managername={managername}
       />
     </>
   );

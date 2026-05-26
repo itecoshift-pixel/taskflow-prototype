@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState, Suspense, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { type DateRange } from "react-day-picker";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
@@ -30,8 +32,7 @@ import { Completed } from "@/components/roles/tsa/activity/planner/completed/com
 import { Delivered } from "@/components/roles/tsa/activity/planner/delivered/delivered";
 import { Done } from "@/components/roles/tsa/activity/planner/done/done";
 import { Overdue } from "@/components/roles/tsa/activity/planner/overdue/overdue";
-
-import { type DateRange } from "react-day-picker";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 import {
@@ -813,7 +814,7 @@ function DashboardContent() {
               </Button>*/}
 
               {userDetails.referenceid && (
-                <NotificationDropdown referenceid={userDetails.referenceid} userId={userId ?? ""} />
+                <UnifiedNotificationBellLazy />
               )}
             </div>
           </header>
@@ -1089,13 +1090,15 @@ function DashboardContent() {
 export default function Page() {
   return (
     <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
+      <NotificationProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </NotificationProvider>
     </UserProvider>
   );
 }

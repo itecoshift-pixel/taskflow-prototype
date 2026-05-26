@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 interface EditApproval {
   id: string;
@@ -337,6 +338,9 @@ function ApprovalContent() {
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
+            </div>
+            <div className="flex items-center px-3">
+              <UnifiedNotificationBellLazy />
             </div>
           </header>
 

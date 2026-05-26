@@ -23,6 +23,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { sileo } from "sileo";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 /* ─── Types ─────────────────────────────────────────────────────── */
 interface Account {
@@ -811,6 +812,9 @@ function DashboardContent() {
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
+            </div>
+            <div className="flex items-center px-3">
+              <UnifiedNotificationBellLazy />
             </div>
           </header>
 

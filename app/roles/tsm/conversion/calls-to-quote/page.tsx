@@ -17,6 +17,7 @@ import { CallQuote } from "@/components/roles/tsm/conversion/calls-quote";
 
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 interface Account {
     id: string;
@@ -151,6 +152,9 @@ function DashboardContent() {
                                     </BreadcrumbItem>
                                 </BreadcrumbList>
                             </Breadcrumb>
+                        </div>
+                        <div className="flex items-center px-3">
+                            <UnifiedNotificationBellLazy />
                         </div>
                     </header>
 

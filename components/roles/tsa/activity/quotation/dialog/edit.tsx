@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { sileo } from "sileo";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -43,6 +44,7 @@ import {
   PanelLeft,
   HelpCircle,
   Info,
+  RotateCcw,
 } from "lucide-react";
 import { supabase } from "@/utils/supabase";
 import {
@@ -62,6 +64,8 @@ interface Completed {
   id: number;
   start_date?: string;
   end_date?: string;
+  date_updated?: string;
+  date_created?: string;
   product_quantity?: string;
   product_amount?: string;
   product_description?: string;
@@ -100,6 +104,17 @@ interface Completed {
   product_is_promo?: string;
   product_is_hidden?: string;
   product_display_mode?: string;
+
+  // Signatory properties
+  agent_signature?: string;
+  agent_contact_number?: string;
+  agent_email_address?: string;
+  tsm_signature?: string;
+  tsm_contact_number?: string;
+  tsm_email_address?: string;
+  manager_signature?: string;
+  manager_contact_number?: string;
+  manager_email_address?: string;
 }
 
 interface ProductItem {
@@ -130,6 +145,13 @@ interface ProductItem {
   originalPrice?: number;
   cloudinaryPublicId?: string;
   id?: string;
+  pageBreakBefore?: boolean;  // Force a page break before this item in PDF
+  spacerAfter?: number;       // Extra vertical space (px) added after this item in PDF
+  descSpacerAfter?: number;   // Extra space (px) added inside description column (4th col) after last section
+  descSpacerBefore?: number;  // Extra space (px) added inside description column (4th col) before first section
+  descSectionSpacing?: number;// Extra space (px) added BETWEEN description sections
+  sectionSpacings?: number[]; // Per-section spacing (array of px values for each section)
+  sectionPageBreaks?: boolean[]; // Per-section page breaks (array of booleans, true = force page break BEFORE this section)
 }
 
 function splitAndTrim(value?: string): string[] {
@@ -140,6 +162,55 @@ function splitAndTrim(value?: string): string[] {
 function splitDescription(value?: string): string[] {
   if (!value) return [];
   return value.split("||").map((v) => v.trim());
+}
+
+function parseDescriptionIntoSections(html?: string): string[] {
+  if (!html?.trim()) return [];
+  
+  // Clean up first
+  let processed = html
+    .replace(/<p>\s*<\/p>/g, '')
+    .replace(/\n\s*\n/g, '\n')
+    .trim();
+  
+  // Split by section headers (divs with #121212 background)
+  const sections: string[] = [];
+  const headerPattern = /<div[^>]*background\s*:\s*#121212[^>]*>/gi;
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = headerPattern.exec(processed)) !== null) {
+    if (match.index > lastIndex) {
+      const before = processed.substring(lastIndex, match.index).trim();
+      if (before) sections.push(before);
+    }
+    
+    // Find the end of this section block
+    let depth = 1;
+    let endIdx = match.index + match[0].length;
+    
+    while (depth > 0 && endIdx < processed.length) {
+      if (processed.substring(endIdx, endIdx + 5) === '<div ') {
+        depth++;
+        endIdx += 5;
+      } else if (processed.substring(endIdx, endIdx + 6) === '</div>') {
+        depth--;
+        endIdx += 6;
+      } else {
+        endIdx++;
+      }
+    }
+    
+    sections.push(processed.substring(match.index, endIdx).trim());
+    lastIndex = endIdx;
+  }
+  
+  if (lastIndex < processed.length) {
+    const remaining = processed.substring(lastIndex).trim();
+    if (remaining) sections.push(remaining);
+  }
+  
+  return sections.filter(s => s.length > 0);
 }
 
 // ── SPF 1 types ──────────────────────────────────────────────────────────────
@@ -429,21 +500,31 @@ interface RevisedQuotation {
   quotation_number?: string;
   product_title?: string;
   quotation_amount?: number;
-  version: string;
+  version?: string;
   start_date?: string | Date;
   end_date?: string | Date;
   products?: Product[];
-  product_description: string;
-  product_quantity: string;
-  product_amount: string;
-  product_photo: string;
-  product_sku: string;
-  item_remarks: string;
+  product_description?: string;
+  product_quantity?: string;
+  product_amount?: string;
+  product_photo?: string;
+  product_sku?: string;
+  item_remarks?: string;
   discounted_priced?: string;
   discounted_amount?: string;
   product_is_promo?: string;
   product_is_hidden?: string;
   product_display_mode?: string;
+  date_updated?: string;
+  date_created?: string;
+  status?: string;
+  type_activity?: string;
+  quotation_subject?: string;
+  quotation_vatable?: string;
+  restocking_fee?: string;
+  delivery_fee?: string;
+  vat_type?: string;
+  quotation_type?: string;
 }
 
 interface TaskListEditDialogProps {
@@ -533,6 +614,7 @@ export default function TaskListEditDialog({
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
   const [previewStates, setPreviewStates] = useState<boolean[]>([]);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [quotationAmount, setQuotationAmount] = useState<number>(0);
 
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -566,17 +648,42 @@ export default function TaskListEditDialog({
 
   // Contact details state (editable in revision)
   const [contactPersonState, setContactPersonState] = useState<string>(
-    item.contact_person || company?.contact_person || "",
+    item.contact_person || "",
   );
   const [contactNumberState, setContactNumberState] = useState<string>(
-    item.contact_number || company?.contact_number || "",
+    item.contact_number || "",
   );
   const [emailAddressState, setEmailAddressState] = useState<string>(
-    item.email_address || company?.email_address || "",
+    item.email_address || "",
   );
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isContentHidden, setIsContentHidden] = useState(false);
+  const [expandedProductRows, setExpandedProductRows] = useState<Set<string>>(new Set());
+  const [lookupDialogOpen, setLookupDialogOpen] = useState(false);
+  const [lookupQuotationNumber, setLookupQuotationNumber] = useState("");
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupError, setLookupError] = useState("");
+  const [isUsingOwnerName, setIsUsingOwnerName] = useState(false);
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [debugPasswordDialogOpen, setDebugPasswordDialogOpen] = useState(false);
+  const [debugPasswordInput, setDebugPasswordInput] = useState("");
+  const [debugPasswordError, setDebugPasswordError] = useState("");
+  // Signature states to override props when loading quotation
+  const [loadedAgentSignature, setLoadedAgentSignature] = useState<string | null>(null);
+  const [loadedAgentContactNumber, setLoadedAgentContactNumber] = useState<string | null>(null);
+  const [loadedAgentEmailAddress, setLoadedAgentEmailAddress] = useState<string | null>(null);
+  const [loadedTsmSignature, setLoadedTsmSignature] = useState<string | null>(null);
+  const [loadedTsmContactNumber, setLoadedTsmContactNumber] = useState<string | null>(null);
+  const [loadedTsmEmailAddress, setLoadedTsmEmailAddress] = useState<string | null>(null);
+  const [loadedManagerSignature, setLoadedManagerSignature] = useState<string | null>(null);
+  const [loadedManagerContactNumber, setLoadedManagerContactNumber] = useState<string | null>(null);
+  const [loadedManagerEmailAddress, setLoadedManagerEmailAddress] = useState<string | null>(null);
+  const [loadedManagerName, setLoadedManagerName] = useState<string | null>(null);
+  const [loadedAgentName, setLoadedAgentName] = useState<string | null>(null);
+  const [loadedTsmName, setLoadedTsmName] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -586,9 +693,12 @@ export default function TaskListEditDialog({
     onCancel: () => void;
   } | null>(null);
   const [pdfOption, setPdfOption] = useState<"with-discount" | "default-only">("default-only");
-  // NEW: 2-step PDF dialog states
-  const [pdfStep, setPdfStep] = useState<1 | 2>(1);
-  const [pdfDescriptionStyle, setPdfDescriptionStyle] = useState<'plain' | 'table'>('table');
+  const [pdfBreakBuffer, setPdfBreakBuffer] = useState(-70); // pixels to adjust page break threshold (+ = later break, - = earlier break)
+  const [pdfContHeaderGap, setPdfContHeaderGap] = useState(-85); // extra gap between column header and content on continuation pages 2+
+  const [pdfAutoRefresh, setPdfAutoRefresh] = useState(true); // auto-refresh preview on slider changes
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   // NEW: Hide discount columns in preview (for SRP-only quotes)
   // Helper to convert database value to boolean (handles strings like "true"/"false")
   const toBoolean = (value: any, defaultValue: boolean): boolean => {
@@ -655,6 +765,7 @@ export default function TaskListEditDialog({
     useState<RevisedQuotation | null>(null);
 
   // SPF modes
+  const [hasChanges, setHasChanges] = useState(false);
   const [isSpfMode, setIsSpfMode] = useState(false);
   const [isSpf1Mode, setIsSpf1Mode] = useState(false);
   const [spf1Loading, setSpf1Loading] = useState(false);
@@ -762,15 +873,15 @@ export default function TaskListEditDialog({
         newCheckedRows[i] = true;
       }
       const unitPrice = parseFloat(amt) || 0;
-      // discounted_amount stores per-unit peso discount
+      // discounted_amount in DB is stored as the TOTAL discount (unit discount × qty).
+      // Always divide by qty to get the per-unit discount amount.
       const discountedAmountArr = splitAndTrim(item.discounted_amount);
-      let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
-      // Normalize: if saved discount looks like a total (>= 50% of unit price and qty > 1), convert to per-unit
-      // This handles cases where DB stores total discount (410 * 3 = 1230) instead of per-unit (410)
       const qtyNum = parseFloat(qty) || 1;
-      if (savedDiscountAmt > 0 && qtyNum > 1 && savedDiscountAmt >= (unitPrice * 0.5)) {
+      let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+      if (savedDiscountAmt > 0 && qtyNum > 1) {
         savedDiscountAmt = savedDiscountAmt / qtyNum;
       }
+      // Fall back to percent-derived if no saved amount
       const unitDiscountAmount = savedDiscountAmt > 0
         ? savedDiscountAmt
         : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
@@ -809,6 +920,13 @@ export default function TaskListEditDialog({
           if (raw === 'request') return 'request';
           return 'transparent';
         })(),
+        pageBreakBefore: false,
+        spacerAfter: 0,
+        descSpacerAfter: 0,
+        descSpacerBefore: 0,
+        descSectionSpacing: 0,
+        sectionSpacings: [],
+        sectionPageBreaks: [],
       });
     }
     setProducts(arr);
@@ -825,11 +943,65 @@ export default function TaskListEditDialog({
       showSummaryDiscounts: toBoolean(item.show_summary_discounts, true),
     });
     setCheckedRows(newCheckedRows);
+
+    // Seed signatory names from item owner data on initial load
+    // so the PDF & preview show the owner's name, not the logged-in user's name
+    const itemAny = item as any;
+    const ownerAgentName =
+      itemAny.owner_name ||
+      ((itemAny.agent_firstname && itemAny.agent_lastname) ? `${itemAny.agent_firstname} ${itemAny.agent_lastname}`.trim() : null) ||
+      ((itemAny.firstname && itemAny.lastname) ? `${itemAny.firstname} ${itemAny.lastname}`.trim() : null) ||
+      null;
+    if (ownerAgentName) setLoadedAgentName(ownerAgentName);
+    const ownerTsmName = itemAny.tsm_name || null;
+    if (ownerTsmName) setLoadedTsmName(ownerTsmName);
+    const ownerManagerName = itemAny.manager_name || null;
+    if (ownerManagerName) setLoadedManagerName(ownerManagerName);
   }, [item]);
 
   useEffect(() => {
     setPreviewStates(products.map(() => true));
   }, [products]);
+
+  // Screenshot Prevention Effects
+  useEffect(() => {
+    // 1. Visibility change: Hide content when tab is not visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        setIsContentHidden(true);
+      } else {
+        // Small delay before showing content again
+        setTimeout(() => setIsContentHidden(false), 300);
+      }
+    };
+
+    // 2. Key down: Hide content on print screen or screenshot keys
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Print Screen key (PrtScn)
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        setIsContentHidden(true);
+        setTimeout(() => setIsContentHidden(false), 1000);
+      }
+      // Windows: Win + Shift + S (snipping tool)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'S') {
+        setIsContentHidden(true);
+        setTimeout(() => setIsContentHidden(false), 1000);
+      }
+      // Mac: Cmd + Shift + 3 / 4
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '3' || e.key === '4')) {
+        setIsContentHidden(true);
+        setTimeout(() => setIsContentHidden(false), 1000);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Check if there are unsaved changes (for PDF security)
   const hasUnsavedChanges = useCallback(() => {
@@ -1023,11 +1195,12 @@ export default function TaskListEditDialog({
           let unitDiscountValue = p.discountAmount != null && p.discountAmount > 0
             ? p.discountAmount
             : p.isDiscounted ? (amt * discountPercent) / 100 : 0;
-          // Normalize: if discountAmount >= unit price, it's likely a total for all qty
+          // Normalize: if discountAmount >= unit price, it's likely a total for all qty — convert to per-unit first
           if (unitDiscountValue >= amt && qty > 1) {
             unitDiscountValue = unitDiscountValue / qty;
           }
-          return unitDiscountValue.toFixed(2);
+          // DB convention: store as total discount (per-unit × qty)
+          return (unitDiscountValue * qty).toFixed(2);
         }),
       );
 
@@ -1138,7 +1311,13 @@ export default function TaskListEditDialog({
   const onClickSave = () => setShowConfirmDialog(true);
 
   const getQuotationPayload = () => {
-    const salesRepresentativeName = `${firstname ?? ""} ${lastname ?? ""}`.trim();
+    const salesRepresentativeName = loadedAgentName
+      || (item.agent_signature ? null : null) // placeholder to keep chain readable
+      || (item as any).owner_name
+      || (((item as any).agent_firstname && (item as any).agent_lastname) ? `${(item as any).agent_firstname} ${(item as any).agent_lastname}`.trim() : null)
+      || (((item as any).firstname && (item as any).lastname) ? `${(item as any).firstname} ${(item as any).lastname}`.trim() : null)
+      || loadedTsmName || loadedManagerName
+      || `${firstname ?? ""} ${lastname ?? ""}`.trim();
     const emailUsername = email?.split("@")[0] ?? "";
 
     let emailDomain = "";
@@ -1156,16 +1335,13 @@ export default function TaskListEditDialog({
       const isDiscounted = p.isDiscounted ?? false;
       const defaultDiscount = vatTypeState === "vat_exe" ? 12 : 0;
       const rowDiscount = isDiscounted ? (p.discount ?? defaultDiscount) : 0;
-      // Prefer stored peso amount; fall back to percent-derived
+      // p.discountAmount in state is always per-unit (load paths normalize it)
+      // Fall back to percent-derived if not set
       let unitDiscountAmount = isDiscounted
         ? (p.discountAmount != null && p.discountAmount > 0
           ? p.discountAmount
           : (unitPrice * rowDiscount) / 100)
         : 0;
-      // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-      if (unitDiscountAmount >= unitPrice && qty > 1) {
-        unitDiscountAmount = unitDiscountAmount / qty;
-      }
       const discountedAmount = Math.max(0, unitPrice - unitDiscountAmount); // net unit price
       const totalAmount = discountedAmount * qty;
 
@@ -1198,6 +1374,13 @@ export default function TaskListEditDialog({
           return m?.[1]?.trim() ?? "";
         })(),
         remarks: p.item_remarks ?? "",
+        pageBreakBefore: p.pageBreakBefore ?? false,
+        spacerAfter: p.spacerAfter ?? 0,
+        descSpacerAfter: p.descSpacerAfter ?? 0,
+        descSpacerBefore: p.descSpacerBefore ?? 0,
+        descSectionSpacing: p.descSectionSpacing ?? 0,
+        sectionSpacings: p.sectionSpacings ?? [],
+        sectionPageBreaks: p.sectionPageBreaks ?? [],
       };
     });
 
@@ -1205,11 +1388,17 @@ export default function TaskListEditDialog({
     const restockingFeeNum = parseFloat(restockingFeeState) || 0;
     const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
 
+    const activeItem = selectedRevisedQuotation || item;
+    const activeItemAny = activeItem as any;
+    
+    const displayDate = activeItemAny.date_updated ?? activeItemAny.date_created ?? activeItemAny.start_date ?? new Date();
+    
     return {
-      referenceNo: item.quotation_number ?? "DRAFT-XXXX",
-      date: new Date().toLocaleDateString(),
-      companyName: item.company_name ?? "",
-      address: item.address ?? "",
+      referenceNo: activeItemAny.quotation_number ?? "DRAFT-XXXX",
+      version: activeItemAny.version,
+      date: new Date(displayDate).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
+      companyName: activeItemAny.company_name ?? "",
+      address: activeItemAny.address ?? "",
       telNo: contactNumberState ?? "",
       email: emailAddressState ?? "",
       attention: contactPersonState ?? "",
@@ -1225,10 +1414,10 @@ export default function TaskListEditDialog({
       salesRepresentative: salesRepresentativeName,
       salesemail,
       salescontact: contact ?? "",
-      salestsmname: tsmname ?? "",
+      salestsmname: loadedTsmName || (item as any).tsm_name || (tsmname ?? ""),
       salestsmemail: tsmemail ?? "",
       salestsmcontact: tsmcontact ?? "",
-      salesmanagername: managername ?? "",
+      salesmanagername: loadedManagerName || (item as any).manager_name || (managername ?? ""),
       vatType: vatTypeState ?? null,
       deliveryFee: deliveryFeeState ?? "",
       restockingFee: parseFloat(restockingFeeState) || 0,
@@ -1255,15 +1444,15 @@ export default function TaskListEditDialog({
             ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
             : 0
         ),
-      agentSignature: agentSignature ?? null,
-      agentContactNumber: agentContactNumber ?? null,
-      agentEmailAddress: agentEmailAddress ?? null,
-      TsmSignature: TsmSignature ?? null,
-      TsmEmailAddress: TsmEmailAddress ?? null,
-      TsmContactNumber: TsmContactNumber ?? null,
-      ManagerSignature: ManagerSignature ?? null,
-      ManagerContactNumber: ManagerContactNumber ?? null,
-      ManagerEmailAddress: ManagerEmailAddress ?? null,
+      agentSignature: loadedAgentSignature ?? agentSignature ?? null,
+      agentContactNumber: loadedAgentContactNumber ?? agentContactNumber ?? null,
+      agentEmailAddress: loadedAgentEmailAddress ?? agentEmailAddress ?? null,
+      TsmSignature: loadedTsmSignature ?? TsmSignature ?? null,
+      TsmEmailAddress: loadedTsmEmailAddress ?? TsmEmailAddress ?? null,
+      TsmContactNumber: loadedTsmContactNumber ?? TsmContactNumber ?? null,
+      ManagerSignature: loadedManagerSignature ?? ManagerSignature ?? null,
+      ManagerContactNumber: loadedManagerContactNumber ?? ManagerContactNumber ?? null,
+      ManagerEmailAddress: loadedManagerEmailAddress ?? ManagerEmailAddress ?? null,
     };
   };
 
@@ -1411,25 +1600,26 @@ export default function TaskListEditDialog({
       }
     }
     if (Array.isArray(productsArray) && productsArray.length > 0) {
-      setProducts(
-        productsArray.map((p, idx) => ({
-          uid: `revised-${Date.now()}-${idx}`,
-          description: p.description || "",
-          skus: p.skus || [],
-          title: p.title,
-          images: p.images || [],
-          isDiscounted: false,
-          price: p.price ? parseFloat(p.price) : 0,
-          quantity: 1,
-          product_quantity: "1",
-          product_amount: p.price ? p.price.toString() : "0",
-          product_description: p.description || "",
-          product_photo: p.images?.[0]?.src || "",
-          product_title: p.title,
-          product_sku: p.skus?.[0] || "",
-          item_remarks: p.remarks?.[0] || "",
-        })),
-      );
+      const mappedArr: ProductItem[] = productsArray.map((p, idx) => ({
+        uid: `revised-${Date.now()}-${idx}`,
+        description: p.description || "",
+        skus: p.skus || [],
+        title: p.title,
+        images: p.images || [],
+        isDiscounted: false,
+        price: p.price ? parseFloat(p.price) : 0,
+        quantity: 1,
+        product_quantity: "1",
+        product_amount: p.price ? p.price.toString() : "0",
+        product_description: p.description || "",
+        product_photo: p.images?.[0]?.src || "",
+        product_title: p.title,
+        product_sku: p.skus?.[0] || "",
+        item_remarks: p.remarks?.[0] || "",
+      }));
+      setProducts(mappedArr);
+      // Sync baseline so hasUnsavedChanges() stays false after loading a revision
+      setOriginalProducts(JSON.parse(JSON.stringify(mappedArr)));
     } else {
       const quantities = splitAndTrim(
         selectedRevisedQuotation.product_quantity,
@@ -1461,9 +1651,10 @@ export default function TaskListEditDialog({
         const discountPct = parseFloat(discountedPrices[i] ?? "0") || 0;
         const isDiscounted = discountPct > 0;
         const unitPrice = parseFloat(amounts[i] ?? "0") || 0;
-        const savedDiscountAmt = parseFloat(discountedAmounts[i] ?? "0") || 0;
-        const unitDiscountAmount = savedDiscountAmt > 0
-          ? savedDiscountAmt
+        let savedDiscountAmtR = parseFloat(discountedAmounts[i] ?? "0") || 0;
+        // Don't divide discount amount by quantity at all
+        const unitDiscountAmount = savedDiscountAmtR > 0
+          ? savedDiscountAmtR
           : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
         const rawDisplayMode = displayModes[i] ?? "";
         arr.push({
@@ -1497,23 +1688,52 @@ export default function TaskListEditDialog({
         });
       }
       setProducts(arr);
+      // Sync baseline so hasUnsavedChanges() stays false after loading a revision
+      setOriginalProducts(JSON.parse(JSON.stringify(arr)));
     }
   }, [selectedRevisedQuotation]);
 
   useEffect(() => {
     if (!item.quotation_number) return;
     const fetch_ = async () => {
-      const { data, error } = await supabase
+      // Fetch original quotation from history
+      const { data: historyData, error: historyError } = await supabase
+        .from("history")
+        .select("*")
+        .eq("quotation_number", item.quotation_number)
+        .order("id", { ascending: false });
+
+      // Fetch revised quotations
+      const { data: revisedData, error: revisedError } = await supabase
         .from("revised_quotations")
         .select("*")
         .eq("quotation_number", item.quotation_number)
         .order("id", { ascending: false });
-      if (!error) setRevisedQuotations(data || []);
+
+      if (!historyError && !revisedError) {
+        // Combine both history (original) and revised quotations
+        const allQuotations = [
+          ...(historyData || []),
+          ...(revisedData || [])
+        ];
+
+        // Sort them by date_updated descending
+        allQuotations.sort((a, b) => {
+          const dateA = new Date(a.date_updated ?? a.date_created);
+          const dateB = new Date(b.date_updated ?? b.date_created);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        setRevisedQuotations(allQuotations);
+        // Auto-select the latest (first row after sorting)
+        if (allQuotations.length > 0) {
+          setSelectedRevisedQuotation(allQuotations[0] as unknown as RevisedQuotation);
+        }
+      }
     };
     fetch_();
   }, [item.quotation_number]);
 
-  const payload = getQuotationPayload();
   const isEcoshift = item.quotation_type === "Ecoshift Corporation";
   const headerImagePath = isEcoshift
     ? "/ecoshift-banner.png"
@@ -1620,16 +1840,53 @@ export default function TaskListEditDialog({
     pdf.text(`Page ${pageNum} of ${totalPages}`, pdfWidth / 2, footerY + 14, { align: "center" });
   };
 
-  const DownloadPDF = async (showDiscount: boolean = false, summaryDiscounts: boolean = showSummaryDiscounts, pdfDescriptionStyle: 'plain' | 'table' = 'table') => {
+  const PreviewPDFBeforeDownload = async (showDiscount: boolean = false, summaryDiscounts: boolean = showSummaryDiscounts) => {
     if (typeof window === "undefined") return;
-    const PRIMARY_CHARCOAL = "#121212";
-    const OFF_WHITE = "#F9FAFA";
+    
+    // Generate PDF in iframe for preview
+    setIsGeneratingPdf(true);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const { default: html2canvas } = await import("html2canvas");
+      
+      // Show download confirmation dialog
+      setPdfOptionsOpen(true);
+      setPdfOption(showDiscount ? "with-discount" : "default-only");
+    } catch (error) {
+      console.error("Error generating PDF preview:", error);
+      sileo.error({
+        title: "Preview Error",
+        description: "Failed to generate PDF preview. Please try again.",
+        duration: 4000,
+        position: "top-right",
+        fill: "black",
+        styles: { title: "text-white!", description: "text-white" },
+      });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const DownloadPDF = async (
+    showDiscount: boolean = false,
+    summaryDiscounts: boolean = showSummaryDiscounts,
+    breakBuffer: number = 0,
+    contHeaderGap: number = 0,
+    returnMode: 'save' | 'blob' = 'save'
+  ): Promise<string | void> => {
+    if (typeof window === "undefined") return;
+    
+    setIsGeneratingPdf(true);
     try {
       const { default: jsPDF } = await import("jspdf");
       const { default: html2canvas } = await import("html2canvas");
       const payload = getQuotationPayload();
       const isEcoshift = item.quotation_type === "Ecoshift Corporation";
-
+      
+      // Define constants for PDF generation
+      const PRIMARY_CHARCOAL = "#121212";
+      const OFF_WHITE = "#F9FAFA";
+      
       // ── Build security artefacts BEFORE rendering ────────────────────────
       const issuedAt = new Date().toISOString();
       const companyLabel = isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC.";
@@ -1640,18 +1897,29 @@ export default function TaskListEditDialog({
         const raw = `${ref}|${total}|${SECURITY_SALT}`;
         let hash = 0;
         for (let i = 0; i < raw.length; i++) {
-          const chr = raw.charCodeAt(i);
-          hash = (hash << 5) - hash + chr;
-          hash |= 0;
+          const char = raw.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash; // Convert to 32-bit integer
         }
-        return Math.abs(hash).toString(36).toUpperCase();
+        return Math.abs(hash).toString(36);
       };
 
       const totalStr = payload.totalPrice.toFixed(2);
-      const token = generateToken(payload.referenceNo, totalStr);
-      const verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
+      let token: string;
+      let verificationUrl: string;
+      let qrDataUrl: string | null;
 
-      const qrDataUrl = await generateQrDataUrl(verificationUrl);
+      if (isDebugMode) {
+        // Bypass security in debug mode
+        token = "DEBUG-MODE";
+        verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
+        qrDataUrl = await generateQrDataUrl(verificationUrl);
+      } else {
+        // Normal security token generation
+        token = generateToken(payload.referenceNo, totalStr);
+        verificationUrl = `${window.location.origin}/verify-quotation?ref=${encodeURIComponent(payload.referenceNo)}&total=${totalStr}&v=${token}`;
+        qrDataUrl = await generateQrDataUrl(verificationUrl);
+      }
 
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -1808,8 +2076,15 @@ export default function TaskListEditDialog({
       };
 
       const initiateNewPage = async () => {
+        let referenceText = payload.referenceNo;
+        if (payload.version) {
+          const match = payload.version.match(/-(\d+)-/);
+          const revNum = match ? match[1] : null;
+          referenceText += revNum ? ` (Rev ${revNum})` : ` (${payload.version})`;
+        }
+        
         const banner = await renderBlock(
-          `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${payload.referenceNo}<br/>DATE: ${payload.date}</div></div>`,
+          `<div style="width:100%;display:block;"><img src="${headerImagePath}" class="header-img" style="width:100%;display:block;object-fit:contain;"/><div style="width:100%;text-align:right;font-weight:900;font-size:10px;margin-top:2px;display:inline-block;padding-bottom:5px;line-height:1.2;box-sizing:border-box;padding-right:60px;">REFERENCE NO: ${referenceText}<br/>DATE: ${payload.date}</div></div>`,
         );
         pdf.addImage(banner.img, "JPEG", 0, 0, pdfWidth, banner.h);
         return banner.h;
@@ -1933,80 +2208,13 @@ export default function TaskListEditDialog({
           totalContent = `₱${item.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${savingsHtml}`;
         }
 
-        // ===== INTELLIGENT PAGE SPLITTING =====
-        // Strategy: Treat each product as an unbreakable unit. If it doesn't fit, move to next page.
-        const usablePageHeight = pdfHeight - 50;
-
-        const formatDescriptionByStyle = (descContent: string, style: string): string => {
-  if (!descContent || descContent.trim() === '') {
-    return '<div style="color:#9ca3af;font-style:italic;">No specifications provided.</div>';
-  }
-
-          if (style === 'plain') {
-            let result = descContent;
-            let plainText = '';
-
-            // Step 1: Replace section headers with placeholder
-            result = result.replace(
-              /<div[^>]*background:\s*#121212[^>]*>([\s\S]*?)<\/div>/gi,
-              (_, inner) => {
-                const cleanTitle = inner ? inner.replace(/<[^>]*>/g, '').trim() : '';
-                return cleanTitle ? `\n%%SECTION:${cleanTitle}%%\n` : '';
-              }
-            );
-
-            // Step 2: Replace tables with placeholders
-            result = result.replace(
-              /<table[^>]*>([\s\S]*?)<\/table>/gi,
-              (_, tableContent) => {
-                let tableText = '\n';
-                const trMatches = tableContent.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-                trMatches.forEach((tr: string) => {
-                  const tdMatches = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || [];
-                  if (tdMatches.length >= 2) {
-                    const key = tdMatches[0] ? tdMatches[0].replace(/<[^>]*>/g, '').trim() : '';
-                    const value = tdMatches[1] ? tdMatches[1].replace(/<[^>]*>/g, '').trim() : '';
-                    if (key && value) tableText += `%%ROW:${key}|${value}%%\n`;
-                    else if (key) tableText += `%%ROW:${key}|%%\n`;
-                  }
-                });
-                return tableText;
-              }
-            );
-
-            // Step 3: Strip all remaining HTML
-            result = result.replace(/<[^>]*>/g, '');
-
-            // Step 4: Process line by line
-            const lines = result.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-            lines.forEach(line => {
-              if (line.startsWith('%%SECTION:')) {
-                const title = line.replace('%%SECTION:', '').replace('%%', '').trim();
-                plainText += `<div style="font-weight:700;text-transform:uppercase;font-size:9px;margin-top:5px;margin-bottom:4px;color:#374151;">${title}</div>`;
-              } else if (line.startsWith('%%ROW:')) {
-                const content = line.replace('%%ROW:', '').replace(/%%$/, '');
-                const pipeIdx = content.indexOf('|');
-                const key = content.substring(0, pipeIdx).trim();
-                const value = content.substring(pipeIdx + 1).trim();
-                if (key && value) {
-                  plainText += `<div style="display:block;margin-bottom:2px"><span style="font-weight:600;color:#374151">${key}:</span> <span style="color:#374151">${value}</span></div>`;
-                } else if (key) {
-                  plainText += `<div style="display:block;margin-bottom:2px;color:#374151">${key}</div>`;
-                }
-              } else {
-                plainText += `<div style="color:#374151;margin-bottom:2px">${line}</div>`;
-              }
-            });
-
-            return plainText.trim() || 'No specifications provided.';
-          } else {
-            return descContent;
-          }
-        };
+        // ===== SECTION-AWARE INTELLIGENT PAGE SPLITTING =====
+        // Strategy: Try full item first. If it doesn't fit, split into sections
+        // breakBuffer: +N = fit more content (later break), -N = break earlier
+        const usablePageHeight = pdfHeight - 50 + breakBuffer;
 
         // Helper: Build complete row HTML
-        const buildFullRowHtml = (descContent: string): string => {
+        const buildFullRowHtml = (descContent: string, showRemarks = false): string => {
           return `<div class="content-area">
           <table class="main-table" style="border:1.5px solid black;border-top:none;">
           <tr>
@@ -2022,8 +2230,8 @@ export default function TaskListEditDialog({
           </div>
           ${item.sku ? `<p class="sku-text">ITEM CODE: ${item.sku}</p>` : ""}
           ${item.procurementLeadTime ? `<div style="display:inline-flex;align-items:center;gap:4px;margin:3px 0 4px;"><span style="font-size:8px;font-weight:900;text-transform:uppercase;color:#6b7280;">Lead Time:</span><span style="font-size:9px;font-weight:700;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;padding:1px 6px;">${item.procurementLeadTime}</span></div>` : ""}
-          <div class="desc-text">${formatDescriptionByStyle(descContent, pdfDescriptionStyle)}</div>
-          ${item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
+          <div class="desc-text">${descContent}</div>
+          ${showRemarks && item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ""}
           </td>
           <td style="width:60px;text-align:center;${hidePriceCols ? 'background:#f9fafb;' : ''}" class="price-col">${unitPriceContent}</td>
           ${showDiscount ? `<td style="width:80px;text-align:center;font-weight:700;${hidePriceCols ? 'background:#f9fafb;' : ''}">${discContent}</td>
@@ -2032,36 +2240,178 @@ export default function TaskListEditDialog({
           </tr></table></div>`;
         };
 
-        // Step 1: Try rendering the complete product
-        const fullRowBlock = await renderBlock(buildFullRowHtml(item.product_description || ''));
+        // First get original sections using the SAME parsing as UI (parseDescriptionIntoSections), NO built-in spacing!
+        const originalSections = parseDescriptionIntoSections(item.product_description);
+        
+        // Step 1: Split original sections into page groups with their ORIGINAL INDICES, based on user's per-section page breaks
+        const pageGroupsWithIndices: Array<{sections: string[], originalIndices: number[]}> = [];
+        let currentGroup: {sections: string[], originalIndices: number[]} = {sections: [], originalIndices: []};
+        
+        originalSections.forEach((section, idx) => {
+          if (idx > 0 && item.sectionPageBreaks?.[idx]) {
+            // Force a new page group before this section!
+            if (currentGroup.sections.length > 0) {
+              pageGroupsWithIndices.push({...currentGroup});
+            }
+            currentGroup = {sections: [section], originalIndices: [idx]};
+          } else {
+            currentGroup.sections.push(section);
+            currentGroup.originalIndices.push(idx);
+          }
+        });
+        if (currentGroup.sections.length > 0) {
+          pageGroupsWithIndices.push({...currentGroup});
+        }
+        
+        // Step 2: For EACH page group, build enhanced description with spacing applied!
+        const finalDescGroups: string[] = [];
+        
+        pageGroupsWithIndices.forEach((group, groupIdx) => {
+          let descContent: string[] = [];
+          
+          // Add before spacer ONLY to FIRST group!
+          if (groupIdx === 0 && item.descSpacerBefore !== 0) {
+            if (item.descSpacerBefore > 0) {
+              descContent.push(`<div style="height:${item.descSpacerBefore}px;"></div>`);
+            } else {
+              descContent.push(`<div style="margin-top:${item.descSpacerBefore}px;"></div>`);
+            }
+          }
+          
+          // Add each section in this group with spacing!
+          group.sections.forEach((section, sIdxInGroup) => {
+            descContent.push(section);
+            
+            // Add spacing after this section (if NOT last section in group)
+            if (sIdxInGroup < group.sections.length - 1) {
+              // Original index is already tracked! No need for indexOf!
+              const originalIdx = group.originalIndices[sIdxInGroup];
+              const spacing = item.sectionSpacings?.[originalIdx] ?? item.descSectionSpacing ?? 0;
+              if (spacing !== 0) {
+                if (spacing > 0) {
+                  descContent.push(`<div style="height:${spacing}px;"></div>`);
+                } else {
+                  descContent.push(`<div style="margin-top:${spacing}px;"></div>`);
+                }
+              }
+            }
+          });
+          
+          // Add after spacer ONLY to LAST group!
+          if (groupIdx === pageGroupsWithIndices.length - 1 && item.descSpacerAfter !== 0) {
+            if (item.descSpacerAfter > 0) {
+              descContent.push(`<div style="height:${item.descSpacerAfter}px;"></div>`);
+            } else {
+              descContent.push(`<div style="margin-top:${item.descSpacerAfter}px;"></div>`);
+            }
+          }
+          
+          finalDescGroups.push(descContent.join(''));
+        });
 
-        // Step 2: If it fits on current page, place it and continue to next product
+        // Okay, now we already have our finalDescGroups which are split by user's per-section page breaks!
+        // Now, we just need to render each finalDescGroup as a separate page group!
+        // So no need for complex bin packing — we already have our groups!
+        // But we still need to check if they fit, and handle fit!
+        // First, let's build the full enhancedDescription for step 1:
+        const enhancedDescription = finalDescGroups.join('');
+        const isOnlyOneGroup = finalDescGroups.length === 1;
+
+        // Force page break before this item if requested (user-controlled)
+        if (item.pageBreakBefore && index > 0) {
+          pdf.addPage([612, 936]);
+          stampPdfWatermark(pdf, companyLabel, payload.referenceNo, pdfWidth, pdfHeight);
+          currentY = await initiateNewPage();
+          pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+          currentY += 28;
+        }
+
+        // Step 1: Try rendering the FULL item first (using ENHANCED DESCRIPTION with spacing!)
+        // If it's only one group, show remarks! Otherwise, no!
+        const fullRowBlock = await renderBlock(buildFullRowHtml(enhancedDescription || '', isOnlyOneGroup));
+
+        // If full item fits, just place it!
         if (currentY + fullRowBlock.h <= usablePageHeight) {
           pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
           currentY += fullRowBlock.h;
+          if (item.spacerAfter !== 0) currentY += item.spacerAfter;
           continue;
         }
 
-        // Step 3: Product doesn't fit - move entire product to new page
-        finalizeCurrentPage();
-        pdf.addPage([612, 936]);
-        pageCount++;
-        currentY = await initiateNewPage();
-        pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
-        currentY += 28;
-        pdf.addImage(fullRowBlock.img, "JPEG", 0, currentY, pdfWidth, fullRowBlock.h);
-        currentY += fullRowBlock.h;
+        // ── Continuation row wrapper (shared table context for measurement) ─
+        // showRemarks=true on the LAST page group so remarks always appears at the end
+        const buildContHtml = (descContent: string, showRemarks = false) => `
+          <div class="content-area">
+          <table class="main-table" style="border:1.5px solid black;border-top:none;">
+          <tr>
+          <td style="width:35px;" class="item-no">&nbsp;</td>
+          <td style="width:40px;" class="qty-col">&nbsp;</td>
+          <td style="width:105px;padding:8px;">&nbsp;</td>
+          <td style="padding:0px 10px;vertical-align:top;">
+          <div class="desc-text">${descContent}</div>
+          ${showRemarks && item.remarks ? `<div class="desc-remarks">${item.remarks}</div>` : ''}
+          </td>
+          <td style="width:60px;" class="price-col">&nbsp;</td>
+          ${showDiscount ? `<td style="width:80px;" class="price-col">&nbsp;</td>
+          <td style="width:80px;" class="price-col">&nbsp;</td>` : ""}
+          <td style="width:90px;" class="total-col">&nbsp;</td>
+          </tr></table></div>`;
+
+        // Now, let's just use our finalDescGroups directly! They are already split by user's page breaks!
+        let isFirstGroup = true;
+        for (let gIdx = 0; gIdx < finalDescGroups.length; gIdx++) {
+          const descGroup = finalDescGroups[gIdx];
+          const isLastGroup = gIdx === finalDescGroups.length - 1;
+          
+          // Build block for this group
+          let blockToRender;
+          if (isFirstGroup) {
+            blockToRender = await renderBlock(buildFullRowHtml(descGroup, isLastGroup));
+          } else {
+            blockToRender = await renderBlock(buildContHtml(descGroup, isLastGroup));
+          }
+
+          // Check if fits
+          const neededH = blockToRender.h + (isFirstGroup ? 0 : (headerBlock.h + 4 + contHeaderGap));
+          let fits = true;
+          
+          if (isFirstGroup) {
+            fits = currentY + blockToRender.h <= usablePageHeight;
+          } else {
+            // For continuation groups, need fresh page
+            fits = false; // force new page
+          }
+
+          if (!fits || !isFirstGroup) {
+            // Need new page!
+            finalizeCurrentPage();
+            pdf.addPage([612, 936]);
+            pageCount++;
+            currentY = await initiateNewPage();
+            pdf.addImage(headerBlock.img, "JPEG", 0, currentY, pdfWidth, headerBlock.h);
+            currentY += (isFirstGroup ? 28 : (headerBlock.h + 4 + contHeaderGap));
+          }
+
+          // Now place the block!
+          pdf.addImage(blockToRender.img, "JPEG", 0, currentY, pdfWidth, blockToRender.h);
+          currentY += blockToRender.h;
+          
+          isFirstGroup = false;
+        }
+
+        // Add user-defined spacer after this item (positive OR negative)
+        if (item.spacerAfter !== 0) currentY += item.spacerAfter;
+
+        // Continue to next item!
+        continue;
       }
 
       // ✅ Helper (put above this block if possible)
       const peso = (val: any) =>
-        Number(val ?? 0).toLocaleString("en-PH", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
+        Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-      const round2 = (n: any) =>
-        Math.round((Number(n ?? 0)) * 100) / 100;
+      const round2 = (n: number | string | undefined) =>
+        Number(Number(n ?? 0).toFixed(2));
 
       // ✅ Safe numeric values
       const _deliveryNum = Number(payload.deliveryFee) || 0;
@@ -2309,26 +2659,7 @@ ${payload.whtType && payload.whtType !== "none"
       currentY += logisticsBlock.h;
 
       const termsAndSigBlock = await renderBlock(
-        `<div class="content-area" style="padding-top:0;">
-        <div class="terms-grid">
-        <div class="terms-label">Payment:</div>
-        <div class="terms-val">
-        <p><strong style="color:red;">For Cash on Delivery (COD)</strong></p>
-        <p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p>
-        <p><strong>BANK DETAILS</strong></p>
-        <p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p>
-        <div class="bank-grid" style="display:flex;gap:20px;">
-        <div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div>
-        <div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div>
-        <div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div>
-        <div class="terms-label">CANCELLATION:</div>
-        <div class="terms-val terms-highlight">
-        <p>1. Above quoted items are non-cancellable.</p>
-        <p>2. If the customer cancels the order under any circumstances, the client shall be responsible for 100% cost incurred by Disruptive, including freight and delivery charges.</p>
-        <p>3. Downpayment for items not in stock/indent and order/special items are non-refundable and will be forfeited if the order is canceled.</p>
-        <p>4. COD transaction payments should be ready upon delivery. If the payment is not ready within seven (7) days from the date of order, the transaction is automatically canceled.</p>
-        <p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p>
-        </div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p>${payload.agentSignature ? `<img src="${payload.agentSignature}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.agentSignature ? "46px" : "8px"};">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p>${payload.TsmSignature ? `<img src="${payload.TsmSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.TsmSignature ? "46px" : "8px"};">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p>${payload.ManagerSignature ? `<img src="${payload.ManagerSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.ManagerSignature ? "46px" : "8px"};">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><div class="sig-line" style="margin-top:68px;width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
+        `<div class="content-area" style="padding-top:0;"><div class="terms-grid"><div class="terms-label">Payment:</div><div class="terms-val"><p><strong style="color:red;">For Cash on Delivery (COD)</strong></p><p><strong>NOTE: Orders below 10,000 pesos can be paid in cash at the time of delivery.</strong></p><p>For special items, Seventy Percent (70%) down payment, 30% upon delivery.</p><p><strong>BANK DETAILS</strong></p><p><b>Payee to: </b><strong>${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}</strong></p><div class="bank-grid" style="display:flex;gap:20px;"><div><strong>BANK: METROBANK</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "243-7-243805100" : "243-7-24354164-2"}</div><div><strong>BANK: BDO</strong><br/>Account Name: ${isEcoshift ? "ECOSHIFT CORPORATION" : "DISRUPTIVE SOLUTIONS INC."}<br/>Account Number: ${isEcoshift ? "0021-8801-7271" : "0021-8801-9258"}</div></div></div><div class="terms-label">DELIVERY:</div><div class="terms-val terms-highlight"><p>Delivery/Pick up is subject to confirmation.</p></div><div class="terms-label">Validity:</div><div class="terms-val"><p class="text-red-strong"><u>Thirty (30) calendar days from the date of this offer.</u></p></div><div class="terms-label">CANCELLATION:</div><div class="terms-val terms-highlight"><p>1. Above quoted items are non-cancellable.</p><p>2. Downpayment for items not in stock/indent and order/special items are non-refundable.</p><p>5. Cancellation for Special Projects (SPF) are not allowed and will be subject to a 100% charge.</p></div></div><div class="sig-hierarchy"><p class="sig-message">Thank you for allowing us to service your requirements. We hope that the above offer merits your acceptance. Unless otherwise indicated, you are deemed to have accepted the Terms and Conditions of this Quotation.</p><div class="sig-grid"><div class="sig-side-internal"><div style="position:relative;min-height:85px;"><p class="sig-italic">${isEcoshift ? "Ecoshift Corporation" : "Disruptive Solutions Inc"}</p>${payload.agentSignature ? `<img src="${payload.agentSignature}" style="position:absolute;top:28px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.agentSignature ? "46px" : "8px"};">${payload.salesRepresentative}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Representative</p><p class="sig-detail">Mobile: ${payload.agentContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.agentEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:85px;"><p class="sig-approved-label">Approved By:</p>${payload.TsmSignature ? `<img src="${payload.TsmSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.TsmSignature ? "46px" : "8px"};">${payload.salestsmname}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales Manager</p><p class="sig-detail">Mobile: ${payload.TsmContactNumber || "N/A"}</p><p class="sig-detail">Email: ${payload.TsmEmailAddress || "N/A"}</p></div><div style="position:relative;min-height:75px;"><p class="sig-approved-label">Noted By:</p>${payload.ManagerSignature ? `<img src="${payload.ManagerSignature}" style="position:absolute;top:22px;left:0;width:110px;height:auto;object-fit:contain;"/>` : ""}<p class="sig-name" style="margin-top:${payload.ManagerSignature ? "46px" : "8px"};">${payload.salesmanagername}</p><div class="sig-line" style="width:220px;margin-top:2px;"></div><p class="sig-sub-label">Sales-B2B</p></div></div><div class="sig-side-client"><div style="text-align:center;"><p class="sig-client-name" style="font-size:10px;font-weight:900;text-transform:uppercase;margin-top:55px;margin-bottom:4px;">${payload.attention || "&nbsp;"}</p><div class="sig-line" style="width:220px;"></div><p class="sig-client-label">Company Authorized Representative</p><p class="sig-client-sub">(Please Sign Over Printed Name)</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Payment Release Date</p></div><div style="text-align:center;"><div class="sig-line" style="margin-top:55px;width:220px;"></div><p class="sig-client-label">Position in the Company</p></div></div></div></div></div>`,
 
       );
       if (currentY + termsAndSigBlock.h > pdfHeight - BOTTOM_MARGIN) {
@@ -2360,27 +2691,433 @@ ${payload.whtType && payload.whtType !== "none"
       }
 
       const safeCompanyName = (payload.companyName || item.company_name || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-      pdf.save(`QUOTATION_${payload.referenceNo}_${safeCompanyName}.pdf`);
-      document.body.removeChild(iframe);
+
+      if (returnMode === 'blob') {
+        const blobUrl = pdf.output('bloburl') as unknown as string;
+        document.body.removeChild(iframe);
+        return blobUrl;
+      } else {
+        pdf.save(`${payload.referenceNo}_${safeCompanyName}.pdf`);
+        document.body.removeChild(iframe);
+      }
     } catch (error) {
       console.error("Critical Export Error:", error);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
   const toggleDescription = (index: number) =>
     setOpenDescription((prev) => ({ ...prev, [index]: !prev[index] }));
 
+  // ── Live PDF Preview ───────────────────────────────────────────────
+  const generatePreview = async () => {
+    setPdfPreviewLoading(true);
+    // Revoke previous blob URL to prevent memory leak
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl(null);
+    }
+    try {
+      const blobUrl = await DownloadPDF(
+        pdfOption === "with-discount",
+        showSummaryDiscounts,
+        pdfBreakBuffer,
+        pdfContHeaderGap,
+        'blob'
+      );
+      if (blobUrl && typeof blobUrl === 'string') {
+        setPdfPreviewUrl(blobUrl);
+      }
+    } catch (err) {
+      console.error("Preview generation failed:", err);
+      sileo.error({
+        title: "Preview Error",
+        description: "Failed to generate PDF preview.",
+        duration: 3000,
+        position: "top-right",
+      });
+    } finally {
+      setPdfPreviewLoading(false);
+    }
+  };
+
+  // Clean up blob URL when preview dialog closes
+  useEffect(() => {
+    if (!pdfPreviewOpen && pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl(null);
+    }
+  }, [pdfPreviewOpen, pdfPreviewUrl]);
+
+  // Generate preview when dialog opens
+  useEffect(() => {
+    if (pdfPreviewOpen && !pdfPreviewUrl && !pdfPreviewLoading) {
+      // Small delay to ensure dialog is fully rendered
+      const timer = setTimeout(() => {
+        generatePreview();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [pdfPreviewOpen]);
+
+  // Auto-refresh preview when settings change (if enabled)
+  // Track per-row break/spacer fingerprint to trigger refresh when rows change
+  const productBreakFingerprint = products.map(p => 
+    `${p.pageBreakBefore ? 1 : 0}:${p.spacerAfter ?? 0}:${p.descSpacerAfter ?? 0}:${p.descSpacerBefore ?? 0}:${p.descSectionSpacing ?? 0}:${(p.sectionSpacings || []).join('-')}:${(p.sectionPageBreaks || []).map(b => b ? '1' : '0').join('')}`
+  ).join(',');
+  useEffect(() => {
+    if (!pdfPreviewOpen || !pdfAutoRefresh || pdfPreviewLoading) return;
+    
+    const timer = setTimeout(() => {
+      generatePreview();
+    }, 300); // Super fast auto-refresh for near-live updates!
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfPreviewOpen, pdfAutoRefresh, pdfBreakBuffer, pdfContHeaderGap, pdfOption, productBreakFingerprint]);
+
+  // Keyboard shortcut for quotation lookup (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (isDebugMode) {
+          // Already in debug mode — open lookup directly
+          setLookupDialogOpen(true);
+          setLookupQuotationNumber("");
+          setLookupError("");
+        } else {
+          // Require IT master password to enter debug mode
+          setDebugPasswordInput("");
+          setDebugPasswordError("");
+          setDebugPasswordDialogOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDebugMode]);
+
+  // Verify IT master password to unlock debug mode
+  const handleDebugPasswordSubmit = () => {
+    const masterPassword = process.env.NEXT_PUBLIC_IT_MASTER_PASSWORD || "";
+    if (!masterPassword) {
+      setDebugPasswordError("IT_MASTER_PASSWORD is not configured.");
+      return;
+    }
+    if (debugPasswordInput === masterPassword) {
+      setIsDebugMode(true);
+      setDebugPasswordDialogOpen(false);
+      setDebugPasswordInput("");
+      setDebugPasswordError("");
+      // Open lookup dialog immediately after auth
+      setLookupDialogOpen(true);
+      setLookupQuotationNumber("");
+      setLookupError("");
+    } else {
+      setDebugPasswordError("Incorrect password. Access denied.");
+    }
+  };
+
+  // Function to fetch quotation by number
+  const handleLookupQuotation = async () => {
+    if (!lookupQuotationNumber.trim()) {
+      setLookupError("Please enter a quotation number");
+      return;
+    }
+
+    setIsLookingUp(true);
+    setLookupError("");
+
+    try {
+      // Try history table first (main taskflow records)
+      let { data, error } = await supabase
+        .from("history")
+        .select("*")
+        .eq("quotation_number", lookupQuotationNumber.trim())
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Fallback to revised_quotations if not found in history
+      if (!data && !error) {
+        const { data: revisedData, error: revisedError } = await supabase
+          .from("revised_quotations")
+          .select("*")
+          .eq("quotation_number", lookupQuotationNumber.trim())
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (revisedData) {
+          data = revisedData;
+          error = revisedError;
+        }
+      }
+
+      if (error || !data) {
+        setLookupError("Quotation not found");
+        return;
+      }
+
+      const quantities = splitAndTrim(data.product_quantity);
+      const amounts = splitAndTrim(data.product_amount);
+      const titles = splitAndTrim(data.product_title);
+      const descriptions = splitDescription(data.product_description);
+      const photos = splitAndTrim(data.product_photo);
+      const sku = splitAndTrim(data.product_sku);
+      const remarks = splitAndTrim(data.item_remarks);
+      const discountedPrices = splitAndTrim(data.discounted_priced);
+      const discountedAmounts = splitAndTrim(data.discounted_amount);
+      const promoFlags = splitAndTrim(data.product_is_promo);
+      const hiddenFlags = splitAndTrim(data.product_is_hidden);
+      const displayModes = splitAndTrim(data.product_display_mode);
+
+      const maxLen = Math.max(
+        quantities.length,
+        amounts.length,
+        titles.length,
+        descriptions.length,
+        photos.length,
+        sku.length,
+        remarks.length,
+      );
+
+      const arr: ProductItem[] = [];
+      const newCheckedRows: Record<number, boolean> = {};
+
+      for (let i = 0; i < maxLen; i++) {
+        const qty = quantities[i] ?? "";
+        const amt = amounts[i] ?? "";
+        const discountPct = parseFloat(discountedPrices[i] ?? "0") || 0;
+        const isDiscounted = discountPct > 0;
+        if (isDiscounted) {
+          newCheckedRows[i] = true;
+        }
+        const unitPrice = parseFloat(amt) || 0;
+        const discountedAmountArr = splitAndTrim(data.discounted_amount);
+        let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
+        // Don't divide discount amount by quantity at all
+        const unitDiscountAmount = savedDiscountAmt > 0
+          ? savedDiscountAmt
+          : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
+
+        arr.push({
+          uid: `product-${i}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          product_quantity: qty,
+          product_amount: amt,
+          product_title: titles[i] ?? "",
+          product_description: descriptions[i] ?? "",
+          product_photo: photos[i] ?? "",
+          product_sku: sku[i] ?? "",
+          item_remarks: remarks[i] ?? "",
+          quantity: parseFloat(qty) || 0,
+          price: unitPrice,
+          description: descriptions[i] ?? "",
+          skus: sku[i] ? [sku[i]] : undefined,
+          title: titles[i] ?? "",
+          images: photos[i] ? [{ src: photos[i] }] : undefined,
+          isDiscounted,
+          discount: discountPct,
+          discountAmount: unitDiscountAmount,
+          isPromo: promoFlags[i] === "1",
+          isHidden: hiddenFlags[i] === "1",
+          displayMode: (() => {
+            const rawDisplayMode = displayModes[i] ?? "";
+            if (rawDisplayMode === 'full' || rawDisplayMode === 'transparent') return 'transparent';
+            if (rawDisplayMode === 'compact' || rawDisplayMode === 'net_only') return 'net_only';
+            if (rawDisplayMode === 'value_add') return 'value_add';
+            if (rawDisplayMode === 'bundle') return 'bundle';
+            if (rawDisplayMode === 'request') return 'request';
+            return 'transparent';
+          })(),
+        });
+      }
+
+      setProducts(arr);
+      setCheckedRows(newCheckedRows);
+
+      if (data.vat_type) {
+        setVatTypeState(data.vat_type === "vat_inc" || data.vat_type === "vat_exe" || data.vat_type === "zero_rated"
+          ? data.vat_type
+          : "zero_rated");
+      }
+      if (data.delivery_fee) setDeliveryFeeState(data.delivery_fee);
+      if (data.restocking_fee) setRestockingFeeState(data.restocking_fee);
+      if (data.wht_type) setWhtTypeState(data.wht_type);
+      if (data.quotation_subject) setQuotationSubjectState(data.quotation_subject);
+      if (data.contact_person) setContactPersonState(data.contact_person);
+      if (data.contact_number) setContactNumberState(data.contact_number);
+      if (data.email_address) setEmailAddressState(data.email_address);
+
+      // Fetch signatories and user names for the loaded quotation
+      let agentName = null;
+      let tsmName = null;
+      let managerName = null;
+      
+      try {
+        // Fetch signatory data
+        const { data: sigData, error: sigError } = await supabase
+          .from("signatories")
+          .select("*")
+          .eq("quotation_number", lookupQuotationNumber.trim())
+          .maybeSingle();
+
+        // User data comes from MongoDB, not Supabase
+        // Get referenceid from signatories table and fetch user from MongoDB to get full name
+        if (sigData?.referenceid) {
+          try {
+            // Fetch user from MongoDB using referenceid
+            const userResponse = await fetch(`/api/users/by-referenceid?referenceid=${sigData.referenceid}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              agentName = userData.firstname && userData.lastname 
+                ? `${userData.firstname} ${userData.lastname}`.trim()
+                : userData.name || sigData.referenceid;
+              console.log("Debug - Fetched user from MongoDB:", userData);
+            } else {
+              console.log("Debug - Failed to fetch user from MongoDB, using fallback");
+              // Use proper name fields instead of reference ID initials
+              agentName = 
+                (data.agent_firstname && data.agent_lastname) ? `${data.agent_firstname} ${data.agent_lastname}`.trim() :
+                (data.firstname && data.lastname) ? `${data.firstname} ${data.lastname}`.trim() :
+                data.owner_name ||
+                `${firstname ?? ""} ${lastname ?? ""}`.trim() || null;
+            }
+          } catch (err) {
+            console.error("Debug - Error fetching user from MongoDB:", err);
+            // Use proper name fields instead of reference ID initials
+            agentName = 
+              (data.agent_firstname && data.agent_lastname) ? `${data.agent_firstname} ${data.agent_lastname}`.trim() :
+              (data.firstname && data.lastname) ? `${data.firstname} ${data.lastname}`.trim() :
+              data.owner_name ||
+              `${firstname ?? ""} ${lastname ?? ""}`.trim() || null;
+          }
+        } else {
+          // Fallback to other options if no referenceid
+          agentName = 
+            (data.agent_firstname && data.agent_lastname) ? `${data.agent_firstname} ${data.agent_lastname}`.trim() :
+            (data.firstname && data.lastname) ? `${data.firstname} ${data.lastname}`.trim() :
+            data.owner_name ||
+            `${firstname ?? ""} ${lastname ?? ""}`.trim() || null;
+        }
+        // In debug mode, prefer names stored on the looked-up quotation record
+        tsmName = (data as any).tsm_name || tsmname || null;
+        managerName = (data as any).manager_name || managername || null;
+
+        if (!sigError && sigData) {
+          // Update the item with signatory data from the loaded quotation
+          item.agent_signature = sigData.agent_signature;
+          item.agent_contact_number = sigData.agent_contact_number;
+          item.agent_email_address = sigData.agent_email_address;
+          item.tsm_signature = sigData.tsm_signature;
+          item.tsm_contact_number = sigData.tsm_contact_number;
+          item.tsm_email_address = sigData.tsm_email_address;
+          item.manager_signature = sigData.manager_signature;
+          item.manager_contact_number = sigData.manager_contact_number;
+          item.manager_email_address = sigData.manager_email_address;
+          
+          // Set loaded signature states to override props
+          setLoadedAgentSignature(sigData.agent_signature);
+          setLoadedAgentContactNumber(sigData.agent_contact_number);
+          setLoadedAgentEmailAddress(sigData.agent_email_address);
+          setLoadedTsmSignature(sigData.tsm_signature);
+          setLoadedTsmContactNumber(sigData.tsm_contact_number);
+          setLoadedTsmEmailAddress(sigData.tsm_email_address);
+          setLoadedManagerSignature(sigData.manager_signature);
+          setLoadedManagerContactNumber(sigData.manager_contact_number);
+          setLoadedManagerEmailAddress(sigData.manager_email_address);
+        }
+        
+        // Debug: Log fetched user names and check for owner's name in quotation data
+        console.log("Debug - Fetched user names:", {
+          agentName,
+          tsmName,
+          managerName,
+          agentId: data.agent,
+          tsmId: data.tsm,
+          managerId: data.manager
+        });
+        console.log("Debug - Signatories data:", {
+          referenceid: sigData?.referenceid,
+          agentName: agentName
+        });
+        console.log("Debug - Checking for owner's name in quotation data:", {
+          firstname: data.firstname,
+          lastname: data.lastname,
+          agent_firstname: data.agent_firstname,
+          agent_lastname: data.agent_lastname,
+          created_by: data.created_by,
+          owner_name: data.owner_name,
+          account_reference_number: data.account_reference_number
+        });
+        
+        // Set loaded name states from fetched user data
+        setLoadedAgentName(agentName);
+        setLoadedTsmName(tsmName);
+        setLoadedManagerName(managerName);
+      } catch (err) {
+        console.error("Failed to fetch signatories or user names:", err);
+      }
+
+      Object.assign(item, {
+        quotation_number: data.quotation_number,
+        company_name: data.company_name,
+        contact_person: data.contact_person,
+        contact_number: data.contact_number,
+        email_address: data.email_address,
+        address: data.address,
+        product_title: data.product_title,
+        product_quantity: data.product_quantity,
+        product_amount: data.product_amount,
+        product_description: data.product_description,
+        product_photo: data.product_photo,
+        product_sku: data.product_sku,
+        item_remarks: data.item_remarks,
+        discounted_priced: data.discounted_priced,
+        discounted_amount: data.discounted_amount,
+        product_is_promo: data.product_is_promo,
+        product_is_hidden: data.product_is_hidden,
+        product_display_mode: data.product_display_mode,
+        vat_type: data.vat_type,
+        delivery_fee: data.delivery_fee,
+        restocking_fee: data.restocking_fee,
+        wht_type: data.wht_type,
+        quotation_subject: data.quotation_subject,
+        quotation_type: data.quotation_type,
+        // Add signatory name fields from fetched user data
+        salesrepresentative: agentName,
+        salestsmname: tsmName,
+        salesmanagername: managerName,
+      });
+
+      showToast(`Loaded quotation: ${data.quotation_number}`, 'success');
+      setLookupDialogOpen(false);
+    } catch (err) {
+      console.error("Lookup error:", err);
+      setLookupError("Failed to load quotation");
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
   const subtotal = React.useMemo(() => {
-    return products.reduce((acc, product, index) => {
+    return products.reduce((acc, product) => {
       const qty = parseFloat(product.product_quantity ?? "0") || 0;
-      const amt = parseFloat(product.product_amount ?? "0") || 0;
-      const lineTotal = qty * amt;
+      const unitPrice = parseFloat(product.product_amount ?? "0") || 0;
       const isChecked = product.isDiscounted ?? false;
       if (isChecked) {
-        const disc = product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0);
-        return acc + lineTotal * (1 - disc / 100);
+        const discPct = product.discount ?? (vatTypeState === "vat_exe" ? 12 : 0);
+        // Prefer explicit peso amount; fall back to percent-derived (same logic as getQuotationPayload & performSave)
+        // discountAmount in state is always per-unit; fall back to percent-derived
+        let unitDiscountAmount = product.discountAmount != null && product.discountAmount > 0
+          ? product.discountAmount
+          : (unitPrice * discPct) / 100;
+        const netUnitPrice = Math.max(0, unitPrice - unitDiscountAmount);
+        return acc + netUnitPrice * qty;
       }
-      return acc + lineTotal;
+      return acc + unitPrice * qty;
     }, 0);
   }, [products, vatTypeState]);
 
@@ -2486,6 +3223,7 @@ ${payload.whtType && payload.whtType !== "none"
             maxHeight: "100vh",
             borderRadius: 0,
           }}
+          onContextMenu={(e) => e.preventDefault()}
         >
           {/* HEADER */}
           <div className="flex flex-col border-b border-gray-200 shrink-0">
@@ -2532,6 +3270,22 @@ ${payload.whtType && payload.whtType !== "none"
                     })() : "N/A"}
                   </span>
                 </div>
+                {isDebugMode && (
+                  <div className="hidden sm:flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span className="text-red-400 font-bold uppercase text-[9px] tracking-widest">DEBUG MODE</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsDebugMode(false)}
+                      className="ml-1 text-[9px] font-black text-red-400 hover:text-red-600 uppercase tracking-widest border border-red-300 hover:border-red-500 rounded px-1 py-0.5 transition-colors"
+                      title="Exit debug mode"
+                    >
+                      EXIT
+                    </button>
+                  </div>
+                )}
                 {products.length > 0 && (
                   <div className="hidden lg:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5">
                     <span className="text-gray-400 font-bold uppercase text-[9px] tracking-widest">Total</span>
@@ -3169,44 +3923,42 @@ ${payload.whtType && payload.whtType !== "none"
                     <p>No revised quotations found.</p>
                   ) : (
                     <div className="space-y-3">
-                      {revisedQuotations.map((q) => (
+                      {revisedQuotations.map((q) => {
+                        const isOriginal = !q.version && q.type_activity !== "Revised Quotations";
+                        const label = isOriginal ? "Original Quotation" : q.version || "N/A";
+                        const displayDate = q.date_updated ?? q.date_created ?? q.start_date;
+                        console.log("📅 Quotation history item:", { q, isOriginal, displayDate });
+                        
+                        return (
                         <Item
                           key={q.id}
-                          className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""}`}
+                          className={`border border-gray-300 rounded-sm p-3 shadow-sm hover:shadow-md transition cursor-pointer ${selectedRevisedQuotation?.id === q.id ? "bg-gray-100" : ""} ${isOriginal ? "border-l-4 border-l-blue-500" : "border-l-4 border-l-yellow-500"}`}
                           onClick={() => setSelectedRevisedQuotation(q)}
                         >
                           <ItemContent>
-                            <ItemTitle className="font-semibold text-sm">
-                              {q.version || "N/A"}
+                            <ItemTitle className="font-semibold text-sm flex items-center gap-2">
+                              {label}
+                              {isOriginal && (
+                                <span className="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                  ORIGINAL
+                                </span>
+                              )}
                             </ItemTitle>
-                            <ItemDescription className="text-xs text-gray-600">
-                              <div>
-                                <strong>Product Title:</strong>{" "}
-                                {q.product_title || "N/A"}
-                              </div>
+                            <ItemDescription className="text-xs text-gray-600 line-clamp-none">
                               <div>
                                 <strong>Amount:</strong>{" "}
-                                {q.quotation_amount ?? "N/A"}
+                                {q.quotation_amount ? `₱${parseFloat(String(q.quotation_amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "N/A"}
                               </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                <span>
-                                  <strong>Start:</strong>{" "}
-                                  {q.start_date
-                                    ? new Date(q.start_date).toLocaleString()
-                                    : "N/A"}
-                                </span>
-                                <br />
-                                <span>
-                                  <strong>End:</strong>{" "}
-                                  {q.end_date
-                                    ? new Date(q.end_date).toLocaleString()
-                                    : "N/A"}
-                                </span>
-                              </div>
+                              {displayDate && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  <strong>Date:</strong>{" "}
+                                  {new Date(displayDate).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
+                                </div>
+                              )}
                             </ItemDescription>
                           </ItemContent>
                         </Item>
-                      ))}
+                      );})}
                     </div>
                   )}
                 </div>
@@ -3878,16 +4630,12 @@ ${payload.whtType && payload.whtType !== "none"
                               ? (product.discount ?? defaultDiscount)
                               : 0;
                             // Prefer explicit peso amount; fall back to % calculation
-                            // If discountAmount looks like a total (>= unit price), convert to per-unit
+                            // discountAmount in state is always per-unit; fall back to percent-derived
                             let unitDiscountAmt = isDiscounted
                               ? (product.discountAmount != null && product.discountAmount > 0
                                 ? product.discountAmount
                                 : (amt * rowDiscountPct) / 100)
                               : 0;
-                            // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-                            if (unitDiscountAmt >= amt && qty > 1) {
-                              unitDiscountAmt = unitDiscountAmt / qty;
-                            }
                             const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
                             const totalAfterDiscount = discountedUnitPrice * qty;
                             return (
@@ -4425,6 +5173,34 @@ ${payload.whtType && payload.whtType !== "none"
                                   {/* Actions */}
                                   <td className="border border-gray-300 text-center p-1">
                                     <div className="flex items-center justify-center gap-1">
+                                      {/* Expand/Collapse PDF Controls */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedProductRows((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(index.toString())) {
+                                              next.delete(index.toString());
+                                            } else {
+                                              next.add(index.toString());
+                                            }
+                                            return next;
+                                          });
+                                        }}
+                                        className="h-6 w-6 p-0 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded text-gray-600 transition-all"
+                                        title="Toggle PDF spacing & page break controls"
+                                      >
+                                        {expandedProductRows.has(index.toString()) ? (
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                          </svg>
+                                        ) : (
+                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                          </svg>
+                                        )}
+                                      </button>
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -4476,6 +5252,221 @@ ${payload.whtType && payload.whtType !== "none"
                                     </td>
                                   </tr>
                                 )}
+
+                                {expandedProductRows.has(index.toString()) && (
+                                  <tr className="bg-blue-50/30">
+                                    <td colSpan={bulkMode ? 13 : 12} className="border border-blue-200 p-3 align-top">
+                                      <div className="flex flex-wrap gap-4 items-start">
+                                        {/* Row spacer (between rows) */}
+                                        <div className="flex flex-col gap-1">
+                                          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">Row Spacing</p>
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-[8px] text-gray-500 w-20 shrink-0">Row gap</span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], spacerAfter: Math.max(-400, (u[index].spacerAfter ?? 0) - 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                                            <span className="w-10 text-center text-[9px] font-mono text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">
+                                              {product.spacerAfter ?? 0}px
+                                            </span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], spacerAfter: Math.min(300, (u[index].spacerAfter ?? 0) + 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                                            <span className="text-[7px] text-gray-400 ml-0.5">after row</span>
+                                          </div>
+
+                                          {/* Desc before spacer */}
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-[8px] text-gray-500 w-20 shrink-0">Desc top</span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], descSpacerBefore: Math.max(-400, (u[index].descSpacerBefore ?? 0) - 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                                            <span className="w-10 text-center text-[9px] font-mono text-blue-700 bg-blue-50 border border-blue-200 rounded px-1">
+                                              {product.descSpacerBefore ?? 0}px
+                                            </span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], descSpacerBefore: Math.min(300, (u[index].descSpacerBefore ?? 0) + 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                                            <span className="text-[7px] text-gray-400 ml-0.5">before desc</span>
+                                          </div>
+
+                                          {/* Desc global section gaps */}
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-[8px] text-gray-500 w-20 shrink-0">Desc gaps</span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], descSectionSpacing: Math.max(-400, (u[index].descSectionSpacing ?? 0) - 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                                            <span className="w-10 text-center text-[9px] font-mono text-purple-700 bg-purple-50 border border-purple-200 rounded px-1">
+                                              {product.descSectionSpacing ?? 0}px
+                                            </span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], descSectionSpacing: Math.min(300, (u[index].descSectionSpacing ?? 0) + 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                                            <span className="text-[7px] text-gray-400 ml-0.5">btw sections</span>
+                                          </div>
+
+                                          {/* Desc after spacer */}
+                                          <div className="flex items-center gap-1">
+                                            <span className="text-[8px] text-gray-500 w-20 shrink-0">Desc bottom</span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], descSpacerAfter: Math.max(-400, (u[index].descSpacerAfter ?? 0) - 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                                            <span className="w-10 text-center text-[9px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1">
+                                              {product.descSpacerAfter ?? 0}px
+                                            </span>
+                                            <button onClick={() => { 
+                                              const u = [...products]; 
+                                              u[index] = { ...u[index], descSpacerAfter: Math.min(300, (u[index].descSpacerAfter ?? 0) + 10) }; 
+                                              setProducts(u); 
+                                            }}
+                                              className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                                            <span className="text-[7px] text-gray-400 ml-0.5">after desc</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Per-section spacing & page breaks */}
+                                        <div className="flex flex-col gap-2">
+                                          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">Per‑Section Controls</p>
+                                          {(() => {
+                                            const sections = parseDescriptionIntoSections(product.product_description || product.description);
+                                            const currentSpacings = product.sectionSpacings || [];
+                                            
+                                            return (
+                                              <div className="flex flex-col gap-2">
+                                                {sections.map((section, sIdx) => {
+                                                  // Extract section name for display
+                                                  let sectionName = `Section ${sIdx + 1}`;
+                                                  const headerMatch = section.match(/background\s*:\s*#121212[^>]*>([^<]+)</);
+                                                  if (headerMatch && headerMatch[1]) {
+                                                    sectionName = headerMatch[1].trim();
+                                                  }
+                                                  
+                                                  const spacing = currentSpacings[sIdx] ?? 0;
+                                                  
+                                                  return (
+                                                    <div key={sIdx} className="bg-white border border-gray-200 rounded p-2 flex flex-col gap-1">
+                                                      <div className="flex items-center justify-between">
+                                                        <span className="text-[8px] font-medium text-gray-700 truncate flex-1">
+                                                          {sectionName.slice(0, 30)}{sectionName.length > 30 ? '...' : ''}
+                                                        </span>
+                                                        {sIdx > 0 && (
+                                                          <button
+                                                            onClick={() => {
+                                                              const u = [...products];
+                                                              const newPageBreaks = [...(u[index].sectionPageBreaks || [])];
+                                                              newPageBreaks[sIdx] = !newPageBreaks[sIdx];
+                                                              u[index] = { ...u[index], sectionPageBreaks: newPageBreaks };
+                                                              setProducts(u);
+                                                            }}
+                                                            className={`ml-1 px-1.5 py-0.5 text-[6px] font-bold uppercase border rounded transition-colors
+                                                              ${(product.sectionPageBreaks?.[sIdx])
+                                                                ? 'bg-blue-500 border-blue-500 text-white'
+                                                                : 'bg-white border-gray-300 text-gray-500 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600'
+                                                              }`}
+                                                          >
+                                                            {(product.sectionPageBreaks?.[sIdx]) ? 'PB ON' : 'PB'}
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                      <div className="flex items-center gap-1">
+                                                        <button
+                                                          onClick={() => {
+                                                            const u = [...products];
+                                                            const newSpacings = [...(u[index].sectionSpacings || [])];
+                                                            newSpacings[sIdx] = Math.max(-400, (newSpacings[sIdx] ?? 0) - 5);
+                                                            u[index] = { ...u[index], sectionSpacings: newSpacings };
+                                                            setProducts(u);
+                                                          }}
+                                                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[10px] font-bold leading-none"
+                                                        >-</button>
+                                                        <span className="w-8 text-center text-[8px] font-mono text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1">
+                                                          {spacing}px
+                                                        </span>
+                                                        <button
+                                                          onClick={() => {
+                                                            const u = [...products];
+                                                            const newSpacings = [...(u[index].sectionSpacings || [])];
+                                                            newSpacings[sIdx] = Math.min(200, (newSpacings[sIdx] ?? 0) + 5);
+                                                            u[index] = { ...u[index], sectionSpacings: newSpacings };
+                                                            setProducts(u);
+                                                          }}
+                                                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[10px] font-bold leading-none"
+                                                        >+</button>
+                                                        <span className="text-[7px] text-gray-400 ml-0.5">space after</span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+
+                                        {/* Page break before item */}
+                                        <div className="flex flex-col gap-2">
+                                          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">Page Breaks</p>
+                                          {index > 0 && (
+                                            <button
+                                              onClick={() => {
+                                                const u = [...products];
+                                                u[index] = { ...u[index], pageBreakBefore: !u[index].pageBreakBefore };
+                                                setProducts(u);
+                                              }}
+                                              className={`px-3 py-1.5 text-[8px] font-bold uppercase border rounded transition-colors
+                                                ${product.pageBreakBefore
+                                                  ? 'bg-red-500 border-red-500 text-white'
+                                                  : 'bg-white border-gray-300 text-gray-500 hover:bg-red-50 hover:border-red-400 hover:text-red-600'
+                                                }`}
+                                            >
+                                              {product.pageBreakBefore ? '❌ Remove Page Break' : '✓ Force Page Break'}
+                                            </button>
+                                          )}
+
+                                          {/* Clear button */}
+                                          <button
+                                            onClick={() => {
+                                              const u = [...products];
+                                              u[index] = {
+                                                ...u[index],
+                                                pageBreakBefore: false,
+                                                spacerAfter: 0,
+                                                descSpacerAfter: 0,
+                                                descSpacerBefore: 0,
+                                                descSectionSpacing: 0,
+                                                sectionSpacings: [],
+                                                sectionPageBreaks: [],
+                                              };
+                                              setProducts(u);
+                                            }}
+                                            className="px-3 py-1.5 text-[8px] font-semibold border border-red-300 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors"
+                                          >
+                                            Clear
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
                               </React.Fragment>
                             );
                           })}
@@ -4508,11 +5499,8 @@ ${payload.whtType && payload.whtType !== "none"
                             ₱{products.reduce((acc, p) => {
                               const qty = parseFloat(p.product_quantity ?? "0") || 0;
                               const amt = parseFloat(p.product_amount ?? "0") || 0;
+                              // discountAmount in state is always per-unit
                               let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
-                              // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-                              if (unitDiscountAmt >= amt && qty > 1) {
-                                unitDiscountAmt = unitDiscountAmt / qty;
-                              }
                               const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
                               return acc + (discountedUnitPrice * qty);
                             }, 0).toFixed(2)}
@@ -4522,11 +5510,8 @@ ${payload.whtType && payload.whtType !== "none"
                             ₱{products.reduce((acc, p) => {
                               const qty = parseFloat(p.product_quantity ?? "0") || 0;
                               const amt = parseFloat(p.product_amount ?? "0") || 0;
+                              // discountAmount in state is always per-unit
                               let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
-                              // Normalize: if discountAmount >= unit price, it's likely a total for all qty
-                              if (unitDiscountAmt >= amt && qty > 1) {
-                                unitDiscountAmt = unitDiscountAmt / qty;
-                              }
                               const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
                               return acc + (discountedUnitPrice * qty);
                             }, 0).toFixed(2)}
@@ -4617,11 +5602,15 @@ ${payload.whtType && payload.whtType !== "none"
                 <span className="text-[11px] font-bold uppercase tracking-wider">Review Quotation</span>
               </Button>
 
-              {(ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head") && (
+              {((ApprovedStatus === "Approved" || ApprovedStatus === "Approved By Sales Head" || ApprovedStatus === "APPROVED" || ApprovedStatus === "Approved By Manager") && !hasChanges && !isUsingOwnerName) && (
                 <>
                   <Button
                     type="button"
-                    onClick={() => setPdfOptionsOpen(true)}
+                    onClick={() => {
+                      setPdfPreviewOpen(true);
+                      // Auto-generate preview after dialog is fully rendered and states are stable
+                      setTimeout(() => generatePreview(), 300);
+                    }}
                     className="rounded-none h-12 px-6 bg-yellow-600 flex items-center gap-2"
                   >
                     <FileText /> PDF
@@ -4666,6 +5655,7 @@ ${payload.whtType && payload.whtType !== "none"
             </DialogDescription>
           </div>
           <Preview
+            key={`${loadedAgentName}-${loadedTsmName}-${loadedManagerName}-${item.quotation_number}`}
             payload={getQuotationPayload()}
             quotationType={item.quotation_type}
             setIsPreviewOpen={setIsPreviewOpen}
@@ -4683,185 +5673,640 @@ ${payload.whtType && payload.whtType !== "none"
         </DialogContent>
       </Dialog>
 
-      {/* ── NEW: 2-Step PDF Download Options Dialog ───────────────────────────── */}
-      <Dialog open={pdfOptionsOpen} onOpenChange={(open) => { if (!open) { setPdfOptionsOpen(false); setPdfStep(1); } }}>
-        <DialogContent className="max-w-[440px] w-[92vw] p-0 border-none bg-white shadow-2xl overflow-hidden rounded-xl">
-
-          {/* Header */}
-          <div className="bg-[#121212] px-5 py-4 flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-white text-sm font-black uppercase tracking-widest leading-tight">
-                Download PDF
-              </DialogTitle>
-              <p className="text-gray-400 text-[10px] mt-0.5 uppercase tracking-wider">
-                Step {pdfStep} of 2 — {pdfStep === 1 ? 'Pricing format' : 'Description layout'}
-              </p>
+      {/* PDF Live Preview Dialog */}
+      <Dialog open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>
+        <DialogContent className="p-0 border-none bg-gray-100 shadow-2xl overflow-hidden flex flex-col" style={{width: '98vw', height: '98vh', maxWidth: '98vw', maxHeight: '98vh'}}>
+          <DialogHeader className="px-4 py-2 border-b bg-white shrink-0">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-sm font-bold uppercase tracking-wider">PDF Live Preview</DialogTitle>
+              <DialogDescription className="text-xs text-gray-500">
+                Adjust settings and update preview before downloading
+              </DialogDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${pdfStep >= 1 ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-gray-600 text-gray-600'}`}>1</div>
-              <div className={`w-8 h-px transition-all ${pdfStep >= 2 ? 'bg-yellow-500' : 'bg-gray-700'}`} />
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2 transition-all ${pdfStep >= 2 ? 'bg-yellow-500 border-yellow-500 text-black' : 'border-gray-600 text-gray-600'}`}>2</div>
-            </div>
-          </div>
+          </DialogHeader>
 
-          <div className="px-5 py-5">
-            {/* ── STEP 1: Pricing format ── */}
-            {pdfStep === 1 && (
-              <div className="space-y-3">
-                <p className="text-[11px] text-gray-500 uppercase font-bold tracking-wider mb-4">Choose pricing format</p>
-                <RadioGroup value={pdfOption} onValueChange={(value) => setPdfOption(value as "with-discount" | "default-only")} className="flex flex-col gap-3">
+          <div className="flex flex-1 overflow-hidden">
+            {/* Left sidebar — settings */}
+            <div className="w-[240px] shrink-0 bg-gray-50 border-r overflow-y-auto flex flex-col">
+              {/* Sidebar Header */}
+              <div className="bg-white border-b px-4 py-3">
+                <h3 className="text-sm font-bold text-gray-800 tracking-wide uppercase">PDF Preview Settings</h3>
+              </div>
+              
+              {/* Auto Refresh Toggle */}
+              <div className="bg-white border-b px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-700">Auto Refresh</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="auto-refresh"
+                      checked={pdfAutoRefresh}
+                      onChange={(e) => setPdfAutoRefresh(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="auto-refresh" className="text-xs text-gray-600 font-medium">
+                      {pdfAutoRefresh ? "Enabled" : "Disabled"}
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-                  {/* Default Only */}
-                  <label htmlFor="pdf-default-only"
-                    className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfOption === "default-only" ? "border-[#121212] bg-gray-50" : "border-gray-200 hover:border-gray-300"}`}>
-                    <RadioGroupItem value="default-only" id="pdf-default-only" className="mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-sm text-[#121212]">Default Only</span>
-                        <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Standard</span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">Clean format — Unit Price and Total only. No discount columns visible to client.</p>
-                      <div className="mt-2 border border-gray-200 rounded overflow-hidden">
-                        <div className="grid grid-cols-[1fr_50px_60px] bg-gray-900 text-white text-[8px] font-bold uppercase">
-                          <div className="px-2 py-1">Product</div>
-                          <div className="px-2 py-1 text-right">Unit</div>
-                          <div className="px-2 py-1 text-right">Total</div>
-                        </div>
-                        <div className="grid grid-cols-[1fr_50px_60px] text-[9px]">
-                          <div className="px-2 py-1 truncate font-medium">LED Bulb E27</div>
-                          <div className="px-2 py-1 text-right">₱400</div>
-                          <div className="px-2 py-1 text-right font-bold">₱4,000</div>
-                        </div>
-                      </div>
-                    </div>
-                  </label>
-
-                  {/* With Discount */}
-                  <label htmlFor="pdf-with-discount"
-                    className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfOption === "with-discount" ? "border-[#121212] bg-gray-50" : "border-gray-200 hover:border-gray-300"}`}>
-                    <RadioGroupItem value="with-discount" id="pdf-with-discount" className="mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-sm text-[#121212]">With Discount</span>
-                        <span className="text-[9px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Detailed</span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">Shows Discount %, Discounted Price alongside Unit Price — full transparency.</p>
-                      <div className="mt-2 border border-gray-200 rounded overflow-hidden">
-                        <div className="grid grid-cols-[1fr_40px_50px_60px_60px] bg-gray-900 text-white text-[8px] font-bold uppercase">
-                          <div className="px-2 py-1">Product</div>
-                          <div className="px-2 py-1 text-right">Unit</div>
-                          <div className="px-2 py-1 text-right text-yellow-400">Disc</div>
-                          <div className="px-2 py-1 text-right text-blue-300">Net</div>
-                          <div className="px-2 py-1 text-right">Total</div>
-                        </div>
-                        <div className="grid grid-cols-[1fr_40px_50px_60px_60px] text-[9px]">
-                          <div className="px-2 py-1 truncate font-medium">LED Bulb E27</div>
-                          <div className="px-2 py-1 text-right">₱500</div>
-                          <div className="px-2 py-1 text-right text-red-500 font-bold">20%</div>
-                          <div className="px-2 py-1 text-right text-blue-600 font-bold">₱400</div>
-                          <div className="px-2 py-1 text-right font-bold">₱4,000</div>
-                        </div>
-                      </div>
-                    </div>
-                  </label>
+              {/* PDF Format Option */}
+              <div className="bg-white border-b px-4 py-3">
+                <label className="text-xs font-semibold text-gray-700 mb-2 block">PDF Format</label>
+                <RadioGroup
+                  value={pdfOption}
+                  onValueChange={(value) => setPdfOption(value as "with-discount" | "default-only")}
+                  className="flex flex-col gap-2"
+                >
+                  <div className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all text-xs ${pdfOption === "with-discount" ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-gray-300"}`}>
+                    <RadioGroupItem value="with-discount" id="prev-with-discount" />
+                    <label htmlFor="prev-with-discount" className="flex-1 cursor-pointer">
+                      <span className="font-semibold text-gray-800">With Discount</span>
+                      <span className="block text-[10px] text-gray-500">Include discount % and discounted price columns</span>
+                    </label>
+                  </div>
+                  <div className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all text-xs ${pdfOption === "default-only" ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-gray-300"}`}>
+                    <RadioGroupItem value="default-only" id="prev-default-only" />
+                    <label htmlFor="prev-default-only" className="flex-1 cursor-pointer">
+                      <span className="font-semibold text-gray-800">Default Only</span>
+                      <span className="block text-[10px] text-gray-500">No discount columns - clean standard format</span>
+                    </label>
+                  </div>
                 </RadioGroup>
               </div>
-            )}
 
-            {/* ── STEP 2: Description layout ── */}
-            {pdfStep === 2 && (
-              <div className="space-y-3">
-                <p className="text-[11px] text-gray-500 uppercase font-bold tracking-wider mb-4">Choose description layout</p>
-
-                {/* Table layout */}
-                <label
-                  className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfDescriptionStyle === 'table' ? 'border-[#121212] bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                  onClick={() => setPdfDescriptionStyle('table')}
-                >
-                  <div className={`w-4 h-4 mt-0.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${pdfDescriptionStyle === 'table' ? 'border-[#121212]' : 'border-gray-300'}`}>
-                    {pdfDescriptionStyle === 'table' && <div className="w-2 h-2 rounded-full bg-[#121212]" />}
+              {/* Page Break Buffer Adjustment */}
+              <div className="bg-white border-b px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700">Page Break Buffer</label>
+                    <p className="text-[10px] text-gray-500 mt-0.5">↑ Later break · ↓ Earlier break</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-sm text-[#121212]">Table Layout</span>
-                      <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Original</span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">Specifications shown in structured tables with grouped sections — professional technical look.</p>
-                    <div className="mt-2 border border-gray-200 rounded overflow-hidden text-[8px]">
-                      <div className="bg-gray-900 text-white px-2 py-1 font-bold uppercase tracking-wider">Electrical Specs</div>
-                      <div className="grid grid-cols-2 border-b border-gray-100">
-                        <div className="px-2 py-1 bg-gray-50 font-bold border-r border-gray-100">Wattage</div>
-                        <div className="px-2 py-1">18W</div>
-                      </div>
-                      <div className="grid grid-cols-2">
-                        <div className="px-2 py-1 bg-gray-50 font-bold border-r border-gray-100">Voltage</div>
-                        <div className="px-2 py-1">220V</div>
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPdfBreakBuffer(v => Math.max(-100, v - 5))}
+                      className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-400 text-gray-600 hover:text-red-600 font-bold text-sm leading-none transition-colors"
+                      title="Earlier break"
+                    >-</button>
+                    <input
+                      type="number"
+                      value={pdfBreakBuffer}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        if (val >= -100 && val <= 100) setPdfBreakBuffer(val);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setPdfBreakBuffer(v => Math.min(100, v + 5));
+                        } else if (e.key === "Delete" || e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setPdfBreakBuffer(v => Math.max(-100, v - 5));
+                        }
+                      }}
+                      className="w-14 px-1 py-0.5 text-[10px] border border-gray-300 rounded text-center focus:border-blue-400 focus:outline-none"
+                      min="-100"
+                      max="100"
+                    />
+                    <button
+                      onClick={() => setPdfBreakBuffer(v => Math.min(100, v + 5))}
+                      className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-400 text-gray-600 hover:text-green-600 font-bold text-sm leading-none transition-colors"
+                      title="Later break"
+                    >+</button>
+                    <span className="text-[10px] text-gray-500">px</span>
                   </div>
-                </label>
-
-                {/* Plain text layout */}
-                <label
-                  className={`flex items-start gap-3 p-3.5 border-2 rounded-lg cursor-pointer transition-all ${pdfDescriptionStyle === 'plain' ? 'border-[#121212] bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                  onClick={() => setPdfDescriptionStyle('plain')}
-                >
-                  <div className={`w-4 h-4 mt-0.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${pdfDescriptionStyle === 'plain' ? 'border-[#121212]' : 'border-gray-300'}`}>
-                    {pdfDescriptionStyle === 'plain' && <div className="w-2 h-2 rounded-full bg-[#121212]" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-sm text-[#121212]">Plain Text</span>
-                      <span className="text-[9px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Compact</span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">Specifications as readable left-aligned text. Cleaner, more compact — saves vertical space.</p>
-                    <div className="mt-2 border border-gray-200 rounded p-2 text-[8px] bg-white text-left space-y-0.5">
-                      <div className="font-black uppercase text-gray-600 border-b border-gray-200 pb-0.5 mb-1">Electrical Specs</div>
-                      <div><span className="font-bold text-gray-700">Wattage:</span> <span className="text-gray-500">18W</span></div>
-                      <div><span className="font-bold text-gray-700">Voltage:</span> <span className="text-gray-500">220V</span></div>
-                    </div>
-                  </div>
-                </label>
+                </div>
+                <Slider
+                  value={[pdfBreakBuffer]}
+                  onValueChange={(v) => setPdfBreakBuffer(v[0])}
+                  min={-100}
+                  max={100}
+                  step={2}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                  <span>Earlier (-100)</span>
+                  <button onClick={() => setPdfBreakBuffer(-70)} className="text-blue-500 hover:text-blue-600 underline">Reset</button>
+                  <span>Later (+100)</span>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Footer */}
-          <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-2">
-            {pdfStep === 1 ? (
-              <>
-                <Button variant="outline" onClick={() => { setPdfOptionsOpen(false); setPdfStep(1); }} className="rounded-none h-10 px-5 border-2">
-                  Cancel
-                </Button>
-                <Button onClick={() => setPdfStep(2)} className="rounded-none h-10 px-6 bg-[#121212] hover:bg-gray-900 flex items-center gap-2">
-                  Next — Layout
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => setPdfStep(1)} className="rounded-none h-10 px-5 border-2 flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back
+              {/* Continuation Gap */}
+              <div className="bg-white border-b px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700">Continuation Gap</label>
+                    <p className="text-[10px] text-gray-500 mt-0.5">↑ More space · ↓ Tighter</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPdfContHeaderGap(v => Math.max(-500, v - 20))}
+                      className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-400 text-gray-600 hover:text-red-600 font-bold text-sm leading-none transition-colors"
+                      title="Tighter"
+                    >-</button>
+                    <input
+                      type="number"
+                      value={pdfContHeaderGap}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        if (val >= -500 && val <= 500) setPdfContHeaderGap(val);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setPdfContHeaderGap(v => Math.min(500, v + 20));
+                        } else if (e.key === "Delete" || e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setPdfContHeaderGap(v => Math.max(-500, v - 20));
+                        }
+                      }}
+                      className="w-14 px-1 py-0.5 text-[10px] border border-gray-300 rounded text-center focus:border-blue-400 focus:outline-none"
+                      min="-500"
+                      max="500"
+                    />
+                    <button
+                      onClick={() => setPdfContHeaderGap(v => Math.min(500, v + 20))}
+                      className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-400 text-gray-600 hover:text-green-600 font-bold text-sm leading-none transition-colors"
+                      title="More space"
+                    >+</button>
+                    <span className="text-[10px] text-gray-500">px</span>
+                  </div>
+                </div>
+                <Slider
+                  value={[pdfContHeaderGap]}
+                  onValueChange={(v) => setPdfContHeaderGap(v[0])}
+                  min={-500}
+                  max={500}
+                  step={10}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                  <span>Tighter (-500)</span>
+                  <button onClick={() => setPdfContHeaderGap(-85)} className="text-blue-500 hover:text-blue-600 underline">Reset</button>
+                  <span>More space (+500)</span>
+                </div>
+              </div>
+
+
+                            {/* Action Buttons */}
+              <div className="border-t pt-3 mt-auto space-y-2">
+                <Button
+                  onClick={() => generatePreview()}
+                  disabled={pdfPreviewLoading || isGeneratingPdf}
+                  variant="outline"
+                  className="rounded-none w-full h-10 text-xs"
+                >
+                  {pdfPreviewLoading ? (
+                    <>
+                      <svg className="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3.7.938l3-2.647z"></path>
+                      </svg>
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3 h-3 mr-1" />
+                      Update Preview
+                    </>
+                  )}
                 </Button>
                 <Button
                   onClick={() => {
-                    setPdfOptionsOpen(false);
-                    setPdfStep(1);
-                    DownloadPDF(pdfOption === "with-discount", showSummaryDiscounts, pdfDescriptionStyle);
+                    setPdfPreviewOpen(false);
+                    DownloadPDF(pdfOption === "with-discount", showSummaryDiscounts, pdfBreakBuffer, pdfContHeaderGap, 'save');
                   }}
-                  className="rounded-none h-10 px-6 bg-yellow-600 hover:bg-yellow-700 flex items-center gap-2"
+                  disabled={isGeneratingPdf}
+                  className="rounded-none w-full h-10 bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400"
                 >
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4 mr-2" />
                   Download PDF
                 </Button>
-              </>
-            )}
+              </div>
+            </div>
+
+            {/* Center area — iframe preview */}
+            <div className="flex-1 bg-gray-100 relative overflow-hidden">
+              {pdfPreviewLoading && !pdfPreviewUrl && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
+                  <div className="flex flex-col items-center gap-4">
+                    <svg className="animate-spin h-12 w-12 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span className="text-lg text-gray-700 font-semibold">Generating PDF Preview...</span>
+                    <p className="text-sm text-gray-500">Please wait while we render your quotation</p>
+                  </div>
+                </div>
+              )}
+              {pdfPreviewUrl ? (
+                <div className="w-full h-full bg-white">
+                  <iframe
+                    src={pdfPreviewUrl}
+                    className="w-full h-full border-0 bg-white"
+                    title="PDF Preview"
+                  />
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-gray-400 bg-white">
+                  <div className="text-center p-8">
+                    <FileText className="w-20 h-20 mx-auto mb-4 opacity-30" />
+                    <h3 className="text-xl font-semibold text-gray-600 mb-2">PDF Preview Ready</h3>
+                    <p className="text-base text-gray-500 mb-4">Click "Update Preview" to generate your quotation</p>
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <Eye className="w-5 h-5 text-yellow-600" />
+                      <span className="text-sm font-medium text-yellow-700">Preview will appear here</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right panel — Row Controls */}
+            <div className="w-[260px] shrink-0 bg-white border-l flex flex-col overflow-hidden">
+              <div className="px-3 py-2 border-b bg-gray-50 shrink-0">
+                <p className="text-[11px] font-bold uppercase text-gray-700 tracking-wide">Row Controls</p>
+                <p className="text-[9px] text-gray-400 mt-0.5">Adjust spacing & page breaks per item</p>
+              </div>
+
+              {/* Legend */}
+              <div className="px-3 py-2 border-b bg-gray-50 shrink-0">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[8px] text-gray-500">
+                  <span><span className="font-bold text-blue-500">P</span> = page break before</span>
+                  <span><span className="font-bold text-amber-500">↕</span> = row spacer (gap after row)</span>
+                  <span><span className="font-bold text-purple-600">T</span> = desc top (space before desc)</span>
+                  <span><span className="font-bold text-orange-600">G</span> = desc gaps (between sections)</span>
+                  <span><span className="font-bold text-green-600">B</span> = desc bottom (space after desc)</span>
+                  <span><span className="font-bold text-red-400">Del</span> = clear all on row</span>
+                </div>
+              </div>
+
+              {/* Per-item rows list */}
+              <div className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-2">
+                {products.map((product, idx) => (
+                  <div
+                    key={product.uid || idx}
+                    className={`rounded border text-[10px] transition-colors
+                      ${product.pageBreakBefore ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'}`}
+                  >
+                    {/* Row header */}
+                    <div
+                      className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer select-none"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (idx === 0) return;
+                          const u = [...products];
+                          u[idx] = { ...u[idx], pageBreakBefore: !u[idx].pageBreakBefore, spacerAfter: 0 };
+                          setProducts(u);
+                        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                          e.preventDefault();
+                          const u = [...products];
+                          u[idx] = { ...u[idx], pageBreakBefore: false, spacerAfter: 0, descSpacerAfter: 0, descSpacerBefore: 0, descSectionSpacing: 0, sectionSpacings: [] };
+                          setProducts(u);
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          const u = [...products];
+                          u[idx] = { ...u[idx], spacerAfter: Math.min(300, (u[idx].spacerAfter ?? 0) + 10) };
+                          setProducts(u);
+                        } else if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          const u = [...products];
+                          u[idx] = { ...u[idx], spacerAfter: Math.max(0, (u[idx].spacerAfter ?? 0) - 10) };
+                          setProducts(u);
+                        }
+                      }}
+                    >
+                      <span className={`shrink-0 w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold
+                        ${product.pageBreakBefore ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                        {idx + 1}
+                      </span>
+                      <span className="flex-1 truncate text-gray-700 font-medium text-[9px]" title={product.product_title ?? product.title}>
+                        {(product.product_title ?? product.title ?? 'Item').slice(0, 22)}
+                      </span>
+                      {product.pageBreakBefore && idx > 0 && (
+                        <span className="shrink-0 text-[7px] bg-blue-100 text-blue-600 font-bold px-1 rounded">PB</span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedSections(prev => ({
+                            ...prev,
+                            [product.uid || idx]: !prev[product.uid || idx]
+                          }));
+                        }}
+                        className="shrink-0 w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-gray-50 text-gray-600 text-[9px]"
+                      >
+                        {expandedSections[product.uid || idx] ? '▼' : '▶'}
+                      </button>
+                    </div>
+
+                    {/* Description preview */}
+                    {(product.product_description || product.description) && (
+                      <div className="px-2 py-1 border-t border-gray-100 bg-gray-50">
+                        <div 
+                          className="text-[7px] text-gray-600 line-clamp-3 overflow-hidden"
+                          dangerouslySetInnerHTML={{ 
+                            __html: (product.product_description || product.description || '')
+                              .replace(/<[^>]*>/g, '') 
+                              .slice(0, 150)
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Expandable per-section controls */}
+                    {expandedSections[product.uid || idx] && (product.product_description || product.description) && (
+                      <div className="border-t border-gray-200 bg-gray-50 px-2 py-2">
+                        <p className="text-[8px] font-bold text-gray-500 mb-2 uppercase tracking-wide">Section Spacing</p>
+                        {(() => {
+                          const sections = parseDescriptionIntoSections(product.product_description || product.description);
+                          const currentSpacings = product.sectionSpacings || [];
+                          
+                          return sections.map((section, sIdx) => {
+                            // Extract section name for display
+                            let sectionName = `Section ${sIdx + 1}`;
+                            const headerMatch = section.match(/background\s*:\s*#121212[^>]*>([^<]+)</);
+                            if (headerMatch && headerMatch[1]) {
+                              sectionName = headerMatch[1].trim();
+                            }
+                            
+                            const spacing = currentSpacings[sIdx] ?? 0;
+                            
+                            return (
+                              <div key={sIdx} className="mb-2 last:mb-0">
+                                <div className="flex items-center justify-between mb-1">
+                                  <p className="text-[7px] text-gray-600 truncate flex-1" title={sectionName}>
+                                    {sectionName.slice(0, 25)}
+                                    {sectionName.length > 25 ? '...' : ''}
+                                  </p>
+                                  {sIdx > 0 && (
+                                    <button
+                                      onClick={() => {
+                                        const u = [...products];
+                                        const newPageBreaks = [...(u[idx].sectionPageBreaks || [])];
+                                        newPageBreaks[sIdx] = !newPageBreaks[sIdx];
+                                        u[idx] = { ...u[idx], sectionPageBreaks: newPageBreaks };
+                                        setProducts(u);
+                                      }}
+                                      className={`ml-1 px-1.5 py-0.5 text-[6px] font-bold uppercase border rounded transition-colors
+                                        ${(product.sectionPageBreaks?.[sIdx])
+                                          ? 'bg-blue-500 border-blue-500 text-white'
+                                          : 'bg-white border-gray-300 text-gray-500 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600'
+                                        }`}
+                                    >
+                                      {(product.sectionPageBreaks?.[sIdx]) ? 'PB ON' : 'PB'}
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => {
+                                      const u = [...products];
+                                      const newSpacings = [...(u[idx].sectionSpacings || [])];
+                                      newSpacings[sIdx] = Math.max(-400, (newSpacings[sIdx] ?? 0) - 5);
+                                      u[idx] = { ...u[idx], sectionSpacings: newSpacings };
+                                      setProducts(u);
+                                    }}
+                                    className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[10px] font-bold leading-none"
+                                  >-</button>
+                                  <span className="w-8 text-center text-[8px] font-mono text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-1">
+                                    {spacing}px
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      const u = [...products];
+                                      const newSpacings = [...(u[idx].sectionSpacings || [])];
+                                      newSpacings[sIdx] = Math.min(200, (newSpacings[sIdx] ?? 0) + 5);
+                                      u[idx] = { ...u[idx], sectionSpacings: newSpacings };
+                                      setProducts(u);
+                                    }}
+                                    className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[10px] font-bold leading-none"
+                                  >+</button>
+                                  <span className="text-[6px] text-gray-400 ml-0.5">space after</span>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Controls row */}
+                    <div className="border-t border-gray-100 px-2 py-1.5 flex flex-col gap-1.5">
+
+                      {/* Row spacer (between rows) */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] text-gray-500 w-20 shrink-0">Row gap</span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],spacerAfter:Math.max(-400,(u[idx].spacerAfter??0)-10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                        <span className="w-10 text-center text-[9px] font-mono text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">
+                          {product.spacerAfter ?? 0}px
+                        </span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],spacerAfter:Math.min(300,(u[idx].spacerAfter??0)+10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                        <span className="text-[7px] text-gray-400 ml-0.5">↕ space after row</span>
+                      </div>
+
+                      {/* Desc before spacer */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] text-gray-500 w-20 shrink-0">Desc top</span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],descSpacerBefore:Math.max(-400,(u[idx].descSpacerBefore??0)-10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                        <span className="w-10 text-center text-[9px] font-mono text-purple-700 bg-purple-50 border border-purple-200 rounded px-1">
+                          {product.descSpacerBefore ?? 0}px
+                        </span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],descSpacerBefore:Math.min(400,(u[idx].descSpacerBefore??0)+10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                        <span className="text-[7px] text-gray-400 ml-0.5">before desc</span>
+                      </div>
+
+                      {/* Desc section spacing */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] text-gray-500 w-20 shrink-0">Desc gaps</span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],descSectionSpacing:Math.max(-400,(u[idx].descSectionSpacing??0)-10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                        <span className="w-10 text-center text-[9px] font-mono text-orange-700 bg-orange-50 border border-orange-200 rounded px-1">
+                          {product.descSectionSpacing ?? 0}px
+                        </span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],descSectionSpacing:Math.min(400,(u[idx].descSectionSpacing??0)+10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                        <span className="text-[7px] text-gray-400 ml-0.5">btw sections</span>
+                      </div>
+
+                      {/* Desc after spacer */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] text-gray-500 w-20 shrink-0">Desc bottom</span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],descSpacerAfter:Math.max(-400,(u[idx].descSpacerAfter??0)-10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-red-50 hover:border-red-300 text-gray-500 text-[11px] font-bold leading-none">-</button>
+                        <span className="w-10 text-center text-[9px] font-mono text-green-700 bg-green-50 border border-green-200 rounded px-1">
+                          {product.descSpacerAfter ?? 0}px
+                        </span>
+                        <button onClick={() => { const u=[...products]; u[idx]={...u[idx],descSpacerAfter:Math.min(400,(u[idx].descSpacerAfter??0)+10)}; setProducts(u); }}
+                          className="w-5 h-5 flex items-center justify-center border border-gray-300 rounded bg-white hover:bg-green-50 hover:border-green-300 text-gray-500 text-[11px] font-bold leading-none">+</button>
+                        <span className="text-[7px] text-gray-400 ml-0.5">after desc</span>
+                      </div>
+
+                      {/* Page break + clear */}
+                      <div className="flex items-center gap-1">
+                        {idx > 0 && (
+                          <button
+                            onClick={() => { const u=[...products]; u[idx]={...u[idx],pageBreakBefore:!u[idx].pageBreakBefore,spacerAfter:0}; setProducts(u); }}
+                            className={`flex-1 h-5 flex items-center justify-center border rounded text-[8px] font-bold transition-colors
+                              ${product.pageBreakBefore
+                                ? 'bg-blue-500 border-blue-500 text-white hover:bg-blue-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-blue-50 hover:border-blue-400 hover:text-blue-600'}`}
+                          >
+                            {product.pageBreakBefore ? '❌ Remove Page Break' : '↵ Force Page Break'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { const u=[...products]; u[idx]={...u[idx],pageBreakBefore:false,spacerAfter:0,descSpacerAfter:0,descSpacerBefore:0,descSectionSpacing:0,sectionSpacings:[],sectionPageBreaks:[]}; setProducts(u); }}
+                          className="h-5 px-2 flex items-center justify-center border border-gray-200 rounded text-[8px] text-red-400 hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                        >Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bottom actions */}
+              <div className="px-3 py-2 border-t bg-gray-50 shrink-0 flex justify-between items-center">
+                <span className="text-[8px] text-gray-400">Enter=page break � ↑↓=row gap</span>
+                <button
+                  onClick={() => setProducts(products.map(p => ({ ...p, pageBreakBefore: false, spacerAfter: 0, descSpacerAfter: 0, descSpacerBefore: 0, descSectionSpacing: 0, sectionSpacings: [], sectionPageBreaks: [] })))}
+                  className="text-[8px] text-red-400 hover:text-red-600 underline"
+                >Clear all</button>
+              </div>
+            </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quotation Lookup Dialog */}
+      {/* ── IT MASTER PASSWORD DIALOG (Debug Mode Gate) ──────────────────── */}
+      <Dialog open={debugPasswordDialogOpen} onOpenChange={(open) => {
+        if (!open) { setDebugPasswordDialogOpen(false); setDebugPasswordInput(""); setDebugPasswordError(""); }
+      }}>
+        <DialogContent className="max-w-[380px] w-[90vw] p-6 border-none bg-[#0f0f0f] shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-black uppercase tracking-widest text-red-400 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              IT Debug Access
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              This mode is restricted to IT personnel only. Enter the master password to proceed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">IT Master Password</label>
+              <input
+                type="password"
+                value={debugPasswordInput}
+                onChange={(e) => { setDebugPasswordInput(e.target.value); setDebugPasswordError(""); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleDebugPasswordSubmit(); }}
+                placeholder="Enter master password"
+                className="bg-[#1a1a1a] border border-gray-700 text-white rounded-none px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent placeholder-gray-600"
+                autoFocus
+              />
+              {debugPasswordError && (
+                <p className="text-red-400 text-[11px] font-bold flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  {debugPasswordError}
+                </p>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-600 italic">⌨ Press Enter or click Authenticate</p>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setDebugPasswordDialogOpen(false); setDebugPasswordInput(""); setDebugPasswordError(""); }}
+              className="rounded-none flex-1 border-gray-700 text-gray-400 hover:bg-gray-800 bg-transparent"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDebugPasswordSubmit}
+              disabled={!debugPasswordInput.trim()}
+              className="rounded-none flex-1 bg-red-700 hover:bg-red-800 text-white font-black disabled:opacity-40"
+            >
+              Authenticate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={lookupDialogOpen} onOpenChange={setLookupDialogOpen}>
+        <DialogContent className="max-w-[400px] w-[90vw] p-6 border-none bg-white shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold uppercase tracking-wider">Load Quotation</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500">
+              Enter quotation number to load its data (Ctrl+K)
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="quotation-number-input" className="text-sm font-bold uppercase text-gray-700">
+                Quotation Number
+              </label>
+              <input
+                id="quotation-number-input"
+                type="text"
+                value={lookupQuotationNumber}
+                onChange={(e) => setLookupQuotationNumber(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleLookupQuotation();
+                  }
+                }}
+                placeholder="e.g., QT-2024-001"
+                className="border border-gray-300 rounded-none px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                disabled={isLookingUp}
+                autoFocus
+              />
+              {lookupError && (
+                <div className="text-red-500 text-xs font-bold">{lookupError}</div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setLookupDialogOpen(false)}
+              disabled={isLookingUp}
+              className="rounded-none flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLookupQuotation}
+              disabled={isLookingUp || !lookupQuotationNumber.trim()}
+              className="rounded-none flex-1 bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 disabled:cursor-not-allowed"
+            >
+              {isLookingUp ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading...
+                </>
+              ) : (
+                "Load Quotation"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -5185,6 +6630,16 @@ ${payload.whtType && payload.whtType !== "none"
               </div>
             </div>
           </div>
+          {/* Screenshot Prevention: Content-hiding overlay */}
+          {isContentHidden && (
+            <div className="fixed inset-0 z-[9999] bg-white flex items-center justify-center pointer-events-auto">
+              <div className="text-center">
+                <div className="text-4xl mb-2">🔒</div>
+                <div className="text-gray-500 font-semibold text-lg">Content Protected</div>
+                <div className="text-gray-400 text-sm mt-1">Screenshot functionality detected</div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
