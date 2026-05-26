@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     Dialog, DialogContent, DialogHeader,
     DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, RefreshCw, Package, DollarSign, Settings2, Layers, ArrowRight } from "lucide-react";
+import { Loader2, RefreshCw, Package, DollarSign, Settings2, Layers, ArrowRight, Plus, Trash2, Check, ImageIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import imageCompression from "browser-image-compression";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,14 +51,41 @@ interface SpfCreationData {
     spf_creation_end_time: string;
 }
 
+interface SpfRequestData {
+    spf_number: string;
+    customer_name: string;
+    contact_person: string;
+    contact_number: string;
+    registered_address: string;
+    delivery_address: string;
+    billing_address: string;
+    collection_address: string;
+    tin_no: string;
+    payment_terms: string;
+    warranty: string;
+    delivery_date: string;
+    special_instructions: string;
+    sales_person: string;
+    prepared_by: string;
+    item_description: string;
+    item_photo: string;
+    item_qty: string;
+}
+
+interface ItemRow {
+    item_photo: string;
+    item_description: string;
+    item_qty: string;
+}
+
 interface Props {
     open: boolean;
     onClose: () => void;
     spf_number: string | null;
-    onRequestRevision: (spf_number: string, revision_type: string, revision_remarks: string) => Promise<void>;
+    onRequestRevision: (spf_number: string, revision_type: string, revision_remarks: string, editedData?: any) => Promise<void>;
 }
 
-type RevisionStep = "select-type" | "review-data" | "add-remarks";
+type RevisionStep = "select-type" | "edit-form" | "add-remarks";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,12 +103,148 @@ const SectionHeader = ({ icon: Icon, title }: { icon: any, title: string }) => (
     </div>
 );
 
-const Field = ({ label, value }: { label: string, value: string }) => (
+const DisplayField = ({ label, value }: { label: string, value: string }) => (
     <div className="mb-2">
         <span className="text-[10px] font-bold text-gray-500 uppercase">{label}:</span>
         <p className="text-xs text-gray-800 mt-0.5">{value || "—"}</p>
     </div>
 );
+
+// ─── Field + SectionLabel (stable, defined outside component) ─────────────────
+
+const Field = ({ label, children, required, className = "" }: { label: string; children: React.ReactNode; required?: boolean; className?: string }) => (
+    <div className={`flex flex-col gap-2 ${className}`}>
+        <label className="text-xs font-semibold uppercase tracking-wider text-gray-600">
+            {label}{required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+        {children}
+    </div>
+);
+
+const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+    <p className="text-xs font-semibold uppercase tracking-wider text-gray-600 mb-3">{children}</p>
+);
+
+// ─── FIX: Step1Form extracted outside RevisionDialog to prevent focus loss ────
+// REASON: When renderStep1 was an inline function inside the component, every
+// keystroke caused a re-render which redefined the function, making React think
+// the Input elements were brand-new components → unmount + remount → cursor lost.
+// By defining it here as a stable named component, React reuses the same element
+// across renders and focus is preserved.
+
+interface Step1FormProps {
+    formData: any;
+    setField: (key: string, value: string) => void;
+    editable: boolean;
+}
+
+const Step1Form = React.memo(({ formData, setField, editable }: Step1FormProps) => {
+    const fields = [
+        { label: "Customer Name", key: "customer_name", required: true },
+        { label: "Contact Person", key: "contact_person" },
+        { label: "Contact Number", key: "contact_number" },
+        { label: "Registered Address", key: "registered_address" },
+        { label: "Delivery Address", key: "delivery_address" },
+        { label: "Billing Address", key: "billing_address" },
+        { label: "Collection Address", key: "collection_address" },
+        { label: "TIN Number", key: "tin_no" },
+    ];
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {fields.map(({ label, key, required }) => (
+                    <Field key={key} label={label} required={required}>
+                        <Input
+                            className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                            placeholder={label}
+                            value={formData?.[key] || ""}
+                            onChange={(e) => setField(key, e.target.value)}
+                            disabled={!editable}
+                        />
+                    </Field>
+                ))}
+            </div>
+        </div>
+    );
+});
+Step1Form.displayName = "Step1Form";
+
+// ─── FIX: Step2Form extracted outside RevisionDialog to prevent focus loss ────
+
+interface Step2FormProps {
+    formData: any;
+    setField: (key: string, value: string) => void;
+    editable: boolean;
+}
+
+const Step2Form = React.memo(({ formData, setField, editable }: Step2FormProps) => (
+    <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Field label="Payment Terms">
+                <select
+                    className="h-9 text-sm border border-gray-300 rounded-sm px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    value={formData?.payment_terms || ""}
+                    onChange={(e) => setField("payment_terms", e.target.value)}
+                    disabled={!editable}
+                >
+                    <option value="">Select…</option>
+                    {["COD", "Check", "Cash", "Bank Deposit", "GCash", "Terms"].map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                    ))}
+                </select>
+            </Field>
+            <Field label="Warranty">
+                <Input
+                    className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                    placeholder="e.g., 1 year"
+                    value={formData?.warranty || ""}
+                    onChange={(e) => setField("warranty", e.target.value)}
+                    disabled={!editable}
+                />
+            </Field>
+        </div>
+        <Field label="Delivery Date">
+            <Input
+                type="date"
+                className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                value={formData?.delivery_date || ""}
+                onChange={(e) => setField("delivery_date", e.target.value)}
+                disabled={!editable}
+            />
+        </Field>
+        <Field label="Special Instructions">
+            <Textarea
+                className="rounded-sm text-sm resize-none border-gray-300 focus:border-gray-400 focus:ring-0"
+                placeholder="Any special instructions..."
+                value={formData?.special_instructions || ""}
+                onChange={(e) => setField("special_instructions", e.target.value)}
+                rows={4}
+                disabled={!editable}
+            />
+        </Field>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Field label="Sales Person">
+                <Input
+                    className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                    placeholder="Name"
+                    value={formData?.sales_person || ""}
+                    onChange={(e) => setField("sales_person", e.target.value)}
+                    disabled={!editable}
+                />
+            </Field>
+            <Field label="Prepared By">
+                <Input
+                    className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                    placeholder="Name"
+                    value={formData?.prepared_by || ""}
+                    onChange={(e) => setField("prepared_by", e.target.value)}
+                    disabled={!editable}
+                />
+            </Field>
+        </div>
+    </div>
+));
+Step2Form.displayName = "Step2Form";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -125,18 +290,30 @@ const revisionTypes = [
     }
 ];
 
+const STEPS = [
+    { id: 1, name: "Customer Info", key: "customer" },
+    { id: 2, name: "Order Terms", key: "terms" },
+    { id: 3, name: "Items", key: "items" },
+];
+
 export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }: Props) {
     const [data, setData] = useState<SpfCreationData | null>(null);
+    const [requestData, setRequestData] = useState<SpfRequestData | null>(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [step, setStep] = useState<RevisionStep>("select-type");
     const [selectedType, setSelectedType] = useState<string | null>(null);
     const [remarks, setRemarks] = useState("");
+    const [formStep, setFormStep] = useState(1);
+    const [items, setItems] = useState<ItemRow[]>([]);
+    const [formData, setFormData] = useState<any>({});
+    const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
 
     useEffect(() => {
         if (!open || !spf_number) {
             setData(null);
+            setRequestData(null);
             setError(null);
             return;
         }
@@ -145,16 +322,36 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch(`/api/activity/tsa/spf/fetch-creation?spf_number=${encodeURIComponent(spf_number)}`);
-                if (!res.ok) {
-                    if (res.status === 404) {
+                const creationRes = await fetch(`/api/activity/tsa/spf/fetch-creation?spf_number=${encodeURIComponent(spf_number)}`);
+                if (!creationRes.ok) {
+                    if (creationRes.status === 404) {
                         setError("No creation record found for this SPF.");
                         return;
                     }
                     throw new Error("Failed to fetch creation data");
                 }
-                const json = await res.json();
-                setData(json.data);
+                const creationJson = await creationRes.json();
+                setData(creationJson.data);
+
+                const requestRes = await fetch(`/api/activity/tsa/spf/fetch?spf_number=${encodeURIComponent(spf_number)}&referenceid=${creationJson.data?.referenceid || ''}`);
+                if (requestRes.ok) {
+                    const requestJson = await requestRes.json();
+                    if (requestJson.activities && requestJson.activities.length > 0) {
+                        const spfData = requestJson.activities[0];
+                        setRequestData(spfData);
+                        setFormData(spfData);
+
+                        const descs = (spfData.item_description || "").split(",").map((s: string) => s.trim());
+                        const photos = (spfData.item_photo || "").split(",").map((s: string) => s.trim());
+                        const qtys = (spfData.item_qty || "").split(",").map((s: string) => s.trim());
+                        const maxLen = Math.max(descs.filter(Boolean).length, photos.filter(Boolean).length);
+                        setItems(maxLen > 0 ? Array.from({ length: maxLen }, (_, i) => ({
+                            item_description: descs[i] || "",
+                            item_photo: photos[i] || "",
+                            item_qty: qtys[i] || ""
+                        })) : []);
+                    }
+                }
             } catch (err: any) {
                 setError(err.message || "Failed to load data");
             } finally {
@@ -171,12 +368,15 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
             setSelectedType(null);
             setRemarks("");
             setError(null);
+            setFormStep(1);
+            setFormData({});
+            setItems([]);
         }
     }, [open]);
 
     const handleTypeSelect = (typeId: string) => {
         setSelectedType(typeId);
-        setStep("review-data");
+        setStep("edit-form");
     };
 
     const handleContinueToRemarks = () => {
@@ -184,11 +384,23 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
     };
 
     const handleBack = () => {
-        if (step === "review-data") {
-            setStep("select-type");
-            setSelectedType(null);
+        if (step === "edit-form") {
+            if (formStep > 1) {
+                setFormStep(formStep - 1);
+            } else {
+                setStep("select-type");
+                setSelectedType(null);
+            }
         } else if (step === "add-remarks") {
-            setStep("review-data");
+            setStep("edit-form");
+        }
+    };
+
+    const handleFormNext = () => {
+        if (formStep < STEPS.length) {
+            setFormStep(formStep + 1);
+        } else {
+            handleContinueToRemarks();
         }
     };
 
@@ -196,7 +408,13 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
         if (!spf_number || !selectedType) return;
         setSaving(true);
         try {
-            await onRequestRevision(spf_number, selectedType, remarks);
+            const editedData = {
+                ...formData,
+                item_description: items.map((it) => it.item_description).join(","),
+                item_photo: items.map((it) => it.item_photo).join(","),
+                item_qty: items.map((it) => it.item_qty).join(","),
+            };
+            await onRequestRevision(spf_number, selectedType, remarks, editedData);
             onClose();
         } catch (err: any) {
             setError(err.message || "Failed to request revision");
@@ -205,33 +423,165 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
         }
     };
 
+    // ─── FIX: setField is stable via useCallback (no dependencies that change) ──
+    // This ensures Step1Form and Step2Form don't re-render unnecessarily,
+    // which would still cause focus loss even with extracted components.
+    const setField = useCallback(
+        (key: string, value: string) => setFormData((prev: any) => ({ ...prev, [key]: value })),
+        []
+    );
+
+    const addItem = () => setItems((prev) => [...prev, { item_photo: "", item_description: "", item_qty: "" }]);
+    const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
+    const updateItemDesc = (i: number, val: string) =>
+        setItems((prev) => { const next = [...prev]; next[i] = { ...next[i], item_description: val.replace(/,/g, "") }; return next; });
+    const updateItemQty = (i: number, val: string) =>
+        setItems((prev) => { const next = [...prev]; next[i] = { ...next[i], item_qty: val.replace(/,/g, "") }; return next; });
+
+    const handleUpload = async (file: File, index: number) => {
+        setUploadingIdx(index);
+        try {
+            const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1920, useWebWorker: true });
+            const form = new FormData();
+            form.append("file", compressed);
+            form.append("upload_preset", "Xchire");
+            form.append("folder", "spf_items");
+            const res = await fetch("https://api.cloudinary.com/v1_1/dhczsyzcz/auto/upload", { method: "POST", body: form });
+            if (!res.ok) throw new Error("Upload failed");
+            const json = await res.json();
+            if (!json.secure_url) throw new Error("No URL returned");
+            setItems((prev) => { const next = [...prev]; next[index] = { ...next[index], item_photo: json.secure_url }; return next; });
+        } catch (err) {
+            console.error("Upload error:", err);
+            alert("Failed to upload image. Please try again.");
+        } finally {
+            setUploadingIdx(null);
+        }
+    };
+
+    // ─── isFieldEditable stays inside component (needs selectedType from state) ─
+
+    const isFieldEditable = (fieldCategory: string) => {
+        if (!selectedType) return false;
+        if (fieldCategory === "items") return true;
+        if (selectedType === "Both") return true;
+        return false;
+    };
+
+    // ─── renderStep3 stays inside component (needs items, handlers, uploadingIdx) ─
+
+    const renderStep3 = () => (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <SectionLabel>Items</SectionLabel>
+                <button
+                    type="button"
+                    onClick={addItem}
+                    className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-600 hover:text-gray-900 transition-all border border-gray-300 px-3 py-2 hover:bg-gray-50"
+                >
+                    <Plus className="w-3.5 h-3.5" /> Add Item
+                </button>
+            </div>
+            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {items.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 border border-dashed border-gray-300 text-gray-400 gap-2 rounded-sm">
+                        <ImageIcon className="w-8 h-8 opacity-40" />
+                        <p className="text-sm">No items added yet</p>
+                        <p className="text-xs text-gray-400">Click "Add Item" to get started</p>
+                    </div>
+                )}
+                {items.map((row, i) => (
+                    <div key={i} className="border border-gray-200 rounded-sm overflow-hidden hover:border-gray-300 transition-colors">
+                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-600">Item {i + 1}</span>
+                            <button
+                                type="button"
+                                onClick={() => removeItem(i)}
+                                className="p-1.5 text-gray-400 hover:text-red-500 transition-colors hover:bg-red-50 rounded-sm"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                            <Field label="Reference Photo" required>
+                                <div>
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        className="rounded-sm h-9 text-xs border-gray-300 file:mr-3 file:py-1 file:px-3 file:rounded-sm file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                                        onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file, i); e.target.value = ""; }}
+                                        disabled={uploadingIdx === i || !isFieldEditable("items")}
+                                    />
+                                    {uploadingIdx === i && <div className="flex items-center gap-2 text-xs text-gray-500 mt-2"><Loader2 className="w-3.5 h-3.5 animate-spin" />Uploading image…</div>}
+                                    {row.item_photo && uploadingIdx !== i && (
+                                        <div className="mt-3 flex items-center gap-3">
+                                            <div className="border border-gray-200 rounded-sm p-1 bg-gray-50"><img src={row.item_photo} alt={`Item ${i + 1}`} className="w-24 h-24 object-contain" /></div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setItems((prev) => { const next = [...prev]; next[i] = { ...next[i], item_photo: "" }; return next; })}
+                                                className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+                                                disabled={!isFieldEditable("items")}
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </Field>
+                            <Field label="Item Quantity" required>
+                                <Input
+                                    type="number"
+                                    className="rounded-sm h-9 text-sm border-gray-300 focus:border-gray-400 focus:ring-0"
+                                    placeholder="Enter quantity..."
+                                    value={row.item_qty}
+                                    onChange={(e) => updateItemQty(i, e.target.value)}
+                                    disabled={!isFieldEditable("items")}
+                                />
+                            </Field>
+                            <Field label="Description" required>
+                                <Textarea
+                                    className="rounded-sm text-sm resize-none border-gray-300 focus:border-gray-400 focus:ring-0"
+                                    placeholder="Describe the item in detail..."
+                                    value={row.item_description}
+                                    onChange={(e) => updateItemDesc(i, e.target.value)}
+                                    rows={4}
+                                    disabled={!isFieldEditable("items")}
+                                />
+                            </Field>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     const renderProductItems = () => {
         if (!data) return null;
 
-        const images = parseRowData(data.product_offer_image);
-        const qtys = parseRowData(data.product_offer_qty);
-        const specs = parseRowData(data.product_offer_technical_specification);
-        const unitCosts = parseRowData(data.product_offer_unit_cost);
-        const subtotals = parseRowData(data.product_offer_subtotal);
-        const packagings = parseRowData(data.product_offer_packaging_details);
-        const factoryAddresses = parseRowData(data.product_offer_factory_address);
-        const ports = parseRowData(data.product_offer_port_of_discharge);
-        const pcsPerCartons = parseRowData(data.product_offer_pcs_per_carton);
-        const companies = parseRowData(data.company_name);
-        const brands = parseRowData(data.supplier_brand);
-        const contactNames = parseRowData(data.contact_name);
-        const contactNumbers = parseRowData(data.contact_number);
-        const finalSellingCosts = parseRowData(data.final_selling_cost);
-        const finalUnitCosts = parseRowData(data.final_unit_cost);
-        const finalSubtotals = parseRowData(data.final_subtotal);
-        const leadTimes = parseRowData(data.proj_lead_time);
-        const itemCodes = parseRowData(data.item_code);
-        const priceValidities = parseRowData(data.price_validity);
-        const tdss = parseRowData(data.tds);
-        const dimDrawings = parseRowData(data.dimensional_drawing);
-        const illumDrawings = parseRowData(data.illuminance_drawing);
-        const origSpecs = parseRowData(data.original_technical_specification);
-        const prodRefIds = parseRowData(data.product_reference_id);
+        const images = parseRowData(data?.product_offer_image || "");
+        const qtys = parseRowData(data?.product_offer_qty || "");
+        const specs = parseRowData(data?.product_offer_technical_specification || "");
+        const unitCosts = parseRowData(data?.product_offer_unit_cost || "");
+        const subtotals = parseRowData(data?.product_offer_subtotal || "");
+        const packagings = parseRowData(data?.product_offer_packaging_details || "");
+        const factoryAddresses = parseRowData(data?.product_offer_factory_address || "");
+        const ports = parseRowData(data?.product_offer_port_of_discharge || "");
+        const pcsPerCartons = parseRowData(data?.product_offer_pcs_per_carton || "");
+        const companies = parseRowData(data?.company_name || "");
+        const brands = parseRowData(data?.supplier_brand || "");
+        const contactNames = parseRowData(data?.contact_name || "");
+        const contactNumbers = parseRowData(data?.contact_number || "");
+        const finalSellingCosts = parseRowData(data?.final_selling_cost || "");
+        const finalUnitCosts = parseRowData(data?.final_unit_cost || "");
+        const finalSubtotals = parseRowData(data?.final_subtotal || "");
+        const leadTimes = parseRowData(data?.proj_lead_time || "");
+        const itemCodes = parseRowData(data?.item_code || "");
+        const priceValidities = parseRowData(data?.price_validity || "");
+        const tdss = parseRowData(data?.tds || "");
+        const dimDrawings = parseRowData(data?.dimensional_drawing || "");
+        const illumDrawings = parseRowData(data?.illuminance_drawing || "");
+        const origSpecs = parseRowData(data?.original_technical_specification || "");
+        const prodRefIds = parseRowData(data?.product_reference_id || "");
 
         const itemCount = Math.max(
             images.length, qtys.length, specs.length, itemCodes.length,
@@ -256,12 +606,12 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
                 )}
 
                 <div className="grid grid-cols-2 gap-2">
-                    <Field label="Item Code" value={itemCodes[i]} />
-                    <Field label="Qty" value={qtys[i]} />
-                    <Field label="Price Validity" value={priceValidities[i]} />
-                    <Field label="TDS" value={tdss[i]} />
-                    <Field label="Packaging" value={packagings[i]} />
-                    <Field label="Port of Discharge" value={ports[i]} />
+                    <DisplayField label="Item Code" value={itemCodes[i]} />
+                    <DisplayField label="Qty" value={qtys[i]} />
+                    <DisplayField label="Price Validity" value={priceValidities[i]} />
+                    <DisplayField label="TDS" value={tdss[i]} />
+                    <DisplayField label="Packaging" value={packagings[i]} />
+                    <DisplayField label="Port of Discharge" value={ports[i]} />
                 </div>
 
                 {specs[i] && specs[i] !== "-" && (
@@ -378,14 +728,14 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
                             </div>
                         )}
 
-                        {/* STEP 2: Review Data */}
-                        {step === "review-data" && !loading && !error && data && (
+                        {/* STEP 2: Edit Form */}
+                        {step === "edit-form" && !loading && !error && requestData && (
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
                                         <Package className="w-4 h-4 text-gray-600" />
                                         <span className="text-xs font-black uppercase tracking-widest text-gray-800">
-                                            Review Current Data
+                                            Edit SPF Request
                                         </span>
                                     </div>
                                     <span className="text-[10px] px-2 py-1 bg-amber-100 text-amber-700 font-semibold">
@@ -393,34 +743,57 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
                                     </span>
                                 </div>
 
-                                {/* Header Info */}
-                                <div className="grid grid-cols-4 gap-3 bg-gray-100 p-3">
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase">SPF Number</span>
-                                        <p className="text-xs font-mono font-semibold">{data.spf_number}</p>
+                                {/* Stepper Header */}
+                                <div className="bg-white border-b border-gray-200">
+                                    <div className="flex items-center justify-between px-6 py-5">
+                                        <div>
+                                            <h2 className="text-lg font-bold text-gray-900 tracking-tight">Edit SPF Request</h2>
+                                            <p className="text-xs text-gray-500 font-mono mt-1">{spf_number}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {STEPS.map((s, idx) => (
+                                                <React.Fragment key={s.id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => idx < formStep && setFormStep(s.id)}
+                                                        className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold transition-all ${formStep === s.id ? "bg-gray-900 text-white" : formStep > s.id ? "bg-emerald-500 text-white cursor-pointer" : "bg-gray-200 text-gray-600"}`}
+                                                    >
+                                                        {formStep > s.id ? <Check className="w-4 h-4" /> : s.id}
+                                                    </button>
+                                                    {idx < STEPS.length - 1 && <div className={`w-8 h-0.5 transition-colors ${formStep > s.id ? "bg-emerald-500" : "bg-gray-200"}`} />}
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Reference ID</span>
-                                        <p className="text-xs font-mono">{data.referenceid}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase">Status</span>
-                                        <p className="text-xs font-semibold">{data.status}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase">TSM</span>
-                                        <p className="text-xs">{data.tsm}</p>
+                                    <div className="px-6 py-2 bg-gray-50 border-t border-gray-100">
+                                        <p className="text-sm font-semibold text-gray-700">Step {formStep} of {STEPS.length}: {STEPS[formStep - 1].name}</p>
                                     </div>
                                 </div>
 
-                                {/* Product Items */}
-                                <SectionHeader icon={Package} title="Product Offer Details" />
-                                {renderProductItems()}
+                                {/* Step Content */}
+                                {/* FIX: Step1Form and Step2Form are now stable components, not inline functions */}
+                                <div className="px-6 py-6 min-h-[400px] max-h-[calc(60vh-200px)] overflow-y-auto">
+                                    {formStep === 1 && (
+                                        <Step1Form
+                                            formData={formData}
+                                            setField={setField}
+                                            editable={isFieldEditable("customer")}
+                                        />
+                                    )}
+                                    {formStep === 2 && (
+                                        <Step2Form
+                                            formData={formData}
+                                            setField={setField}
+                                            editable={isFieldEditable("terms")}
+                                        />
+                                    )}
+                                    {formStep === 3 && renderStep3()}
+                                </div>
                             </div>
                         )}
 
                         {/* STEP 3: Add Remarks */}
-                        {step === "add-remarks" && !loading && !error && data && (
+                        {step === "add-remarks" && !loading && !error && requestData && (
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
@@ -467,16 +840,16 @@ export function RevisionDialog({ open, onClose, spf_number, onRequestRevision }:
                         disabled={saving}
                         className="rounded-none h-9 text-xs uppercase font-bold tracking-wider"
                     >
-                        {step === "select-type" ? "Cancel" : "Back"}
+                        {step === "select-type" ? "Cancel" : step === "edit-form" && formStep > 1 ? "← Previous" : "Back"}
                     </Button>
 
-                    {step === "review-data" && data && (
+                    {step === "edit-form" && requestData && (
                         <Button
-                            onClick={handleContinueToRemarks}
-                            disabled={saving}
+                            onClick={handleFormNext}
+                            disabled={saving || uploadingIdx !== null}
                             className="rounded-none h-9 text-xs uppercase font-black tracking-wider bg-gray-900 hover:bg-gray-800 text-white"
                         >
-                            Continue <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                            {formStep < STEPS.length ? <>Next →</> : <>Continue <ArrowRight className="w-3.5 h-3.5 ml-1.5" /></>}
                         </Button>
                     )}
 
