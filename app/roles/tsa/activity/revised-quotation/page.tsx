@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 
@@ -26,6 +27,7 @@ import { RevisedQuotation } from "@/components/roles/tsa/activity/quotation/revi
 
 import { type DateRange } from "react-day-picker";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 interface SupervisorDetails {
   firstname: string;
@@ -211,6 +213,9 @@ function DashboardContent() {
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          <div className="flex items-center px-3">
+            <UnifiedNotificationBellLazy />
+          </div>
         </header>
 
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
@@ -253,13 +258,15 @@ function DashboardContent() {
 export default function Page() {
   return (
     <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
+      <NotificationProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </NotificationProvider>
     </UserProvider>
   );
 }

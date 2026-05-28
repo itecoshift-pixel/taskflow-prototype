@@ -232,10 +232,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     user.Department !== "Sales" &&
     user.Department !== "IT" &&
     user.Department !== "CSR" &&
-    user.Department !== "Procurement"
+    user.Department !== "Procurement" &&
+    user.Department !== "Accounting"
   ) {
     return res.status(403).json({
-      message: "Only Sales, IT, CSR or Procurement department users are allowed to log in.",
+      message: "Only Sales, IT, CSR, Procurement or Accounting department users are allowed to log in.",
     });
   }
 

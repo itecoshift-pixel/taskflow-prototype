@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SeenByDialog } from "@/components/seen-by-dialog";
 
 const EngiConnectLogo = () => (
   <div className="flex items-center justify-center size-9 bg-linear-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg rotate-3">
@@ -42,6 +43,9 @@ interface Message {
     senderId?: string;
     originalMsgId?: string; 
   } | null;
+  isPrivate?: boolean;
+  privateTo?: string;
+  senderDepartment?: string;
 }
 
 interface CollaborationHubProps {
@@ -54,6 +58,7 @@ interface CollaborationHubProps {
   userRole: string;
   status: string;
   title?: string;
+  userDepartment?: string;
 }
 
 export function CollaborationHub({
@@ -79,6 +84,7 @@ export function CollaborationHub({
   
   // New States for Features
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [userNamesMap, setUserNamesMap] = useState<Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string; department?: string }>>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const unreadRef = useRef<HTMLDivElement>(null);
@@ -99,6 +105,40 @@ export function CollaborationHub({
     if (sentSound.current) sentSound.current.volume = 0.3;
     if (receivedSound.current) receivedSound.current.volume = 0.3;
   }, []);
+
+  // Fetch user names for seenBy IDs
+  useEffect(() => {
+    const fetchUserNames = async () => {
+      // Collect all unique user IDs from seenBy arrays (including current user)
+      const allUserIds = new Set<string>();
+      messages.forEach(msg => {
+        msg.seenBy?.forEach(id => {
+          allUserIds.add(id);
+        });
+      });
+
+      if (allUserIds.size === 0) return;
+
+      try {
+        const response = await fetch("/api/get-users-by-ids", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userIds: Array.from(allUserIds) })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUserNamesMap(data.users || {});
+        }
+      } catch (error) {
+        console.error("Failed to fetch user names:", error);
+      }
+    };
+
+    if (messages.length > 0) {
+      fetchUserNames();
+    }
+  }, [messages]);
 
   // FEATURE: TYPING INDICATORS (WRITE)
   useEffect(() => {
@@ -537,12 +577,12 @@ export function CollaborationHub({
 
                           <div className={cn("flex items-center justify-end gap-1 text-[9px] mt-1 opacity-60 font-medium", isMe ? "text-blue-100" : "text-slate-400")}>
                             {new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            {isMe && seenByOthers.length > 0 && (
-                              <div className="flex items-center gap-0.5 ml-1">
-                                <Eye size={10} />
-                                <span>{seenByOthers.length}</span>
-                              </div>
-                            )}
+                            <SeenByDialog 
+                              seenByIds={msg.seenBy || []} 
+                              userNamesMap={userNamesMap} 
+                              isMe={isMe}
+                              currentUserId={currentUserId}
+                            />
                           </div>
                         </div>
                       </div>

@@ -50,6 +50,12 @@ export default async function handler(
     /* =============================
        2️⃣ UPDATE HISTORY
     ============================= */
+    console.log("🔔 TSM API: Updating history table", {
+      quotation_number,
+      tsm_approved_status,
+      timestamp: new Date().toISOString()
+    });
+    
     const { data: historyData, error: historyError } = await supabase
       .from("history")
       .update({
@@ -59,16 +65,20 @@ export default async function handler(
       .select();
 
     if (historyError) {
+      console.log("🔔 TSM API: ❌ History update failed", historyError);
       return res.status(500).json({
         message: historyError.message,
       });
     }
 
     if (!historyData || historyData.length === 0) {
+      console.log("🔔 TSM API: ❌ No history record found");
       return res.status(404).json({
         message: "No matching history record found",
       });
     }
+
+    console.log("🔔 TSM API: ✅ History updated successfully", historyData);
 
     /* =============================
        3️⃣ FETCH SIGNATORY (SAFE)

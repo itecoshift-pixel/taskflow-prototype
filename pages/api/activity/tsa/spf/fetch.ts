@@ -2,10 +2,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { 
-    referenceid, 
-    from, 
-    to, 
+  const {
+    referenceid,
+    spf_number,
+    from,
+    to,
     limit = "10",
     page = "1",
     search
@@ -25,8 +26,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let query = supabase
       .from("spf_request")
       .select("*", { count: "exact" })
-      .eq("referenceid", referenceid)
-      .order("date_created", { ascending: false })
+      .eq("referenceid", referenceid);
+
+    // If spf_number is provided, filter by it as well
+    if (spf_number && typeof spf_number === "string") {
+      query = query.eq("spf_number", spf_number);
+    }
+
+    query = query.order("date_created", { ascending: false })
       .order("spf_number", { ascending: false });
 
     // Apply search filter
@@ -75,11 +82,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Merge status and creation id into the data
+    // Merge status into the data
     const mergedData = (requestData || []).map(item => ({
       ...item,
-      status: statusMap.get(item.spf_number) || item.status || "pending",
-      spf_creation_id: creationIdMap.get(item.spf_number) || null
+      status: statusMap.get(item.spf_number) || item.status || "pending"
     }));
 
     // Calculate pagination info

@@ -8,10 +8,19 @@ import React, {
   useState,
   useCallback,
 } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/utils/supabase";
 import { useUser } from "@/contexts/UserContext";
 import { dbCollab } from "@/lib/firebase";
 import { collection, onSnapshot, QuerySnapshot, DocumentData } from "firebase/firestore";
+import { sileo } from "sileo";
+
+// Extend Window interface for global test function
+declare global {
+  interface Window {
+    testGlobalNotification?: () => void;
+  }
+}
 
 /** Raw `spf_creation.status` values that map to actionable badges on the requests list. */
 const CREATION_NOTIFICATION_STATUSES = new Set([
@@ -28,6 +37,15 @@ function isCreationNotificationStatus(status: unknown): boolean {
   return CREATION_NOTIFICATION_STATUSES.has(normalizeCreationStatusForCompare(status));
 }
 
+interface QuotationNotification {
+  id: string;
+  quotationNumber: string;
+  companyName: string;
+  activityReferenceNumber: string;
+  tsm: string;
+  dateCreated: string;
+}
+
 interface NotificationContextValue {
   unreadCount: number;
   unreadChatCount: number;
@@ -40,6 +58,9 @@ interface NotificationContextValue {
   isChatUnread: (requestId: string) => boolean;
   getChatUnreadCount: (requestId: string) => number;
   updateChatUnreadCount: (requestId: string, count: number) => void;
+  // Quotation notification functions
+  showQuotationNotification: (quotation: QuotationNotification) => void;
+  testQuotationNotification: () => void; // Manual test function
 }
 
 const NotificationContext = createContext<NotificationContextValue>({
@@ -53,14 +74,32 @@ const NotificationContext = createContext<NotificationContextValue>({
   isChatUnread: () => false,
   getChatUnreadCount: () => 0,
   updateChatUnreadCount: () => {},
+  showQuotationNotification: () => {},
+  testQuotationNotification: () => {},
 });
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { userId } = useUser();
+  const pathname = usePathname();
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  useEffect(() => {
+    if (isClient) {
+      console.log("🔔 NotificationProvider: Initializing with userId:", userId);
+      console.log("🔔 NotificationProvider: Current path:", pathname);
+      console.log("🔔 NotificationProvider: Is TSA page:", pathname?.includes('/roles/tsa/'));
+    }
+  }, [isClient, userId, pathname]);
+  
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const quotationAudioRef = useRef<HTMLAudioElement | null>(null);
   const stopTimerRef = useRef<number | null>(null);
   const readSPFRef = useRef<Map<string, string>>(new Map());
   const unreadSPFRef = useRef<Set<string>>(new Set());
@@ -171,6 +210,144 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, 5000);
   }, []);
 
+  const playQuotationNotificationSound = useCallback(() => {
+    if (!isClient) return;
+    console.log("🔔 GLOBAL playQuotationNotificationSound: CALLED");
+    console.log("🔔 GLOBAL playQuotationNotificationSound: Page:", pathname);
+    
+    const audio = quotationAudioRef.current;
+    if (!audio) {
+      console.log("🔔 GLOBAL playQuotationNotificationSound: ❌ No audio element found");
+      console.log("🔔 GLOBAL playQuotationNotificationSound: Creating new audio element...");
+      try {
+        const newAudio = new Audio("/quotation-req.mp3");
+        newAudio.preload = "auto";
+        newAudio.currentTime = 0;
+        newAudio.play().then(() => {
+          console.log("🔔 GLOBAL playQuotationNotificationSound: ✅ New audio played successfully");
+        }).catch((error) => {
+          console.log("🔔 GLOBAL playQuotationNotificationSound: ❌ New audio play failed:", error);
+        });
+      } catch (error) {
+        console.log("🔔 GLOBAL playQuotationNotificationSound: ❌ Failed to create audio:", error);
+      }
+      return;
+    }
+    
+    console.log("🔔 GLOBAL playQuotationNotificationSound: ✅ Audio element found");
+    console.log("🔔 GLOBAL playQuotationNotificationSound: Audio src:", audio.src);
+    console.log("🔔 GLOBAL playQuotationNotificationSound: Audio readyState:", audio.readyState);
+    
+    audio.currentTime = 0;
+    void audio.play().then(() => {
+      console.log("🔔 GLOBAL playQuotationNotificationSound: ✅ Audio played successfully");
+    }).catch((error) => {
+      console.log("🔔 GLOBAL playQuotationNotificationSound: ❌ Audio play failed:", error);
+      
+      // Try with user interaction fallback
+      console.log("🔔 GLOBAL playQuotationNotificationSound: Trying user interaction fallback...");
+      document.addEventListener('click', function playAudioFallback() {
+        audio.currentTime = 0;
+        audio.play().then(() => {
+          console.log("🔔 GLOBAL playQuotationNotificationSound: ✅ Audio played with user interaction");
+        }).catch((e) => {
+          console.log("🔔 GLOBAL playQuotationNotificationSound: ❌ Still failed with user interaction:", e);
+        });
+        document.removeEventListener('click', playAudioFallback);
+      }, { once: true });
+      
+      console.log("🔔 GLOBAL playQuotationNotificationSound: Click anywhere to test audio with user interaction");
+    });
+  }, [isClient, pathname]);
+
+  const showQuotationNotification = useCallback((quotation: QuotationNotification) => {
+    if (!isClient) return;
+    console.log("🔔 GLOBAL showQuotationNotification: 🚨 CALLED with:", quotation);
+    console.log("🔔 GLOBAL showQuotationNotification: 🚨 Page:", pathname);
+    console.log("🔔 GLOBAL showQuotationNotification: 🚨 Timestamp:", new Date().toISOString());
+    console.log("🔔 GLOBAL showQuotationNotification: 🚨 Document ready:", document.readyState);
+    console.log("🔔 GLOBAL showQuotationNotification: 🚨 Body available:", !!document.body);
+    
+    try {
+      // Play the quotation notification sound
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 STEP 1: Playing sound...");
+      playQuotationNotificationSound();
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 STEP 1: Sound function called");
+      
+      // Show toast notification
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 STEP 2: Checking toast options...");
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 Sileo available:", typeof sileo);
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 Sileo.success available:", !!(sileo && sileo.success));
+      
+      if (sileo && sileo.success) {
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 STEP 2A: Using sileo toast");
+        sileo.success({
+          title: "📋 New Quotation Request",
+          description: `${quotation.companyName} - ${quotation.quotationNumber}`,
+          duration: 8000,
+          fill: "white",
+          styles: { 
+            title: "text-blue-600!", 
+            description: "text-gray-700 font-medium" 
+          },
+        });
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 ✅ Sileo toast displayed successfully");
+      } else {
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 STEP 2B: Using manual toast fallback");
+        // Fallback: create manual toast
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 Creating manual toast element...");
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: white;
+          color: #1e293b;
+          padding: 15px 20px;
+          border-radius: 8px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+          z-index: 9999;
+          min-width: 300px;
+          transform: translateX(400px);
+          transition: transform 0.3s ease;
+          border-left: 4px solid #2563eb;
+        `;
+        toast.innerHTML = `
+          <div style="color: #2563eb; font-weight: bold; margin-bottom: 5px;">📋 New Quotation Request</div>
+          <div style="color: #374151; font-weight: 500;">${quotation.companyName} - ${quotation.quotationNumber}</div>
+          <div style="color: #64748b; font-size: 12px; margin-top: 5px;">Global Notification</div>
+        `;
+        
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 Appending toast to body...");
+        document.body.appendChild(toast);
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 Toast appended to DOM");
+        
+        setTimeout(() => {
+          console.log("🔔 GLOBAL showQuotationNotification: 🚨 Showing toast with animation...");
+          toast.style.transform = 'translateX(0)';
+        }, 100);
+        
+        setTimeout(() => {
+          console.log("🔔 GLOBAL showQuotationNotification: 🚨 Hiding toast...");
+          toast.style.transform = 'translateX(400px)';
+          setTimeout(() => {
+            if (document.body.contains(toast)) {
+              document.body.removeChild(toast);
+              console.log("🔔 GLOBAL showQuotationNotification: 🚨 Toast removed from DOM");
+            }
+          }, 300);
+        }, 8000);
+        
+        console.log("🔔 GLOBAL showQuotationNotification: 🚨 ✅ Manual toast displayed");
+      }
+      
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 ✅ Notification process completed successfully");
+    } catch (error) {
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 ❌ ERROR:", error);
+      console.log("🔔 GLOBAL showQuotationNotification: 🚨 ❌ Error stack:", error instanceof Error ? error.stack : 'No stack available');
+    }
+  }, [playQuotationNotificationSound]);
+
   // ─── SPF request notification logic (Supabase) ───────────────────────────────
   useEffect(() => {
     if (!userId) {
@@ -186,8 +363,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
 
     if (!audioRef.current) {
-      audioRef.current = new Audio("/musics/notif-sound.mp3");
+      audioRef.current = new Audio("/alert-notification.mp3");
       audioRef.current.preload = "auto";
+    }
+    if (!quotationAudioRef.current) {
+      quotationAudioRef.current = new Audio("/quotation-req.mp3");
+      quotationAudioRef.current.preload = "auto";
+      console.log("🔔 Using quotation-req.mp3 for TSM quotation notifications");
     }
     if (channelRef.current) supabase.removeChannel(channelRef.current);
 
@@ -354,23 +536,197 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       .subscribe();
     channelRef.current = channel;
 
+    // TSA subscription for TSM quotation approvals/declines
+    if (isClient) {
+      console.log("🔔 TSA SUBSCRIPTION: Setting up TSA subscription for TSM quotation approvals/declines");
+      console.log("🔔 TSA SUBSCRIPTION: User ID:", userId);
+      console.log("🔔 TSA SUBSCRIPTION: Current path:", pathname);
+    }
+    
+    const tsmQuotationChannel = supabase
+      .channel("tsm_quotation_approval_changes")
+      .on("postgres_changes", { 
+        event: "UPDATE", 
+        schema: "public", 
+        table: "history",
+        filter: `tsm_approved_status=in.(Approved,Declined)` 
+      }, (payload) => {
+        console.log("🔔 TSA QUOTATION EVENT: TSM quotation status changed", payload);
+        console.log("🔔 TSA QUOTATION EVENT: Event type:", payload.eventType);
+        console.log("🔔 TSA QUOTATION EVENT: New data:", payload.new);
+        console.log("🔔 TSA QUOTATION EVENT: Old data:", payload.old);
+        
+        if (payload.eventType === "UPDATE" && payload.new && isClient) {
+          const newStatus = payload.new.tsm_approved_status;
+          const oldStatus = payload.old?.tsm_approved_status;
+          
+          console.log("🔔 TSA QUOTATION EVENT: Status change detected");
+          console.log("🔔 TSA QUOTATION EVENT: Old status:", oldStatus);
+          console.log("🔔 TSA QUOTATION EVENT: New status:", newStatus);
+          
+          // Only notify if status changed from Pending to Approved/Declined
+          if (oldStatus === "Pending" && (newStatus === "Approved" || newStatus === "Declined")) {
+            console.log("🔔 TSA QUOTATION EVENT: ✅ Triggering TSA notification for", newStatus);
+            
+            // Play quotation sound for TSA notifications
+            if (audioRef.current) {
+              const audio = new Audio("/quotation-req.mp3");
+              audio.volume = 0.6;
+              audio.play().catch((error) => {
+                console.log("🔔 TSA QUOTATION EVENT: ❌ Audio play failed:", error);
+              });
+              console.log("🔔 TSA QUOTATION EVENT: ✅ Quotation audio played");
+            } else {
+              console.log("🔔 TSA QUOTATION EVENT: ❌ No audio ref found");
+            }
+            
+            // Show TSA-specific notification
+            if (sileo && sileo.success) {
+              sileo.success({
+                title: newStatus === "Approved" ? "✅ Quotation Approved" : "❌ Quotation Declined",
+                description: `TSM action: ${payload.new.company_name || 'Unknown Company'} - ${payload.new.quotation_number || 'Unknown'}`,
+                duration: 8000,
+                fill: "white",
+                styles: { 
+                  title: newStatus === "Approved" ? "text-green-600!" : "text-red-600!", 
+                  description: "text-gray-700 font-medium" 
+                },
+              });
+              console.log("🔔 TSA QUOTATION EVENT: ✅ Sileo toast shown");
+            } else {
+              console.log("🔔 TSA QUOTATION EVENT: ❌ Sileo not available");
+            }
+            
+            // Dispatch custom event to trigger UnifiedNotificationBell refresh
+            const customEvent = new CustomEvent('tsmQuotationApproval', {
+              detail: payload.new
+            });
+            window.dispatchEvent(customEvent);
+            console.log("🔔 TSA QUOTATION EVENT: ✅ Custom event dispatched", customEvent);
+          } else {
+            console.log("🔔 TSA QUOTATION EVENT: ❌ Status change not from Pending to Approved/Declined");
+          }
+        } else {
+          console.log("🔔 TSA QUOTATION EVENT: ❌ Not an UPDATE event or no new data");
+        }
+      })
+      .subscribe((status) => {
+        if (isClient) {
+          console.log("🔔 TSA SUBSCRIPTION: Subscription status:", status);
+          if (status === 'SUBSCRIBED') {
+            console.log("🔔 TSA SUBSCRIPTION: ✅ Successfully subscribed to TSA quotation changes");
+          } else if (status === 'CHANNEL_ERROR') {
+            console.log("🔔 TSA SUBSCRIPTION: ❌ Subscription error");
+          }
+        }
+      });
+    
+    if (isClient) {
+      console.log("🔔 TSA SUBSCRIPTION: ✅ TSA subscription setup complete");
+    }
+
     return () => {
       cancelled = true;
       if (stopTimerRef.current) { window.clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
       supabase.removeChannel(channel);
+      supabase.removeChannel(tsmQuotationChannel);
     };
   }, [
     userId, getInitKey, getStorageKey, getLegacyStorageKey, getKnownSignatureKey,
     getUnreadCountKey, persistReadMap, persistKnownSignatureMap, persistUnreadCountMap,
     normalizeSPFNumber, playNotificationSound, getLastSeenCreationKey, applyEffectiveUnreadAggregates,
+    isClient, pathname,
   ]);
+
+  // ─── TSM Quotation notification system - RELY ON LOCAL SYSTEM + GLOBAL EVENTS ─────────────────────────────
+  // Global system now only listens for custom events from the working local system
+  // This avoids Supabase subscription conflicts and ensures reliable cross-page notifications
+
+  // Manual test functions for debugging notifications
+  useEffect(() => {
+    if (!isClient) return;
+    // Add global test functions
+    (window as any).testTSANotification = () => {
+      console.log("🔔 MANUAL TEST: Triggering TSA notification manually");
+      
+      // Play quotation sound
+      if (audioRef.current) {
+        const audio = new Audio("/quotation-req.mp3");
+        audio.volume = 0.6;
+        audio.play().catch((error) => {
+          console.log("🔔 MANUAL TEST: ❌ Audio play failed:", error);
+        });
+        console.log("🔔 MANUAL TEST: ✅ Quotation audio played");
+      } else {
+        console.log("🔔 MANUAL TEST: ❌ No audio ref found");
+      }
+      
+      // Show toast
+      if (sileo && sileo.success) {
+        sileo.success({
+          title: "✅ Test TSA Notification",
+          description: "This is a manual test of TSA notification system",
+          duration: 8000,
+          fill: "white",
+          styles: { 
+            title: "text-green-600!", 
+            description: "text-gray-700 font-medium" 
+          },
+        });
+        console.log("🔔 MANUAL TEST: ✅ Sileo toast shown");
+      } else {
+        console.log("🔔 MANUAL TEST: ❌ Sileo not available");
+      }
+      
+      // Dispatch custom event to trigger bell refresh
+      const customEvent = new CustomEvent('tsmQuotationApproval', {
+        detail: {
+          company_name: 'Test Company',
+          quotation_number: 'Q-TEST-001',
+          tsm_approved_status: 'Approved',
+          date_created: new Date().toISOString()
+        }
+      });
+      window.dispatchEvent(customEvent);
+      console.log("🔔 MANUAL TEST: ✅ Custom event dispatched", customEvent);
+    };
+
+    // Test function to manually trigger database update
+    (window as any).testDatabaseUpdate = async () => {
+      console.log("🔔 DB TEST: Manually triggering database update");
+      
+      try {
+        const { data, error } = await supabase
+          .from("history")
+          .update({ tsm_approved_status: "Approved" })
+          .eq("quotation_number", "Q-TEST-DB-UPDATE")
+          .select();
+          
+        if (error) {
+          console.log("🔔 DB TEST: ❌ Database update failed", error);
+        } else {
+          console.log("🔔 DB TEST: ✅ Database update successful", data);
+        }
+      } catch (err) {
+        console.log("🔔 DB TEST: ❌ Database update exception", err);
+      }
+    };
+    
+    console.log("🔔 MANUAL TEST: Test functions available. Run testTSANotification() or testDatabaseUpdate() in console");
+    
+    return () => {
+      delete (window as any).testTSANotification;
+      delete (window as any).testDatabaseUpdate;
+    };
+  }, [isClient]);
 
   // ─── Firebase chat unread listener ───────────────────────────────────────────
   // Strategy:
   //   1. On mount, load persisted unread counts from localStorage immediately
   //      so badges are visible before Firebase even connects.
   //   2. On every Firebase snapshot, recompute unread per chat doc by counting
+  //      messages from others that this user hasn't seen
   //      messages where senderId !== userId AND userId NOT in seenBy.
   //   3. If the new count is higher than what we had, play a sound (new message).
   //   4. Persist the updated map to localStorage so it survives refreshes.
@@ -387,7 +743,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     // Init sound
     if (!chatNotifSoundRef.current) {
-      chatNotifSoundRef.current = new Audio("/musics/notif-messege-sound.mp3");
+      chatNotifSoundRef.current = new Audio("/reminder-notification.mp3");
       chatNotifSoundRef.current.preload = "auto";
     }
 
@@ -557,6 +913,154 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     applyEffectiveUnreadAggregates();
   }, [persistReadMap, persistKnownSignatureMap, persistUnreadCountMap, persistLastSeenCreationMap, userId, applyEffectiveUnreadAggregates]);
 
+  // Manual test function for debugging
+  const testQuotationNotification = useCallback(() => {
+    console.log("🔔 TSM Quotation Notification: Manual test triggered");
+    
+    const testQuotation: QuotationNotification = {
+      id: 'test-' + Date.now(),
+      quotationNumber: 'Q-TEST-' + Math.floor(Math.random() * 1000),
+      companyName: 'Test Company (Manual)',
+      activityReferenceNumber: 'ACT-TEST',
+      tsm: userId || 'unknown',
+      dateCreated: new Date().toISOString(),
+    };
+    
+    console.log("🔔 TSM Quotation Notification: Manual test with:", testQuotation);
+    showQuotationNotification(testQuotation);
+  }, [userId, showQuotationNotification]);
+
+  // Make the test function available globally for console testing
+  useEffect(() => {
+    if (!isClient) return;
+    (window as any).testGlobalNotification = () => {
+      console.log("🔔 MANUAL CONSOLE TEST: Triggering global notification");
+      const testQuotation: QuotationNotification = {
+        id: 'console-test-' + Date.now(),
+        quotationNumber: 'Q-CONSOLE-' + Math.floor(Math.random() * 1000),
+        companyName: 'Console Test Company',
+        activityReferenceNumber: 'ACT-CONSOLE',
+        tsm: userId || 'unknown',
+        dateCreated: new Date().toISOString(),
+      };
+      console.log("🔔 MANUAL CONSOLE TEST: Showing notification on page:", pathname);
+      showQuotationNotification(testQuotation);
+    };
+    
+    // Listen for custom events from local notification system
+    const handleQuotationEvent = (event: Event) => {
+      console.log("🔔 GLOBAL EVENT LISTENER: Received quotation event from local system");
+      
+      const customEvent = event as CustomEvent;
+      console.log("🔔 GLOBAL EVENT LISTENER: Event data:", customEvent.detail);
+      
+      if (customEvent.detail && customEvent.detail.type_activity === 'Quotation Preparation' && 
+          customEvent.detail.tsm_approved_status === 'Pending') {
+        console.log("🔔 GLOBAL EVENT LISTENER: Triggering global notification from local event");
+        
+        const quotation: QuotationNotification = {
+          id: customEvent.detail.id?.toString() || '',
+          quotationNumber: customEvent.detail.quotation_number || 'Unknown',
+          companyName: customEvent.detail.company_name || 'Unknown Company',
+          activityReferenceNumber: customEvent.detail.activity_reference_number || '',
+          tsm: customEvent.detail.tsm || '',
+          dateCreated: customEvent.detail.date_created || new Date().toISOString(),
+        };
+        
+        showQuotationNotification(quotation);
+      }
+    };
+
+    // TSA subscription for TSM quotation approval/decline
+    const handleTSMApprovalEvent = (event: Event) => {
+      console.log("🔔 TSA EVENT LISTENER: Received TSM approval/decline event");
+      
+      const customEvent = event as CustomEvent;
+      console.log("🔔 TSA EVENT LISTENER: Event data:", customEvent.detail);
+      
+      if (customEvent.detail && 
+          customEvent.detail.type_activity === 'Quotation Preparation' && 
+          (customEvent.detail.tsm_approved_status === 'Approved' || customEvent.detail.tsm_approved_status === 'Declined')) {
+        console.log("🔔 TSA EVENT LISTENER: Triggering TSA notification for TSM action");
+        
+        const notification = {
+          id: customEvent.detail.id?.toString() || '',
+          quotationNumber: customEvent.detail.quotation_number || 'Unknown',
+          companyName: customEvent.detail.company_name || 'Unknown Company',
+          activityReferenceNumber: customEvent.detail.activity_reference_number || '',
+          tsm: customEvent.detail.tsm || '',
+          dateCreated: customEvent.detail.date_created || new Date().toISOString(),
+        };
+        
+        // Show different notification for TSA users
+        if (sileo && sileo.success) {
+          sileo.success({
+            title: customEvent.detail.tsm_approved_status === 'Approved' ? "✅ Quotation Approved" : "❌ Quotation Declined",
+            description: `${customEvent.detail.company_name} - ${customEvent.detail.quotation_number}`,
+            duration: 8000,
+            fill: "white",
+            styles: { 
+              title: customEvent.detail.tsm_approved_status === 'Approved' ? "text-green-600!" : "text-red-600!", 
+              description: "text-gray-700 font-medium" 
+            },
+          });
+        } else {
+          // Fallback: create manual toast
+          const toast = document.createElement('div');
+            toast.style.cssText = `
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              background: ${customEvent.detail.tsm_approved_status === 'Approved' ? '#10b981' : '#ef4444'};
+              color: white;
+              padding: 15px 20px;
+              border-radius: 8px;
+              box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+              z-index: 9999;
+              min-width: 300px;
+              transform: translateX(400px);
+              transition: transform 0.3s ease;
+              border-left: 4px solid ${customEvent.detail.tsm_approved_status === 'Approved' ? '#059669' : '#dc2626'};
+            `;
+            toast.innerHTML = `
+              <div style="color: white; font-weight: bold; margin-bottom: 5px;">
+                ${customEvent.detail.tsm_approved_status === 'Approved' ? '✅ Quotation Approved' : '❌ Quotation Declined'}
+              </div>
+              <div style="color: white; font-size: 12px; margin-top: 5px;">
+                ${customEvent.detail.company_name} - ${customEvent.detail.quotation_number}
+              </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+              toast.style.transform = 'translateX(0)';
+            }, 100);
+            
+            setTimeout(() => {
+              toast.style.transform = 'translateX(400px)';
+              setTimeout(() => {
+                if (document.body.contains(toast)) {
+                  document.body.removeChild(toast);
+                }
+              }, 300);
+            }, 8000);
+          }
+        }
+      };
+      
+      window.addEventListener('quotationNotification', handleQuotationEvent);
+      window.addEventListener('tsmQuotationApproval', handleTSMApprovalEvent);
+      console.log("🔔 GLOBAL EVENT LISTENER: Listening for quotation events from local system");
+      console.log("🔔 TSA EVENT LISTENER: Listening for TSM approval/decline events");
+      
+      return () => {
+        window.removeEventListener('quotationNotification', handleQuotationEvent);
+        window.removeEventListener('tsmQuotationApproval', handleTSMApprovalEvent);
+        delete (window as any).testGlobalNotification;
+      };
+  }, [isClient, pathname, userId, showQuotationNotification]);
+
   return (
     <NotificationContext.Provider value={{
       unreadCount,
@@ -569,6 +1073,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       isChatUnread,
       getChatUnreadCount,
       updateChatUnreadCount,
+      showQuotationNotification,
+      testQuotationNotification,
     }}>
       {children}
     </NotificationContext.Provider>

@@ -224,25 +224,41 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     [activities]
   );
 
+  // ─── Filtered activities for dashboard display (date filter only) ────────────────
+  const filteredActivities = useMemo(() => {
+    const fromStr = dateCreatedFilterRange?.from ? toPlainDate(dateCreatedFilterRange.from) : null;
+    const toStr = dateCreatedFilterRange?.to ? toPlainDate(dateCreatedFilterRange.to) : null;
+
+    if (!fromStr && !toStr) return sortedActivities;
+
+    return sortedActivities.filter((item) => {
+      const itemDate = toPlainDate(item.date_created);
+      if (!itemDate) return false;
+      if (fromStr && itemDate < fromStr) return false;
+      if (toStr && itemDate > toStr) return false;
+      return true;
+    });
+  }, [sortedActivities, dateCreatedFilterRange]);
+
   // ─── Dynamic Status Columns (based on quotation_status) ────────────────────────────────
   const uniqueStatuses = useMemo(() => {
     const statuses = new Set<string>();
-    sortedActivities.forEach((item) => {
+    filteredActivities.forEach((item) => {
       const status = item.quotation_status?.toUpperCase();
       if (status) statuses.add(status);
     });
     return Array.from(statuses).sort();
-  }, [sortedActivities]);
+  }, [filteredActivities]);
 
   // ─── Dynamic Sub-Status Columns (based on quotation_status_sub) ────────────────────────────────
   const uniqueSubStatuses = useMemo(() => {
     const subStatuses = new Set<string>();
-    sortedActivities.forEach((item) => {
+    filteredActivities.forEach((item) => {
       const subStatus = item.quotation_status_sub?.toUpperCase();
       if (subStatus) subStatuses.add(subStatus);
     });
     return Array.from(subStatuses).sort();
-  }, [sortedActivities]);
+  }, [filteredActivities]);
 
   // ─── TSM Summary (Dynamic per-status and per-sub-status counts) ────────────────────────────────
   const tsmSummary = useMemo(() => {
@@ -268,7 +284,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
       });
     });
 
-    sortedActivities.forEach((item) => {
+    filteredActivities.forEach((item) => {
       const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
       const tsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
       if (!tsmId) return;
@@ -292,12 +308,12 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     });
 
     return Array.from(summaryMap.values()).sort((a, b) => b.quoteCount - a.quoteCount);
-  }, [sortedActivities, agentMap, tsmAgents]);
+  }, [filteredActivities, agentMap, tsmAgents]);
 
   const expandedTsaGroups = useMemo(() => {
     if (!expandedTsmId) return [];
 
-    const rowsForTsm = sortedActivities.filter((item) => {
+    const rowsForTsm = filteredActivities.filter((item) => {
       const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
       const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
       return derivedTsmId === expandedTsmId;
@@ -313,7 +329,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     });
 
     return Array.from(byTsa.values()).sort((a, b) => b.rows.length - a.rows.length);
-  }, [expandedTsmId, sortedActivities, agentMap]);
+  }, [expandedTsmId, filteredActivities, agentMap]);
 
   /* ---- Helper: Create TSM Summary Workbook ---- */
   const createTsmSummaryWorkbook = async (filterTsmId?: string): Promise<ExcelJS.Workbook> => {
@@ -393,17 +409,17 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-    // Filter activities by TSM if provided
-    const filteredActivities = filterTsmId
-      ? sortedActivities.filter((item) => {
+    // Use filtered activities (already has date filter applied), then filter by TSM if provided
+    const filteredForExport = filterTsmId
+      ? filteredActivities.filter((item: Quotation) => {
           const agent = agentMap[item.referenceid?.toLowerCase() ?? ""];
           const derivedTsmId = (agent?.TSM ?? item.tsm ?? "").toLowerCase();
           return derivedTsmId === filterTsmId.toLowerCase();
         })
-      : sortedActivities;
+      : filteredActivities;
 
     const byTsa = new Map<string, { tsaName: string; rows: Quotation[] }>();
-    filteredActivities.forEach((row) => {
+    filteredForExport.forEach((row: Quotation) => {
       const tsaId = (row.referenceid || "unknown").toLowerCase();
       const tsaAgent = agentMap[tsaId];
       const tsaName = tsaAgent?.name || row.referenceid || "Unknown Agent";

@@ -556,6 +556,60 @@ export function QuotationSheet(props: Props) {
     }
   }, [showMarginAlerts, props.setShowMarginAlerts]);
 
+  // Restore selected products from props on mount
+  useEffect(() => {
+    if (!productCat || productCat.trim() === "") return;
+    
+    const splitAndTrim = (value: string | null | undefined, separator: string = ",") => {
+      if (!value) return [];
+      return value.split(separator).map((v) => v.trim());
+    };
+    
+    const ids = splitAndTrim(productCat);
+    const quantities = splitAndTrim(productQuantity);
+    const amounts = splitAndTrim(productAmount);
+    const skus = splitAndTrim(productSku);
+    const titles = splitAndTrim(productTitle);
+    const descriptions = splitAndTrim(productDescription, " || ");
+    const photos = splitAndTrim(productPhoto);
+    const discountedPrices = splitAndTrim(productDiscountedPrice);
+    const discountedAmounts = splitAndTrim(productDiscountedAmount);
+    const isPromoFlags = splitAndTrim(productIsPromo);
+    const isHiddenFlags = splitAndTrim(productIsHidden);
+    const rowDisplayModes = splitAndTrim(productRowDisplayMode);
+    const remarks = splitAndTrim(itemRemarks);
+    
+    const newSelectedProducts: SelectedProduct[] = ids.map((id, index) => {
+      const quantity = parseInt(quantities[index] || "1") || 1;
+      const price = parseFloat(amounts[index] || "0") || 0;
+      const discount = parseFloat(discountedPrices[index] || "0") || 0;
+      const discountAmount = parseFloat(discountedAmounts[index] || "0") || 0;
+      const isPromo = isPromoFlags[index] === "1";
+      const isHidden = isHiddenFlags[index] === "1";
+      const rowDisplayMode = (rowDisplayModes[index] || "full") as 'full' | 'compact';
+      
+      return {
+        id: id || `restored-${index}`,
+        uid: crypto.randomUUID(),
+        title: titles[index] || "Restored Product",
+        quantity,
+        price,
+        discount,
+        discountAmount,
+        isDiscounted: discount > 0 || discountAmount > 0,
+        isPromo,
+        isHidden,
+        rowDisplayMode,
+        skus: skus[index] ? [skus[index]] : [],
+        images: photos[index] ? [{ src: photos[index] }] : [],
+        description: descriptions[index] || "",
+        itemRemarks: remarks[index] || "",
+      };
+    });
+    
+    setSelectedProducts(newSelectedProducts);
+  }, []);
+
   // NEW: Search filter for product table
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [quotationSubjectState, setQuotationSubjectState] = useState<string>(

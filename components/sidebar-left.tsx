@@ -45,6 +45,11 @@ const roleConfig: Record<string, { label: string; className: string }> = {
     className:
       "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-800",
   },
+  "User": {
+    label: "ACCOUNTING",
+    className:
+      "bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-800",
+  },
 };
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -119,7 +124,11 @@ const data = {
         { name: "Daily Activity Logs", url: "/roles/manager/activity/ccg", icon: Compass },
 
         { name: "Quotation List", url: "/roles/csr/activity/quotation/quotation-list", icon: Compass },
-         
+
+        // Accounting
+        { name: "Quotation List", url: "/roles/accounting/activity/quotation/quotation-list", icon: Compass },
+        { name: "SPF Records", url: "/roles/accounting/activity/spf", icon: Mail },
+
         { name: "Pending Approval", url: "/roles/admin/activity/quotation/pending-quotation", icon: CalendarDays },
         { name: "Approved Quotations", url: "/roles/admin/activity/quotation/approval-quotation", icon: CalendarDays },
         { name: "Client Coverage Guide", url: "/roles/admin/activity/ccg", icon: Compass },
@@ -311,9 +320,15 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     }
 
     return data.workspaces
+      .filter((workspace) => {
+        // Hide Customer Database (Leads) for accounting users
+        if (role === "User" && workspace.name === "Customer Database") return false;
+        return true;
+      })
       .map((workspace) => ({
         ...workspace,
         pages: workspace.pages.filter((p) => {
+          if (role === "User") return p.url?.includes("/accounting");
           if (role === "Staff") return p.url?.includes("/csr");
           if (role === "Territory Sales Associate") return p.url?.includes("/tsa");
           if (role === "Territory Sales Manager") return p.url?.includes("/tsm");
@@ -336,11 +351,12 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     }
 
     return data.favorites.filter((fav) => {
-      // Special case: National Call Ranking should be available for all roles except Staff
+      // Special case: National Call Ranking should be available for TSA, TSM, Manager, and Admin only
       if (fav.name === "National Call Ranking") {
-        return role !== "Staff";
+        return role === "Territory Sales Associate" || role === "Territory Sales Manager" || role === "Manager" || role === "SuperAdmin";
       }
-      
+
+      if (role === "User") return fav.url?.includes("/accounting");
       if (role === "Staff") return fav.url?.includes("/csr");
       if (role === "Territory Sales Associate") return fav.url?.includes("/tsa");
       if (role === "Territory Sales Manager") return fav.url?.includes("/tsm");

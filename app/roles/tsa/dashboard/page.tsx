@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo, Suspense } from "reac
 import { useSearchParams } from "next/navigation";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { FormatProvider } from "@/contexts/FormatContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
 import {
@@ -36,6 +37,7 @@ import { SOCard } from "@/components/roles/tsa/dashboard/list/so";
 // Maps
 import { SiteVisitCard } from "@/components/roles/tsa/dashboard/maps/site-visit";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 /* ================= TYPES ================= */
 
@@ -249,6 +251,9 @@ function DashboardContent() {
               </BreadcrumbList>
             </Breadcrumb>
           </div>
+          <div className="flex items-center px-3">
+            <UnifiedNotificationBellLazy />
+          </div>
         </header>
 
         <div className="flex flex-col gap-4 p-4">
@@ -304,13 +309,15 @@ function DashboardContent() {
 export default function Page() {
   return (
     <UserProvider>
-      <FormatProvider>
-        <SidebarProvider>
-          <Suspense fallback={<div>Loading...</div>}>
-            <DashboardContent />
-          </Suspense>
-        </SidebarProvider>
-      </FormatProvider>
+      <NotificationProvider>
+        <FormatProvider>
+          <SidebarProvider>
+            <Suspense fallback={<div>Loading...</div>}>
+              <DashboardContent />
+            </Suspense>
+          </SidebarProvider>
+        </FormatProvider>
+      </NotificationProvider>
     </UserProvider>
   );
 }

@@ -14,14 +14,12 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { sileo } from "sileo";
 import { type DateRange } from "react-day-picker";
 
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
-import { AlertCircleIcon, Bell, FileText, ExternalLink } from "lucide-react";
+import { AlertCircleIcon, ExternalLink } from "lucide-react";
+import { UnifiedNotificationBellLazy } from "@/components/unified-notification-bell-lazy";
 
 import { Scheduled } from "@/components/roles/tsm/activity/quotation/pending/pending-quotation";
 import { EndorsedQuotation } from "@/components/roles/tsm/activity/quotation/endorsed/endorsed-quotation";
@@ -583,85 +581,9 @@ function DashboardContent() {
                             </Breadcrumb>
                         </div>
 
-                        {/* SPF Notification Bell */}
+                        {/* Notification Bell */}
                         <div className="flex items-center px-3">
-                            <Popover open={spfNotificationOpen} onOpenChange={setSpfNotificationOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="relative"
-                                        aria-label="SPF Notifications"
-                                    >
-                                        <Bell className="h-5 w-5" />
-                                        {spfRequests.length > 0 && (
-                                            <Badge
-                                                variant="destructive"
-                                                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-                                            >
-                                                {spfRequests.length > 99 ? "99+" : spfRequests.length}
-                                            </Badge>
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80 p-0" align="end">
-                                    <div className="flex items-center justify-between p-3 border-b">
-                                        <h4 className="font-semibold text-sm">SPF Requests - Approval for TSM</h4>
-                                        <Badge variant="secondary" className="text-xs">
-                                            {spfRequests.length} pending
-                                        </Badge>
-                                    </div>
-                                    <ScrollArea className="h-64">
-                                        {loadingSpf ? (
-                                            <div className="p-4 text-center text-sm text-muted-foreground">
-                                                Loading...
-                                            </div>
-                                        ) : spfRequests.length === 0 ? (
-                                            <div className="p-4 text-center text-sm text-muted-foreground">
-                                                No pending SPF requests
-                                            </div>
-                                        ) : (
-                                            <div className="divide-y">
-                                                {spfRequests.map((request) => (
-                                                    <Link
-                                                        key={request.id}
-                                                        href={`/roles/tsm/activity/spf?highlight=${encodeURIComponent(request.spf_number)}`}
-                                                        onClick={() => setSpfNotificationOpen(false)}
-                                                    >
-                                                        <div className="p-3 hover:bg-muted transition-colors cursor-pointer">
-                                                            <div className="flex items-start gap-2">
-                                                                <FileText className="h-4 w-4 mt-0.5 text-blue-500" />
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-medium truncate">
-                                                                        {request.customer_name || "Unknown Customer"}
-                                                                    </p>
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        SPF: {request.spf_number}
-                                                                    </p>
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        Prepared by: {request.prepared_by || "N/A"}
-                                                                    </p>
-                                                                    <p className="text-xs text-muted-foreground">
-                                                                        {request.date_created ? new Date(request.date_created).toLocaleDateString() : "—"}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </Link>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </ScrollArea>
-                                    <div className="p-2 border-t">
-                                        <Link href="/roles/tsm/activity/spf">
-                                            <Button variant="ghost" className="w-full justify-between text-xs" size="sm">
-                                                View all SPF requests
-                                                <ExternalLink className="h-3 w-3" />
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                            <UnifiedNotificationBellLazy />
                         </div>
                     </header>
 

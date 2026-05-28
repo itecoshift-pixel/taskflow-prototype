@@ -682,11 +682,11 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         setRevisionTargetSpfNumber(null);
     };
 
-    const handleRequestRevision = async (spf_number: string, revision_type: string, revision_remarks: string) => {
+    const handleRequestRevision = async (spf_number: string, revision_type: string, revision_remarks: string, editedData?: any) => {
         const res = await fetch("/api/activity/tsa/spf/request-revision", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ spf_number, revision_type, revision_remarks }),
+            body: JSON.stringify({ spf_number, revision_type, revision_remarks, edited_data: editedData }),
         });
         if (!res.ok) {
             const data = await res.json();

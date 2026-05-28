@@ -208,9 +208,36 @@ export const Scheduled: React.FC<ScheduledProps> = ({
             .catch(() => setError("Failed to load agents."));
     }, [referenceid]);
 
-    // Fetch on mount + real-time subscription
+    // Check for highlighted quotation from notification click
     useEffect(() => {
-        if (!referenceid) return;
+        const highlightedId = localStorage.getItem('highlightQuotationId');
+        if (highlightedId) {
+            console.log("🔔 Local TSM Notification: Checking for highlighted quotation:", highlightedId);
+            // Wait for activities to load then highlight
+            const checkAndHighlight = setInterval(() => {
+                const element = document.querySelector(`[data-quotation-id="${highlightedId}"]`);
+                if (element) {
+                    console.log("🔔 Local TSM Notification: Found and highlighting quotation:", highlightedId);
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    element.classList.add('highlight-quotation');
+                    setTimeout(() => {
+                        element.classList.remove('highlight-quotation');
+                    }, 3000);
+                    localStorage.removeItem('highlightQuotationId');
+                    clearInterval(checkAndHighlight);
+                }
+            }, 500);
+            
+            // Stop checking after 10 seconds
+            setTimeout(() => {
+                clearInterval(checkAndHighlight);
+                localStorage.removeItem('highlightQuotationId');
+            }, 10000);
+        }
+    }, [activities]);
+    // Fetch on mount + real-time subscription
+useEffect(() => {
+    if (!referenceid) return;
 
         fetchActivities(1, false);
 
@@ -362,6 +389,7 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                         return (
                             <div
                                 key={item.id}
+                                data-quotation-id={item.id}
                                 className="border rounded-sm bg-white hover:shadow-md transition-shadow duration-200 relative overflow-hidden"
                             >
                                 {/* Left accent strip by status */}
@@ -501,6 +529,19 @@ export const Scheduled: React.FC<ScheduledProps> = ({
                     vatType={editItem.vat_type}
                 />
             )}
+            
+            {/* CSS for highlighting quotations from notification clicks */}
+            <style>{`
+                @keyframes highlight-pulse {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+                    50% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+                }
+                .highlight-quotation {
+                    animation: highlight-pulse 1.5s ease-in-out 2;
+                    border: 2px solid #2563eb !important;
+                    background-color: #eff6ff !important;
+                }
+            `}</style>
         </>
     );
 };
