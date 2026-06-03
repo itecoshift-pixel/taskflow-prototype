@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import { ReportSummary } from "@/components/roles/manager/dashboard/report-summary";
+import { AIInsightsButton, type AIInsightsMetrics } from "@/components/roles/manager/dashboard/ai-insights-button";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1125,6 +1126,56 @@ function DashboardContent() {
   const selectedAgent = agents.find((a) => a.ReferenceID === selectedRefId);
   const selectedAgentUser = agentUsers.find((a) => a.ReferenceID === selectedAgentRefId);
 
+  // ── AI Insights metrics snapshot ────────────────────────────────────────────────────────────────────────────
+  const _aiFromDate = activeTab === "manager" ? fromDate : activeTab === "tsm" ? tsmFromDate : agentFromDate;
+  const _aiToDate   = activeTab === "manager" ? toDate   : activeTab === "tsm" ? tsmToDate   : agentToDate;
+
+  const aiMetrics = {
+    tab: activeTab,
+    fromDate: _aiFromDate,
+    toDate: _aiToDate,
+    viewingName:
+      activeTab === "tsm" && selectedAgent
+        ? `${selectedAgent.Lastname}, ${selectedAgent.Firstname}`
+        : activeTab === "agent" && selectedAgentUser
+        ? `${selectedAgentUser.Lastname}, ${selectedAgentUser.Firstname}`
+        : `${userDetails.lastname}, ${userDetails.firstname}`,
+    totalAccounts: denominators.total,
+    coveredAccounts: coveredAccounts.length,
+    uncoveredAccounts: uncoveredAccounts.length,
+    seg: {
+      top50: clientSegments.top50,
+      next30: clientSegments.next30,
+      balance20: clientSegments.balance20,
+      csrClient: clientSegments.csrClient,
+      newClient: clientSegments.newClient,
+      tsaClient: clientSegments.tsaClient,
+    },
+    denom: {
+      top50: denominators.top50,
+      next30: denominators.next30,
+      bal20: denominators.bal20,
+      csrClient: denominators.csrClient,
+      newClient: denominators.newClient,
+      tsaClient: denominators.tsaClient,
+    },
+    totalSales,
+    outboundDaily,
+    newClientCount,
+    pendingClientApproval: pendingClientApprovalCount,
+    orderComplete: orderCompleteCount,
+    convertToSO: convertToSOCount,
+    declined: declinedCount,
+    cancelled: cancelledCount,
+    avgResponseTime: formatHoursToHMS(avgResponseTime),
+    avgNonQuotationHT: formatHoursToHMS(avgNonQuotationHT),
+    avgQuotationHT: formatHoursToHMS(avgQuotationHT),
+    avgSpfHT: formatHoursToHMS(avgSpfHT),
+    overdueCount,
+    overdueByCompany,
+    newClientByCompany,
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -1439,6 +1490,10 @@ function DashboardContent() {
                     : <RefreshCcw size={11} />}
                   {isAnySyncing ? "Syncing..." : "Sync Data"}
                 </Button>
+                <AIInsightsButton
+                  metrics={aiMetrics}
+                  disabled={isAnySyncing || (activeTab === "manager" ? !userDetails.referenceid : activeTab === "tsm" ? !selectedRefId : !selectedAgentRefId)}
+                />
               </div>
 
               {/* ── METRICS GRID ────────────────────────────────────────────────── */}
@@ -1754,7 +1809,24 @@ function DashboardContent() {
           {/* Report Summary */}
 
           <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            <ReportSummary />
+            <ReportSummary
+              selectedAgentRefId={
+                activeTab === "agent" ? selectedAgentRefId
+                : activeTab === "tsm" ? selectedRefId
+                : undefined
+              }
+              agentName={
+                activeTab === "agent" && selectedAgentUser
+                  ? `${selectedAgentUser.Lastname}, ${selectedAgentUser.Firstname}`
+                  : activeTab === "tsm" && selectedAgent
+                  ? `${selectedAgent.Lastname}, ${selectedAgent.Firstname}`
+                  : undefined
+              }
+              fromDate={activeTab === "manager" ? fromDate : activeTab === "tsm" ? tsmFromDate : agentFromDate}
+              toDate={activeTab === "manager" ? toDate : activeTab === "tsm" ? tsmToDate : agentToDate}
+              dbTotal={denominators.total}
+              dbActual={coveredAccounts.length}
+            />
           </main>
         </SidebarInset>
       </ProtectedPageWrapper>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, RefreshCcw } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -78,6 +78,32 @@ function isFinitePositive(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v) && v > 0;
 }
 
+// Format a raw numeric string with commas for display
+function fmtAmt(raw: string): string {
+  if (!raw || raw === "0") return raw;
+  const num = Number(raw.replace(/,/g, ""));
+  if (isNaN(num)) return raw;
+  return num % 1 === 0
+    ? num.toLocaleString("en-PH")
+    : num.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Count Mon–Sat working days between two date strings (inclusive)
+function countWorkingDays(from?: string, to?: string): number {
+  if (!from || !to) return 0;
+  const start = new Date(from + "T00:00:00");
+  const end   = new Date(to   + "T00:00:00");
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return 0;
+  let count = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    const day = cur.getDay(); // 0=Sun, 6=Sat
+    if (day !== 0) count++;   // exclude Sunday only
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 function colLabel(index: number): string {
   let label = "";
   let i = index;
@@ -102,15 +128,18 @@ function evalFormula(
   quoteOb: string[],
   soOb: string[],
   siOb: string[],
-  extraCols: SheetData["extraCols"]
+  extraCols: SheetData["extraCols"],
+  workingDays?: number
 ): string {
+  // Use workingDays if provided, otherwise fall back to obMultiplier
+  const effectiveMultiplier = workingDays ?? obMultiplier;
   const getCell = (colIdx: number, rIdx: number): string => {
     if (colIdx === 0) return names[rIdx] ?? "";
     if (colIdx === 1) return names[rIdx]?.trim() ? String(obQuota) : "";
-    if (colIdx === 2) return names[rIdx]?.trim() ? String(obQuota * obMultiplier) : "";
+    if (colIdx === 2) return names[rIdx]?.trim() ? String(obQuota * effectiveMultiplier) : "";
     if (colIdx === 3) return actualOb[rIdx] ?? "";
     if (colIdx === 4) {
-      const target = obQuota * obMultiplier;
+      const target = obQuota * effectiveMultiplier;
       const actual = Number(actualOb[rIdx] ?? "0");
       if (!names[rIdx]?.trim() || target === 0) return "";
       return ((actual / target) * 100).toFixed(2) + "%";
@@ -231,13 +260,28 @@ function loadMultiplier(): number {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ReportSummary() {
+export function ReportSummary({
+  selectedAgentRefId,
+  agentName,
+  fromDate,
+  toDate,
+  dbTotal,
+  dbActual,
+}: {
+  selectedAgentRefId?: string;
+  agentName?: string;
+  fromDate?: string;
+  toDate?: string;
+  dbTotal?: number;   // denominators.total from parent
+  dbActual?: number;  // coveredAccounts.length from parent
+} = {}) {
   const [sheet, setSheet] = useState<SheetData>(initSheet);
   const [obQuota, setObQuota] = useState<number>(FALLBACK_QUOTA);
   const [quotaLoading, setQuotaLoading] = useState(true);
   const [multiplier, setMultiplier] = useState<number>(DEFAULT_MULTIPLIER);
   const [editingMultiplier, setEditingMultiplier] = useState(false);
   const [multiplierInput, setMultiplierInput] = useState("");
+  const [fetchingOb, setFetchingOb] = useState(false);
   const multiplierRef = useRef<HTMLInputElement>(null);
 
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
@@ -275,6 +319,114 @@ export function ReportSummary() {
       .finally(() => setQuotaLoading(false));
   }, []);
 
+  // ── Auto-fetch Actual OB when agent is selected ────────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!selectedAgentRefId) return;
+
+    setFetchingOb(true);
+
+    const url = new URL("/api/activity/manager/report-summary/fetch-ob", window.location.origin);
+    url.searchParams.set("referenceid", selectedAgentRefId);
+    if (fromDate) url.searchParams.set("from", fromDate);
+    if (toDate)   url.searchParams.set("to", toDate);
+
+    fetch(url.toString())
+      .then((r) => r.json())
+      .then((data) => {
+        // API now returns { actualOb, quoteOb, soOb, siOb }
+        const actualObVal      = String(data.actualOb       ?? 0);
+        const quoteObVal       = String(data.quoteOb        ?? 0);
+        const soObVal          = String(data.soOb           ?? 0);
+        const siObVal          = String(data.siOb           ?? 0);
+        const quoteAmtActual   = String(Math.round((data.quoteAmtActual ?? 0) * 100) / 100);
+        const soAmtActual      = String(Math.round((data.soAmtActual    ?? 0) * 100) / 100);
+        const siAmtActual      = String(Math.round((data.siAmtActual    ?? 0) * 100) / 100);
+
+        setSheet((prev) => {
+          // Find the row whose name matches agentName, or use the first empty row
+          let rowIdx = agentName
+            ? prev.names.findIndex((n) => n.trim().toLowerCase() === agentName.trim().toLowerCase())
+            : -1;
+
+          // If not found, use first empty name row; if all filled, append
+          if (rowIdx === -1) {
+            rowIdx = prev.names.findIndex((n) => !n.trim());
+          }
+
+          if (rowIdx === -1) {
+            // All rows filled — append a new row
+            return {
+              ...prev,
+              names:    [...prev.names,    agentName ?? selectedAgentRefId ?? ""],
+              actualOb: [...prev.actualOb, actualObVal],
+              quoteOb:  [...prev.quoteOb,  quoteObVal],
+              soOb:     [...prev.soOb,     soObVal],
+              siOb:     [...prev.siOb,     siObVal],
+              dbCoverage:     [...prev.dbCoverage,     ""],
+              dbDatabase:     [...prev.dbDatabase,     ""],
+              dbActual:       [...prev.dbActual,       ""],
+              quoteAmtTarget: [...prev.quoteAmtTarget, ""],
+              quoteAmtActual: [...prev.quoteAmtActual, quoteAmtActual],
+              soAmtTarget:    [...prev.soAmtTarget,    ""],
+              soAmtActual:    [...prev.soAmtActual,    soAmtActual],
+              siAmtTarget:    [...prev.siAmtTarget,    ""],
+              siAmtActual:    [...prev.siAmtActual,    siAmtActual],
+              svExisting: [...prev.svExisting, "20"],
+              svNew:      [...prev.svNew,      ""],
+              svActual:   [...prev.svActual,   ""],
+              extraCols: prev.extraCols.map((ec) => ({ ...ec, cells: [...ec.cells, ""] })),
+            };
+          }
+
+          // Update existing row
+          const names          = [...prev.names];
+          const actualOb       = [...prev.actualOb];
+          const quoteOb        = [...prev.quoteOb];
+          const soOb           = [...prev.soOb];
+          const siOb           = [...prev.siOb];
+          const quoteAmtActualArr = [...prev.quoteAmtActual];
+          const soAmtActualArr    = [...prev.soAmtActual];
+          const siAmtActualArr    = [...prev.siAmtActual];
+          if (!names[rowIdx]?.trim() && agentName) names[rowIdx] = agentName;
+          actualOb[rowIdx]            = actualObVal;
+          quoteOb[rowIdx]             = quoteObVal;
+          soOb[rowIdx]                = soObVal;
+          siOb[rowIdx]                = siObVal;
+          quoteAmtActualArr[rowIdx]   = quoteAmtActual;
+          soAmtActualArr[rowIdx]      = soAmtActual;
+          siAmtActualArr[rowIdx]      = siAmtActual;
+          return { ...prev, names, actualOb, quoteOb, soOb, siOb,
+            quoteAmtActual: quoteAmtActualArr,
+            soAmtActual: soAmtActualArr,
+            siAmtActual: siAmtActualArr,
+          };
+        });
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => setFetchingOb(false));
+  }, [selectedAgentRefId, agentName, fromDate, toDate]);
+
+  // ── Auto-fill DB Coverage from parent props ────────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (dbTotal === undefined && dbActual === undefined) return;
+    if (!agentName && !selectedAgentRefId) return;
+
+    setSheet((prev) => {
+      // Find the row by agent name or first empty row
+      let rowIdx = agentName
+        ? prev.names.findIndex((n) => n.trim().toLowerCase() === agentName.trim().toLowerCase())
+        : -1;
+      if (rowIdx === -1) rowIdx = prev.names.findIndex((n) => !n.trim());
+      if (rowIdx === -1) return prev; // no row to update yet — OB fetch will create it
+
+      const dbDatabase = [...prev.dbDatabase];
+      const dbActualArr = [...prev.dbActual];
+      if (dbTotal !== undefined)  dbDatabase[rowIdx]  = String(dbTotal);
+      if (dbActual !== undefined) dbActualArr[rowIdx] = String(dbActual);
+      return { ...prev, dbDatabase: dbDatabase, dbActual: dbActualArr };
+    });
+  }, [dbTotal, dbActual, agentName, selectedAgentRefId]);
+
   useEffect(() => {
     if (!contextMenu) return;
     const handler = () => setContextMenu(null);
@@ -291,7 +443,7 @@ export function ReportSummary() {
   // ── Display value for extra cols ─────────────────────────────────────────
   function displayExtra(raw: string, rowIdx: number): string {
     if (raw.startsWith("="))
-      return evalFormula(raw.slice(1), rowIdx, sheet.names, obQuota, multiplier, sheet.actualOb, sheet.quoteOb, sheet.soOb, sheet.siOb, sheet.extraCols);
+      return evalFormula(raw.slice(1), rowIdx, sheet.names, obQuota, multiplier, sheet.actualOb, sheet.quoteOb, sheet.soOb, sheet.siOb, sheet.extraCols, (fromDate && toDate) ? countWorkingDays(fromDate, toDate) : multiplier);
     return raw;
   }
 
@@ -660,7 +812,10 @@ export function ReportSummary() {
 
               {/* Actual OB */}
               <th className="bg-gray-100 border border-gray-200 px-2 py-0 h-6 text-center select-none">
-                <span className="text-[10px] font-semibold text-orange-600 truncate">Actual OB</span>
+                <div className="flex items-center justify-center gap-1">
+                  <span className="text-[10px] font-semibold text-orange-600 truncate">Actual OB</span>
+                  {fetchingOb && <Loader2 size={8} className="animate-spin text-orange-400" />}
+                </div>
               </th>
 
               {/* OB Calls Achievement */}
@@ -795,7 +950,9 @@ export function ReportSummary() {
             {sheet.names.map((name, ri) => {
               const hasName = name.trim() !== "";
               const obDisplay = hasName ? (quotaLoading ? "…" : String(obQuota)) : "";
-              const target = obQuota * multiplier;
+              // Use working days in range (Mon–Sat) × daily quota; fall back to multiplier if no range
+              const workingDaysInRange = (fromDate && toDate) ? countWorkingDays(fromDate, toDate) : multiplier;
+              const target = obQuota * workingDaysInRange;
               const targetDisplay = hasName ? (quotaLoading ? "…" : String(target)) : "";
               const actualObVal = sheet.actualOb[ri] ?? "";
 
@@ -1077,7 +1234,7 @@ export function ReportSummary() {
                     {editingCell?.row === ri && editingCell?.col === -9 ? (
                       <input autoFocus className="w-full h-full outline-none bg-transparent text-[11px] text-gray-800 tabular-nums text-center" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={handleKeyDown} />
                     ) : (
-                      <span className={`block truncate tabular-nums text-center font-semibold ${quoteAmtTargetVal ? "text-lime-700" : "text-gray-300"}`}>{quoteAmtTargetVal}</span>
+                      <span className={`block truncate tabular-nums text-center font-semibold ${quoteAmtTargetVal ? "text-lime-700" : "text-gray-300"}`}>{fmtAmt(quoteAmtTargetVal)}</span>
                     )}
                   </td>
 
@@ -1089,7 +1246,7 @@ export function ReportSummary() {
                     {editingCell?.row === ri && editingCell?.col === -10 ? (
                       <input autoFocus className="w-full h-full outline-none bg-transparent text-[11px] text-gray-800 tabular-nums text-center" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={handleKeyDown} />
                     ) : (
-                      <span className={`block truncate tabular-nums text-center font-semibold ${quoteAmtActualVal ? "text-lime-700" : "text-gray-300"}`}>{quoteAmtActualVal}</span>
+                      <span className={`block truncate tabular-nums text-center font-semibold ${quoteAmtActualVal ? "text-lime-700" : "text-gray-300"}`}>{fmtAmt(quoteAmtActualVal)}</span>
                     )}
                   </td>
 
@@ -1106,7 +1263,7 @@ export function ReportSummary() {
                     {editingCell?.row === ri && editingCell?.col === -11 ? (
                       <input autoFocus className="w-full h-full outline-none bg-transparent text-[11px] text-gray-800 tabular-nums text-center" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={handleKeyDown} />
                     ) : (
-                      <span className={`block truncate tabular-nums text-center font-semibold ${soAmtTargetVal ? "text-purple-700" : "text-gray-300"}`}>{soAmtTargetVal}</span>
+                      <span className={`block truncate tabular-nums text-center font-semibold ${soAmtTargetVal ? "text-purple-700" : "text-gray-300"}`}>{fmtAmt(soAmtTargetVal)}</span>
                     )}
                   </td>
 
@@ -1118,7 +1275,7 @@ export function ReportSummary() {
                     {editingCell?.row === ri && editingCell?.col === -12 ? (
                       <input autoFocus className="w-full h-full outline-none bg-transparent text-[11px] text-gray-800 tabular-nums text-center" value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={commitEdit} onKeyDown={handleKeyDown} />
                     ) : (
-                      <span className={`block truncate tabular-nums text-center font-semibold ${soAmtActualVal ? "text-purple-700" : "text-gray-300"}`}>{soAmtActualVal}</span>
+                      <span className={`block truncate tabular-nums text-center font-semibold ${soAmtActualVal ? "text-purple-700" : "text-gray-300"}`}>{fmtAmt(soAmtActualVal)}</span>
                     )}
                   </td>
 

@@ -401,6 +401,17 @@ function DetailField({ label, value }: { label: string; value: string | null | u
   );
 }
 
+interface TaskLogEntry {
+  _id?: string;
+  ReferenceID?: string | null;
+  Type?: string | null;
+  Location?: string | null;
+  SiteVisitAccount?: string | null;
+  date_created?: string | null;
+  PhotoURL?: string | null;
+  Status?: string | null;
+}
+
 function HistoryDialog({ open, onClose, companyName, loading, records, account, onBackToSearch }: {
   open: boolean; onClose: () => void; companyName: string | null;
   loading: boolean; records: Activity[]; account?: Account | null;
@@ -408,8 +419,21 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account, 
 }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | number | null>(null);
+  const [taskLogs, setTaskLogs] = useState<TaskLogEntry[]>([]);
+  const [loadingTaskLogs, setLoadingTaskLogs] = useState(false);
 
-  useEffect(() => { if (!open) { setSearch(""); setExpanded(null); } }, [open]);
+  useEffect(() => { if (!open) { setSearch(""); setExpanded(null); setTaskLogs([]); } }, [open]);
+
+  // Fetch TaskLog records for this account from MongoDB
+  useEffect(() => {
+    if (!open || !account?.account_reference_number) return;
+    setLoadingTaskLogs(true);
+    fetch(`/api/tasklog/by-account?account_reference_number=${encodeURIComponent(account.account_reference_number)}`)
+      .then((r) => r.json())
+      .then((d) => setTaskLogs(d.taskLogs ?? []))
+      .catch(() => setTaskLogs([]))
+      .finally(() => setLoadingTaskLogs(false));
+  }, [open, account?.account_reference_number]);
 
   const totalActualSales = useMemo(() => records.reduce((sum, r) => sum + (r.actual_sales ?? 0), 0), [records]);
 
@@ -579,7 +603,37 @@ function HistoryDialog({ open, onClose, companyName, loading, records, account, 
               )}
             </div>
 
-            {/* Activity breakdown */}
+            {/* Client Visits from MongoDB */}
+      <div className="px-6 py-4 border-b border-white/5 space-y-2">
+        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2">Client Visits</p>
+        {loadingTaskLogs ? (
+          <div className="flex items-center gap-2 text-[10px] text-slate-500">
+            <div className="w-3 h-3 rounded-full border border-white/20 border-t-slate-400 animate-spin" />
+            <span className="font-mono">Loading...</span>
+          </div>
+        ) : taskLogs.length === 0 ? (
+          <p className="text-[10px] text-slate-600 font-mono">No visit records</p>
+        ) : (
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {taskLogs.map((log, i) => (
+              <div key={log._id ?? i} className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2 space-y-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-sky-300 font-mono">{log.Type ?? "Visit"}</span>
+                  <span className="text-[9px] text-slate-500 font-mono">{fmtDate(log.date_created ?? undefined)}</span>
+                </div>
+                {log.Location && (
+                  <p className="text-[10px] text-slate-400 font-mono truncate">📍 {log.Location}</p>
+                )}
+                {log.Status && (
+                  <p className="text-[9px] text-slate-500 font-mono">{log.Status}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Activity breakdown */}
             {!loading && records.length > 0 && (
               <div className="px-6 py-4 space-y-2">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2">Activity Breakdown</p>
