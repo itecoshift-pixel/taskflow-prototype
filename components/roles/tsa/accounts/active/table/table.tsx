@@ -171,19 +171,16 @@ async function sendAuditLog(
 }
 
 // ─── Visible rows snapshot helper ────────────────────────────────────────────
-// Returns company names of table rows currently visible in the viewport.
 function getVisibleCompanyNames(tableEl: HTMLDivElement): string[] {
   const viewportTop    = window.scrollY;
   const viewportBottom = viewportTop + window.innerHeight;
   const names: string[] = [];
 
-  // Each data row has a <tr> — grab the first <p> inside (company name cell)
   const rows = tableEl.querySelectorAll("tbody tr");
   rows.forEach((row) => {
     const rect = row.getBoundingClientRect();
     const absTop    = rect.top + window.scrollY;
     const absBottom = rect.bottom + window.scrollY;
-    // Row is at least partially visible
     if (absBottom > viewportTop && absTop < viewportBottom) {
       const nameEl = row.querySelector("td p.font-semibold");
       if (nameEl?.textContent) names.push(nameEl.textContent.trim());
@@ -195,7 +192,8 @@ function getVisibleCompanyNames(tableEl: HTMLDivElement): string[] {
 // ─── useAuditLogger hook ──────────────────────────────────────────────────────
 function useAuditLogger(
   referenceid: string,
-  tableRef: React.RefObject<HTMLDivElement | null>
+  tableRef: React.RefObject<HTMLDivElement | null>,
+  suppressBlurRef: React.RefObject<boolean>
 ) {
   const lastScrollLog = useRef<number>(0);
   const lastBlurAt    = useRef<number>(0);
@@ -209,7 +207,6 @@ function useAuditLogger(
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        // Snapshot visible rows when tab is hidden
         const visible = tableRef.current
           ? getVisibleCompanyNames(tableRef.current)
           : [];
@@ -223,11 +220,13 @@ function useAuditLogger(
     };
 
     const handleBlur = () => {
+      // ── REVISED: suppress blur for the entire duration any dialog is open ──
+      if (suppressBlurRef.current) return;
+
       const now = Date.now();
       if (now - lastBlurAt.current < 1000) return;
       lastBlurAt.current = now;
 
-      // Snapshot which companies were visible at the moment of blur
       const visible = tableRef.current
         ? getVisibleCompanyNames(tableRef.current)
         : [];
@@ -258,7 +257,7 @@ function useAuditLogger(
     };
   }, [referenceid, tableRef]);
 
-  // Scroll — throttled to once per 5s, also snapshots visible rows
+  // Scroll — throttled to once per 5s
   useEffect(() => {
     const el = tableRef.current;
     if (!el || !referenceid) return;
@@ -288,11 +287,31 @@ export function AccountsTable({
 }: AccountsTableProps) {
   const router = useRouter();
   const tableRef = useRef<HTMLDivElement>(null);
+
+  // ── REVISED: Use a counter ref instead of a boolean + timeout ────────────
+  // suppressBlurRef is true whenever openDialogCount > 0
+  const suppressBlurRef  = useRef<boolean>(false);
+  const openDialogCount  = useRef<number>(0);
+
+  // Call when opening ANY dialog
+  const onDialogOpen = useCallback(() => {
+    openDialogCount.current += 1;
+    suppressBlurRef.current = true;
+  }, []);
+
+  // Call when closing ANY dialog (onOpenChange receives false)
+  const onDialogClose = useCallback(() => {
+    openDialogCount.current = Math.max(0, openDialogCount.current - 1);
+    if (openDialogCount.current === 0) {
+      suppressBlurRef.current = false;
+    }
+  }, []);
+
   const [localPosts, setLocalPosts] = useState<Account[]>(posts);
   useEffect(() => setLocalPosts(posts), [posts]);
 
   // ── Audit logging ─────────────────────────────────────────────────────────
-  useAuditLogger(userDetails.referenceid, tableRef);
+  useAuditLogger(userDetails.referenceid, tableRef, suppressBlurRef);
 
   // ── Copy & screenshot protection ─────────────────────────────────────────
   useEffect(() => {
@@ -302,7 +321,6 @@ export function AccountsTable({
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      // Log the attempt
       sendAuditLog(userDetails.referenceid, "copy_attempted", {
         note: "Ctrl+C or copy blocked",
       });
@@ -676,6 +694,8 @@ export function AccountsTable({
             className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 border border-zinc-200 transition-all group/edit"
             style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
             onClick={() => {
+              // ── REVISED: open dialog using onDialogOpen ──
+              onDialogOpen();
               setEditingAccount(row.original);
               setIsEditDialogOpen(true);
             }}
@@ -893,7 +913,7 @@ export function AccountsTable({
         },
       },
     ],
-    [activityCounts]
+    [activityCounts, onDialogOpen]
   );
 
   // ── Search debounce ───────────────────────────────────────────────────────
@@ -970,7 +990,7 @@ export function AccountsTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localPosts]);
 
-  // ── Fetch historical data ─────────────────────────────────────────────────
+  // ── Fetch historical data (shared logic) ──────────────────────────────────
   const fetchHistoricalData = async (accountIds: string[]) => {
     if (!accountIds.length) {
       setLoadingHistoricalData(false);
@@ -1243,9 +1263,10 @@ export function AccountsTable({
           }}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* ── REVISED: onDialogOpen() instead of suppressNextBlur() ── */}
             <Button
               className="cursor-pointer h-8 text-xs font-semibold shrink-0 shadow-sm"
-              onClick={() => setIsCreateDialogOpen(true)}
+              onClick={() => { onDialogOpen(); setIsCreateDialogOpen(true); }}
               style={{
                 backgroundColor: tableStyles.toolbar_btn_bg,
                 color: tableStyles.toolbar_btn_text,
@@ -1301,6 +1322,7 @@ export function AccountsTable({
                 <span className="text-[11px] text-slate-500 font-medium">
                   {selectedAccountIds.length} selected
                 </span>
+                {/* ── REVISED: onDialogOpen() for Transfer ── */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -1308,10 +1330,11 @@ export function AccountsTable({
                   style={{
                     borderRadius: `${tableStyles.table_border_radius}px`,
                   }}
-                  onClick={() => setIsTransferDialogOpen(true)}
+                  onClick={() => { onDialogOpen(); setIsTransferDialogOpen(true); }}
                 >
                   <Repeat className="h-3.5 w-3.5 mr-1" /> Transfer
                 </Button>
+                {/* ── REVISED: onDialogOpen() for Archive ── */}
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1320,6 +1343,7 @@ export function AccountsTable({
                     borderRadius: `${tableStyles.table_border_radius}px`,
                   }}
                   onClick={async () => {
+                    onDialogOpen();
                     const ids = [...selectedAccountIds];
                     const accountsToArchive = localPosts.filter((acc) =>
                       ids.includes(acc.id)
@@ -1558,7 +1582,8 @@ export function AccountsTable({
         )}
       </div>
 
-      {/* ── Create dialog ─────────────────────────────────────────────── */}
+      {/* ── Create dialog ─────────────────────────────────────────────────── */}
+      {/* ── REVISED: onDialogClose when dialog closes ── */}
       <AccountDialog
         mode="create"
         userDetails={userDetails}
@@ -1567,7 +1592,10 @@ export function AccountsTable({
           setIsCreateDialogOpen(false);
         }}
         open={isCreateDialogOpen}
-        onOpenChangeAction={setIsCreateDialogOpen}
+        onOpenChangeAction={(open) => {
+          if (!open) onDialogClose();
+          setIsCreateDialogOpen(open);
+        }}
       />
 
       {/* ── Edit dialog ───────────────────────────────────────────────────── */}
@@ -1615,8 +1643,10 @@ export function AccountsTable({
             setIsEditDialogOpen(false);
           }}
           open={isEditDialogOpen}
+          // ── REVISED: onDialogClose when edit dialog closes ──
           onOpenChangeAction={(open) => {
             if (!open) {
+              onDialogClose();
               setEditingAccount(null);
               setIsEditDialogOpen(false);
             }
@@ -1624,9 +1654,13 @@ export function AccountsTable({
         />
       )}
 
+      {/* ── REVISED: onDialogClose when remove dialog closes ── */}
       <AccountsActiveDeleteDialog
         open={isRemoveDialogOpen}
-        onOpenChange={setIsRemoveDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) onDialogClose();
+          setIsRemoveDialogOpen(open);
+        }}
         removeRemarks={removeRemarks}
         setRemoveRemarks={setRemoveRemarks}
         onConfirmRemove={handleBulkRemove}
@@ -1635,9 +1669,13 @@ export function AccountsTable({
         loadingHistoricalData={loadingHistoricalData}
       />
 
+      {/* ── REVISED: onDialogClose when transfer dialog closes ── */}
       <TransferDialog
         open={isTransferDialogOpen}
-        onOpenChange={setIsTransferDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) onDialogClose();
+          setIsTransferDialogOpen(open);
+        }}
         agents={agents}
         selectedAccountIds={selectedAccountIds}
         onConfirmTransfer={handleBulkTransfer}
