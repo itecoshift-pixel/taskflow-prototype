@@ -76,8 +76,8 @@ export function TimemotionCard({ activities, loading, error }: Props) {
     <Card className="bg-white z-10 text-black flex flex-col justify-between"
       style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
       <CardHeader>
-        <CardTitle>Total Work Time</CardTitle>
-        <CardDescription>Working Hours</CardDescription>
+        <CardTitle>Total Time Spent</CardTitle>
+        <CardDescription>Time Spent</CardDescription>
       </CardHeader>
 
       <CardContent className="flex flex-col justify-center items-center p-6 space-y-3">

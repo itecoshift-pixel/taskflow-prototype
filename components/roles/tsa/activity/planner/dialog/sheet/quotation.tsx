@@ -4974,23 +4974,12 @@ Procurement
                                               </span>
                                             )}
                                           </div>
-                                          <div
-                                            contentEditable
-                                            suppressContentEditableWarning
-                                            className="outline-none text-[10px] sm:text-xs wrap-break-word"
-                                            onBlur={(e) => {
-                                              const html = e.currentTarget.innerHTML; // keep HTML
-                                              setSelectedProducts((prev) => {
-                                                const copy = [...prev];
-                                                copy[idx] = { ...copy[idx], description: html };
-                                                return copy;
-                                              });
-                                            }}
-                                          >
+                                          <div>
                                             {p.title}
                                           </div>
+                                          
                                           {/* Regular Price Display */}
-                                          {p.regPrice && p.regPrice > 0 && (
+                                          {typeof p.regPrice === "number" && p.regPrice > 0 && (
                                             <div className="text-[9px] text-yellow-700 font-bold mt-0.5">
                                               Reg Price: ₱{p.regPrice.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                                             </div>
@@ -5963,7 +5952,7 @@ Procurement
                               </div>
                               <p className="text-[9px] text-blue-600 font-bold mb-1 tracking-tighter">{item.sku}</p>
                               {/* Regular Price in Preview */}
-                              {item.regPrice && item.regPrice > 0 && (
+                              {typeof item.regPrice === "number" && item.regPrice > 0 && (
                                 <div className="mb-2 flex items-center gap-1.5">
                                   <span className="text-[8px] font-black uppercase tracking-widest text-gray-500">Reg Price:</span>
                                   <span className="text-[9px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded">

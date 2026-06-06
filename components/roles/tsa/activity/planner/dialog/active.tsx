@@ -46,6 +46,7 @@ const INDUSTRY_OPTIONS = [
   "End user",
   "Trading / Individual-Reseller / Dealer / Influencer",
   "Distributor",
+  "Transportation"
 ] as const;
 
 const TYPECLIENT_OPTIONS = [
@@ -82,7 +83,7 @@ function cleanCompanyName(name: string): string {
   if (!name) return "";
   return name
     .toUpperCase()
-    .replace(/[-_.@!$%]/g, "")
+    .replace(/[^A-Z0-9 ]/g, "")
     .replace(/\s+/g, " ")
     .replace(/\d+$/, "")
     .trim();
@@ -93,7 +94,7 @@ function sanitizeCompanyNameTyping(name: string): string {
   if (!name) return "";
   return name
     .toUpperCase()
-    .replace(/[-_.@!$%]/g, "");
+    .replace(/[^A-Z0-9 ]/g, ""); // allow only letters, digits, spaces
 }
 
 function isValidEmail(email: string): boolean {
@@ -214,7 +215,7 @@ const DEFAULT_FORM: AccountFormData = {
   status: "For Approval",
   delivery_address: "",
   type_client: "New Client",
-  industry: "Technology / Manufacturing / Telco / Data Center / Agriculture",
+  industry: "",
   company_group: "",
   tin_number: "",
   reason: "",
@@ -698,7 +699,7 @@ export function AccountDialog({
                       value={val}
                       onChange={(e) => {
                         const copy = [...formData.contact_person];
-                        copy[i] = e.target.value.toUpperCase().replace(/[-_.@!$%]/g, "");
+                        copy[i] = e.target.value.toUpperCase().replace(/[^A-Z0-9 ]/g, "");
                         updateField("contact_person", copy);
                       }}
                       onBlur={() => {

@@ -5,8 +5,8 @@ import {
   Bot, LayoutDashboard, Mail, CalendarDays, Settings, BarChart2, Phone, Home,
   BookOpen, Trash2, Users, Briefcase, Target, FileText, Compass, ShoppingCart,
   XCircle, File, Leaf, ShoppingBag, TrendingUp, PhoneCall, GitGraph, CreditCard,
-  Rocket, ClipboardList, ClipboardPenLine, ShieldIcon, Edit, List,
-  Building,
+  Rocket, ClipboardList, ClipboardPenLine, ShieldIcon, Edit, List, PhoneIcon,
+  Building, HeadphonesIcon,
 } from "lucide-react";
 import { NavFavorites } from "@/components/nav/favorites";
 import { NavSecondary } from "@/components/nav/secondary";
@@ -60,6 +60,7 @@ const data = {
     { title: "Security", url: "/general/security", icon: ShieldIcon },
     { title: "Calendar", url: "/general/calendar", icon: CalendarDays },
     { title: "Settings", url: "/general/settings", icon: Settings },
+    { title: "Support", url: "/general/support", icon: HeadphonesIcon },
   ],
   favorites: [
     { name: "Dashboard", url: "/roles/tsa/dashboard", icon: LayoutDashboard },
