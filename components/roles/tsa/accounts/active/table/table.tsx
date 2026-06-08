@@ -131,8 +131,8 @@ export function AccountsTable({
   const [localPosts, setLocalPosts] = useState<Account[]>(posts);
   useEffect(() => setLocalPosts(posts), [posts]);
 
-  // ── Table styles from API ─────────────────────────────────────────────────
-  const [tableStyles, setTableStyles] = useState({
+  // ── Table styles ──────────────────────────────────────────────────────────
+  const tableStyles = {
     th_bg: "#f9fafb",
     layout: "datatable",
     td_text: "#111827",
@@ -172,16 +172,7 @@ export function AccountsTable({
     pagination_active_bg: "#3b82f6",
     toolbar_input_border: "#d1d5db",
     pagination_active_text: "#ffffff",
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.table_styles) setTableStyles(data.table_styles);
-      })
-      .catch(() => {});
-  }, []);
+  };
 
   // ─── Stat Card ────────────────────────────────────────────────────────────
   function StatCard({

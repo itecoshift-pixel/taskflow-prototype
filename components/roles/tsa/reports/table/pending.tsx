@@ -66,7 +66,7 @@ export const PendingTable: React.FC<{
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
 
-  const [tableStyles, setTableStyles] = useState({
+  const tableStyles = {
     th_bg: "#f9fafb",
     layout: "datatable",
     td_text: "#111827",
@@ -105,15 +105,7 @@ export const PendingTable: React.FC<{
     pagination_active_bg: "#3b82f6",
     toolbar_input_border: "#d1d5db",
     pagination_active_text: "#ffffff"
-
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-      .catch(() => { });
-  }, []);
+  };
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchActivities = useCallback(() => {
