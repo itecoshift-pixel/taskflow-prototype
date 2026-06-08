@@ -57,6 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const allowedEmails = [
     "l.roluna@disruptivesolutionsinc.com",
     "tsa.taskflowtest@ecoshiftcorp.com",
+    "b.rodriguez@ecoshiftcorp.com",
   ];
 
   //const manilaNow = new Date(
