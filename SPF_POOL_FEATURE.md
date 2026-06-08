@@ -56,6 +56,19 @@ This broadcast endpoint is called automatically after:
 #### Why This Is Needed
 Previously, only the SPF being approved/revised received the correct queue number at that moment. With this sync, when a new SPF enters the pool (or a revision resets `for_pool_date`), all other SPFs in the pool will also receive an updated queue number in their collaboration hub in near real-time.
 
+### 4. Product Development Pool Completion (Finish Pool + PD Status Message)
+**Repository:** `disruptive-product-database`
+
+#### Bridge Between spf_creation and spf_request via spf_number
+Since Product Development screens commonly follow `spf_creation`, the pool completion action uses `spf_number` as the shared identifier to update the queue source table `spf_request`.
+
+#### Finish Pool Behavior
+When Product Development clicks the **For Pooling** button:
+- `spf_request.is_pool_finished` is set to `true` using `spf_number` as the key (removes the SPF from the active pool queue)
+- A system message is sent to the specific SPF collaboration hub only:
+  - `PROJECT STATUS: SPF SEND BY PD`
+- After removal, queue positions are recomputed and updated system messages are broadcast to all remaining active SPFs in the pool (same queue message format used by approval/revision)
+
 ## How It Works
 
 ### Approval Flow
@@ -99,6 +112,13 @@ Previously, only the SPF being approved/revised received the correct queue numbe
 7. **Queue sync broadcast** triggers automatically:
    - Calls `/api/activity/spf/update-queue` to rebroadcast updated queue numbers to all active SPFs in the pool
 8. **Messages appear** in collaboration hub across all three repositories
+
+### Pool Completion Flow (PD)
+1. **Product Development clicks "For Pooling"** button
+2. **PD API updates** `spf_request.is_pool_finished = TRUE` by `spf_number` (removes SPF from active pool)
+3. **PD system message sent** to the SPF’s collaboration hub only:
+   - `PROJECT STATUS: SPF SEND BY PD`
+4. **Queue recalculated and rebroadcast** to all remaining active SPFs in the pool so everyone’s queue number stays accurate in real-time
 
 ### Timezone Conversion
 The `for_pool_date` is converted from ISO format to Asia/Shanghai timezone:

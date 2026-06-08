@@ -85,9 +85,20 @@ function getManilaHour(): number {
   return parseInt(manilaTime, 10);
 }
 
-function isLoginLocked(): boolean {
+const allowedEmails = [
+  "l.roluna@disruptivesolutionsinc.com",
+  "tsa.taskflowtest@ecoshiftcorp.com",
+  "b.rodriguez@ecoshiftcorp.com",
+];
+
+function isLoginLocked(email?: string): boolean {
+  // Check if user is whitelisted - they can login anytime
+  if (email && allowedEmails.includes(email.toLowerCase())) {
+    return false;
+  }
+  
   const hour = getManilaHour();
-  // Locked from 18:00 (6PM) to 23:59 and 00:00 to 05:59
+  // Locked from 18:00 (6 PM) to 05:59 (6 AM)
   return hour >= 18 || hour < 6;
 }
 
@@ -162,19 +173,21 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [ticketDone,       setTicketDone]       = useState(false);
   const [ticket, setTicket] = useState<Ticket[]>([]);
 
-  // ── Time-based lockout (6PM–6AM Manila time) ───────────────────────────────
+  // ── Time-based lockout (12AM–6AM Manila time) ───────────────────────────────
   const [locked, setLocked] = useState(() => isLoginLocked());
   const [manilaTime, setManilaTime] = useState(() => getManilaTimeString());
 
+  // Update locked state when email changes or time changes
   useEffect(() => {
-    const tick = () => {
-      setLocked(isLoginLocked());
+    const update = () => {
+      setLocked(isLoginLocked(Email));
       setManilaTime(getManilaTimeString());
     };
-    // Update every 30 seconds
-    const id = setInterval(tick, 30_000);
+    
+    update(); // Initial update
+    const id = setInterval(update, 30_000); // Update every 30 seconds
     return () => clearInterval(id);
-  }, []);
+  }, [Email]);
 
   // ── Login form styles from API ─────────────────────────────────────────────
   const [formStyles, setFormStyles] = useState<LoginFormStyles>(DEFAULT_STYLES);
