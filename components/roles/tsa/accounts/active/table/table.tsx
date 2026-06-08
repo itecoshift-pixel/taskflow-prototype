@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   useReactTable,
@@ -118,167 +118,6 @@ const STATUS_STYLES: Record<string, string> = {
   inactive: "bg-red-100 text-red-800 border-red-200",
 };
 
-// ─── Audit log helper ─────────────────────────────────────────────────────────
-type AuditEventType =
-  | "table_viewed"
-  | "tab_hidden"
-  | "tab_visible"
-  | "window_blurred"
-  | "window_focused"
-  | "table_scrolled"
-  | "copy_attempted";
-
-// Session dedup — prevents firing the same one-shot events on re-renders
-const _sessionLogged = new Set<string>();
-
-async function sendAuditLog(
-  referenceid: string,
-  event_type: AuditEventType,
-  metadata: Record<string, unknown> = {},
-  opts: { once?: boolean } = {}
-) {
-  if (opts.once) {
-    const key = `${referenceid}:${event_type}`;
-    if (_sessionLogged.has(key)) return;
-    _sessionLogged.add(key);
-  }
-  try {
-    const res = await fetch("/api/screenshot-log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      keepalive: true,
-      body: JSON.stringify({
-        referenceid,
-        event_type,
-        page: "accounts-table",
-        metadata: {
-          ...metadata,
-          user_agent: navigator.userAgent,
-          timestamp: new Date().toISOString(),
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`[audit-log] HTTP ${res.status} — ${event_type}:`, text);
-    } else {
-      console.log(`[audit-log] ✓ saved — ${event_type}`);
-    }
-  } catch (err) {
-    console.error(`[audit-log] fetch failed — ${event_type}:`, err);
-  }
-}
-
-// ─── Visible rows snapshot helper ────────────────────────────────────────────
-// Returns company names of table rows currently visible in the viewport.
-function getVisibleCompanyNames(tableEl: HTMLDivElement): string[] {
-  const viewportTop    = window.scrollY;
-  const viewportBottom = viewportTop + window.innerHeight;
-  const names: string[] = [];
-
-  // Each data row has a <tr> — grab the first <p> inside (company name cell)
-  const rows = tableEl.querySelectorAll("tbody tr");
-  rows.forEach((row) => {
-    const rect = row.getBoundingClientRect();
-    const absTop    = rect.top + window.scrollY;
-    const absBottom = rect.bottom + window.scrollY;
-    // Row is at least partially visible
-    if (absBottom > viewportTop && absTop < viewportBottom) {
-      const nameEl = row.querySelector("td p.font-semibold");
-      if (nameEl?.textContent) names.push(nameEl.textContent.trim());
-    }
-  });
-  return names;
-}
-
-// ─── useAuditLogger hook ──────────────────────────────────────────────────────
-function useAuditLogger(
-  referenceid: string,
-  tableRef: React.RefObject<HTMLDivElement | null>
-) {
-  const lastScrollLog = useRef<number>(0);
-  const lastBlurAt    = useRef<number>(0);
-  const lastFocusAt   = useRef<number>(0);
-
-  useEffect(() => {
-    if (!referenceid) return;
-
-    // Fire once per session
-    sendAuditLog(referenceid, "table_viewed");
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        // Snapshot visible rows when tab is hidden
-        const visible = tableRef.current
-          ? getVisibleCompanyNames(tableRef.current)
-          : [];
-        sendAuditLog(referenceid, "tab_hidden", {
-          visible_companies: visible,
-          scroll_y: window.scrollY,
-        });
-      } else {
-        sendAuditLog(referenceid, "tab_visible");
-      }
-    };
-
-    const handleBlur = () => {
-      const now = Date.now();
-      if (now - lastBlurAt.current < 1000) return;
-      lastBlurAt.current = now;
-
-      // Snapshot which companies were visible at the moment of blur
-      const visible = tableRef.current
-        ? getVisibleCompanyNames(tableRef.current)
-        : [];
-
-      sendAuditLog(referenceid, "window_blurred", {
-        note: "Window lost focus — possible screenshot tool or Alt+Tab",
-        visible_companies: visible,
-        scroll_y: window.scrollY,
-        viewport_height: window.innerHeight,
-      });
-    };
-
-    const handleFocus = () => {
-      const now = Date.now();
-      if (now - lastFocusAt.current < 1000) return;
-      lastFocusAt.current = now;
-      sendAuditLog(referenceid, "window_focused");
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [referenceid, tableRef]);
-
-  // Scroll — throttled to once per 5s, also snapshots visible rows
-  useEffect(() => {
-    const el = tableRef.current;
-    if (!el || !referenceid) return;
-
-    const handleScroll = () => {
-      const now = Date.now();
-      if (now - lastScrollLog.current < 5000) return;
-      lastScrollLog.current = now;
-      const visible = getVisibleCompanyNames(el);
-      sendAuditLog(referenceid, "table_scrolled", {
-        scroll_y: window.scrollY,
-        visible_companies: visible,
-      });
-    };
-
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [referenceid, tableRef]);
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function AccountsTable({
   posts = [],
@@ -288,70 +127,12 @@ export function AccountsTable({
 }: AccountsTableProps) {
   const router = useRouter();
   const tableRef = useRef<HTMLDivElement>(null);
+
   const [localPosts, setLocalPosts] = useState<Account[]>(posts);
   useEffect(() => setLocalPosts(posts), [posts]);
 
-  // ── Audit logging ─────────────────────────────────────────────────────────
-  useAuditLogger(userDetails.referenceid, tableRef);
-
-  // ── Copy & screenshot protection ─────────────────────────────────────────
-  useEffect(() => {
-    const el = tableRef.current;
-    if (!el) return;
-
-    const handleCopy = (e: ClipboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // Log the attempt
-      sendAuditLog(userDetails.referenceid, "copy_attempted", {
-        note: "Ctrl+C or copy blocked",
-      });
-    };
-
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (ctrl && (e.key === "c" || e.key === "C")) {
-        e.preventDefault();
-        e.stopPropagation();
-        sendAuditLog(userDetails.referenceid, "copy_attempted", {
-          note: "Ctrl+C blocked",
-        });
-      }
-      if (ctrl && (e.key === "a" || e.key === "A")) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      if (ctrl && (e.key === "x" || e.key === "X")) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      if (e.key === "PrintScreen") {
-        e.preventDefault();
-        navigator.clipboard?.writeText("").catch(() => {});
-        sendAuditLog(userDetails.referenceid, "window_blurred", {
-          note: "PrintScreen key pressed",
-        });
-      }
-    };
-
-    el.addEventListener("copy", handleCopy);
-    el.addEventListener("contextmenu", handleContextMenu);
-    el.addEventListener("keydown", handleKeyDown, true);
-
-    return () => {
-      el.removeEventListener("copy", handleCopy);
-      el.removeEventListener("contextmenu", handleContextMenu);
-      el.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [userDetails.referenceid]);
-
-  // ── Table styles from API ─────────────────────────────────────────────────
-  const [tableStyles, setTableStyles] = useState({
+  // ── Table styles ──────────────────────────────────────────────────────────
+  const tableStyles = {
     th_bg: "#f9fafb",
     layout: "datatable",
     td_text: "#111827",
@@ -391,16 +172,7 @@ export function AccountsTable({
     pagination_active_bg: "#3b82f6",
     toolbar_input_border: "#d1d5db",
     pagination_active_text: "#ffffff",
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.table_styles) setTableStyles(data.table_styles);
-      })
-      .catch(() => {});
-  }, []);
+  };
 
   // ─── Stat Card ────────────────────────────────────────────────────────────
   function StatCard({
@@ -970,7 +742,7 @@ export function AccountsTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localPosts]);
 
-  // ── Fetch historical data ─────────────────────────────────────────────────
+  // ── Fetch historical data (shared logic) ──────────────────────────────────
   const fetchHistoricalData = async (accountIds: string[]) => {
     if (!accountIds.length) {
       setLoadingHistoricalData(false);
@@ -1245,7 +1017,7 @@ export function AccountsTable({
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Button
               className="cursor-pointer h-8 text-xs font-semibold shrink-0 shadow-sm"
-              onClick={() => setIsCreateDialogOpen(true)}
+              onClick={() => { setIsCreateDialogOpen(true); }}
               style={{
                 backgroundColor: tableStyles.toolbar_btn_bg,
                 color: tableStyles.toolbar_btn_text,
@@ -1301,6 +1073,7 @@ export function AccountsTable({
                 <span className="text-[11px] text-slate-500 font-medium">
                   {selectedAccountIds.length} selected
                 </span>
+                {/* ── REVISED: onDialogOpen() for Transfer ── */}
                 <Button
                   variant="outline"
                   size="sm"
@@ -1308,10 +1081,11 @@ export function AccountsTable({
                   style={{
                     borderRadius: `${tableStyles.table_border_radius}px`,
                   }}
-                  onClick={() => setIsTransferDialogOpen(true)}
+                  onClick={() => { setIsTransferDialogOpen(true); }}
                 >
                   <Repeat className="h-3.5 w-3.5 mr-1" /> Transfer
                 </Button>
+                {/* ── REVISED: onDialogOpen() for Archive ── */}
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1558,7 +1332,7 @@ export function AccountsTable({
         )}
       </div>
 
-      {/* ── Create dialog ─────────────────────────────────────────────── */}
+      {/* ── Create dialog ─────────────────────────────────────────────────── */}
       <AccountDialog
         mode="create"
         userDetails={userDetails}
@@ -1624,6 +1398,7 @@ export function AccountsTable({
         />
       )}
 
+      {/* ── Delete dialog ────────────────────────────────────────────────── */}
       <AccountsActiveDeleteDialog
         open={isRemoveDialogOpen}
         onOpenChange={setIsRemoveDialogOpen}
@@ -1635,6 +1410,7 @@ export function AccountsTable({
         loadingHistoricalData={loadingHistoricalData}
       />
 
+      {/* ── Transfer dialog ──────────────────────────────────────────────── */}
       <TransferDialog
         open={isTransferDialogOpen}
         onOpenChange={setIsTransferDialogOpen}

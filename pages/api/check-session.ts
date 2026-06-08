@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const sessionUserId = cookies.session;
   const deviceId = req.headers["x-device-id"];
 
-  if (!sessionUserId || !deviceId) {
+  if (!sessionUserId || !ObjectId.isValid(sessionUserId) || !deviceId) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 

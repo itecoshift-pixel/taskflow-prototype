@@ -46,6 +46,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getTableStyles, DEFAULT_TABLE_STYLES, type TableStyles } from "@/lib/table-styles";
+
 import { sileo } from "sileo";
 
 const QUOTATION_STATUS_OPTIONS = {
@@ -276,53 +278,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [highlightedArn, setHighlightedArn] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
-  const [tableStyles, setTableStyles] = useState({
-    th_bg: "#f9fafb",
-    layout: "datatable",
-    td_text: "#111827",
-    th_text: "#374151",
-    table_bg: "#ffffff",
-    tfoot_bg: "#ffffff",
-    td_border: "#f3f4f6",
-    th_border: "#e5e7eb",
-    tr_border: "#f3f4f6",
-    td_padding: "12",
-    tfoot_text: "#6b7280",
-    th_padding: "12",
-    toolbar_bg: "#f9fafb",
-    tr_hover_bg: "#f9fafb",
-    table_border: "#e5e7eb",
-    table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
-    td_font_size: "13",
-    tfoot_border: "#e5e7eb",
-    th_font_size: "12",
-    pagination_bg: "#ffffff",
-    tfoot_padding: "12",
-    th_font_weight: "600",
-    toolbar_border: "#e5e7eb",
-    toolbar_btn_bg: "#ffffff",
-    pagination_text: "#374151",
-    tfoot_font_size: "12",
-    toolbar_btn_text: "#374151",
-    toolbar_input_bg: "#ffffff",
-    pagination_border: "#d1d5db",
-    pagination_radius: "8",
-    table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
-    th_letter_spacing: "0.01em",
-    toolbar_btn_border: "#d1d5db",
-    toolbar_input_text: "#374151",
-    table_border_radius: "16",
-    pagination_active_bg: "#3b82f6",
-    toolbar_input_border: "#d1d5db",
-    pagination_active_text: "#ffffff"
-
-  });
+  const [tableStyles, setTableStyles] = useState<TableStyles>(DEFAULT_TABLE_STYLES);
 
   useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-      .catch(() => { });
+    getTableStyles().then(setTableStyles);
   }, []);
 
   // ── Inline status edit state ─────────────────────────────────────────────
@@ -436,26 +395,25 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     }
   }, [referenceid, dateCreatedFilterRange, itemsPerPage, searchTerm, filterStatus, filterTypeActivity, filterSource, filterTypeClient, filterCallStatus, filterQuotationStatus]);
 
+  // Stable ref so the realtime channel isn't rebuilt on every filter change
+  const fetchActivitiesRef = useRef(fetchActivities);
+  useEffect(() => { fetchActivitiesRef.current = fetchActivities; }, [fetchActivities]);
+
   useEffect(() => {
     if (!referenceid) return;
-    fetchActivities(1, false); // Initial load without loadMore
+    fetchActivitiesRef.current(1, false);
     const channel = supabase
       .channel(`history-${referenceid}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "history",
-          filter: `referenceid=eq.${referenceid}`,
-        },
-        () => fetchActivities(1, false), // Refresh on changes
+        { event: "*", schema: "public", table: "history", filter: `referenceid=eq.${referenceid}` },
+        () => fetchActivitiesRef.current(1, false),
       )
       .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [referenceid, fetchActivities]);
+    return () => { supabase.removeChannel(channel); };
+  // Only depend on referenceid — fetchActivities changes are handled via the ref above
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [referenceid]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -752,8 +710,7 @@ const OFF_WHITE = "#F9FAFA";
           styles: { title: 'text-white!', description: 'text-white' },
         });
 
-        // Refresh data
-        fetchActivities();
+        return true; // caller should refresh
       }
     } catch (error: any) {
       console.error('Auto status update failed:', error);

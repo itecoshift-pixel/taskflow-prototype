@@ -17,15 +17,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const db = await connectToDatabase();
 
     // Query TaskLog collection filtering by exact ReferenceID
+    // Using exact match instead of regex for better performance and to avoid timeouts
+    // Added limit to prevent large data transfers
     const siteVisits = await db
-  .collection("TaskLog")
-  .find({
-    ReferenceID: { $regex: `^${referenceid}$`, $options: "i" }
-  })
-  .sort({ date_created: -1 })
-  .toArray();
+      .collection("TaskLog")
+      .find({
+        ReferenceID: referenceid,
+      })
+      .sort({ date_created: -1 })
+      .limit(200)
+      .toArray();
 
-    res.status(200).json({ siteVisits });
+    res.status(200).json({ success: true, siteVisits });
   } catch (error) {
     console.error("Error fetching site visits:", error);
     res.status(500).json({ error: "Server error fetching site visits" });

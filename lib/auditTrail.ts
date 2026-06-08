@@ -132,6 +132,11 @@ export async function getUserInfo(userId: string) {
     const { connectToDatabase } = await import("./mongodb");
     const { ObjectId } = await import("mongodb");
     
+    if (!ObjectId.isValid(userId)) {
+      console.warn(`Invalid userId format for audit trail: ${userId}`);
+      return null;
+    }
+
     const db = await connectToDatabase();
     const user = await db.collection("users").findOne({ _id: new ObjectId(userId) });
 

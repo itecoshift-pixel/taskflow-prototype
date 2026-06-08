@@ -1,0 +1,9 @@
+export { OutboundPerformance }  from "./outbound-performance";
+export { DatabaseCoverage }     from "./database-coverage";
+export { OverdueActivities }    from "./overdue-activities";
+export { NewAccountDevt }       from "./new-account-devt";
+export { TimeConsumed }         from "./time-consumed";
+export { TotalSales }           from "./total-sales";
+export { CsrMetrics }           from "./csr-metrics";
+export { ClosingQuotation }     from "./closing-quotation";
+export { CoverageDialog }       from "./coverage-dialog";

@@ -5,9 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { supabase } from "@/utils/supabase";
-import ExcelJS from "exceljs";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +86,7 @@ export const SOTable: React.FC<{
   const [filterStatus, setFilterStatus] = useState("all");
   const [page, setPage] = useState(1);
 
-  const [tableStyles, setTableStyles] = useState({
+  const tableStyles = {
     th_bg: "#f9fafb",
     layout: "datatable",
     td_text: "#111827",
@@ -126,15 +125,7 @@ export const SOTable: React.FC<{
     pagination_active_bg: "#3b82f6",
     toolbar_input_border: "#d1d5db",
     pagination_active_text: "#ffffff"
-
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-      .catch(() => { });
-  }, []);
+  };
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchActivities = useCallback(() => {

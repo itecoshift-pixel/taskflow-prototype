@@ -81,10 +81,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     filter.ReferenceID = { $in: agentReferenceIds };
 
     // Query TaskLog collection
+    // Added limit to prevent performance issues with large datasets
     const taskLogs = await db
       .collection("TaskLog")
       .find(filter)
       .sort({ date_created: -1 })
+      .limit(500)
       .toArray();
 
     // Map to expected format - handle all possible field name variations
@@ -113,9 +115,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    res.status(200).json({ taskLogs: formattedLogs });
+    res.status(200).json({ success: true, taskLogs: formattedLogs });
   } catch (error) {
-    // Error occurred but don't log to console
+    console.error("Error fetching task logs:", error);
     res.status(500).json({ error: "Server error fetching task logs" });
   }
 }

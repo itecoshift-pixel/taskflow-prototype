@@ -43,7 +43,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const userId = req.query.id as string;
-  if (!userId) return res.status(400).json({ error: "User ID is required" });
+
+  if (!userId || !ObjectId.isValid(userId)) {
+    return res.status(400).json({ error: "Invalid or missing User ID" });
+  }
 
   try {
     const db = await connectToDatabase();

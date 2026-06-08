@@ -269,7 +269,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   // ── PIN Login ──────────────────────────────────────────────────────────────
   const handlePinLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (locked) return;
     if (pin.length !== 4) {
       sileo.warning({ title: "Invalid PIN", description: "Please enter a 4-digit PIN.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
@@ -299,6 +298,21 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         setLoading(false);
         return;
       }
+
+      // Check for time lock bypass (Managers only)
+      if (locked && result.Role !== "Manager") {
+        sileo.warning({
+          title: "Access Restricted",
+          description: "Login is currently disabled for your role during off-hours.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" }
+        });
+        setLoading(false);
+        return;
+      }
+
       setPendingLoginData({ Email: pinData.email, deviceId, result });
       setShowLocationDialog(true);
     } catch {
@@ -306,12 +320,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     } finally {
       setLoading(false);
     }
-  }, [pin]);
+  }, [pin, locked]);
 
   // ── Password Login ──────────────────────────────────────────────────────────
   const handlePasswordLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (locked) return;
     if (!Email || !Password) {
       sileo.warning({ title: "Required", description: "All fields are required.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
@@ -331,6 +344,21 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         setLoading(false);
         return;
       }
+
+      // Check for time lock bypass (Managers only)
+      if (locked && result.Role !== "Manager") {
+        sileo.warning({
+          title: "Access Restricted",
+          description: "Login is currently disabled for your role during off-hours.",
+          duration: 4000,
+          position: "top-right",
+          fill: "black",
+          styles: { title: "text-white!", description: "text-white" }
+        });
+        setLoading(false);
+        return;
+      }
+
       setPendingLoginData({ Email, deviceId, result });
       setShowLocationDialog(true);
       localStorage.setItem("userPin", JSON.stringify({ email: Email, password: Password, pin: "1234" }));
@@ -339,7 +367,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     } finally {
       setLoading(false);
     }
-  }, [Email, Password]);
+  }, [Email, Password, locked]);
 
   // ── Post-login redirect ────────────────────────────────────────────────────
   const handlePostLogin = async (location: any) => {

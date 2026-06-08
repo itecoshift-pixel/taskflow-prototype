@@ -54,8 +54,8 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
     Gender
   } = req.body;
 
-  if (!id) {
-    return res.status(400).json({ error: "User ID is required" });
+  if (!id || !ObjectId.isValid(id)) {
+    return res.status(400).json({ error: "Valid User ID is required" });
   }
 
   try {

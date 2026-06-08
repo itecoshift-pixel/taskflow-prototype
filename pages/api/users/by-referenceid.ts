@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Connect to MongoDB
-    const client = new MongoClient(process.env.MONGODB_URI || '');
+    const client = new MongoClient(process.env.MONGODB_URI || '', { maxPoolSize: 5, minPoolSize: 1, serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 });
     await client.connect();
     
     const db = client.db('taskflow');

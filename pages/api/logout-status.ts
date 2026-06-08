@@ -9,8 +9,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { userId } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ message: "userId is required" });
+  if (!userId || !ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: "Valid userId is required" });
   }
 
   try {

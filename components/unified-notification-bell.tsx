@@ -328,13 +328,28 @@ export function UnifiedNotificationBell() {
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen) {
-      // Mark all as read
+      // Mark SPF + Quotation as read in localStorage
       const allIds = new Set([
         ...spfRequests.map(s => `spf-${s.id}`),
         ...quotations.map(q => `q-${q.id}`)
       ]);
       setReadIds(allIds);
       try { localStorage.setItem(READ_KEY, JSON.stringify(Array.from(allIds))); } catch {}
+
+      // Mark support ticket messages as seen in DB
+      if (supportTickets.length > 0) {
+        for (const ticket of supportTickets) {
+          if ((ticket.unseen_count ?? 0) > 0) {
+            fetch("/api/support/mark-seen", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ticket_id: ticket.ticket_id }),
+            }).catch(() => {});
+          }
+        }
+        // Clear local unseen counts immediately
+        setSupportTickets(prev => prev.map(t => ({ ...t, unseen_count: 0 })));
+      }
     }
   };
 
@@ -380,12 +395,12 @@ export function UnifiedNotificationBell() {
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5" />
-          {totalCount > 0 && (
+          {totalUnread > 0 && (
             <Badge
               variant="destructive"
               className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
             >
-              {totalCount > 99 ? "99+" : totalCount}
+              {totalUnread > 99 ? "99+" : totalUnread}
             </Badge>
           )}
         </Button>
