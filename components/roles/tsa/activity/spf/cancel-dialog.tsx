@@ -27,10 +27,9 @@ interface CancelDialogProps {
 }
 
 const REASON_OPTIONS = [
-    "No Money",
-    "Threats",
-    "Negotiation Off",
-    "Others",
+    "Client Asked to Cancel",
+    "Lead Time Concerns",
+    "Agent Asked to Cancel",
 ];
 
 export const CancelDialog: React.FC<CancelDialogProps> = ({
