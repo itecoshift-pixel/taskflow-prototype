@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Bell, FileText, ClipboardList, Check } from "lucide-react";
+import { Bell, FileText, ClipboardList, Check, HeadphonesIcon } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useUser } from "@/contexts/UserContext";
 import Link from "next/link";
+import { supabase } from "@/utils/supabase";
 
 interface SPFRequest {
   id: number;
@@ -31,12 +32,21 @@ interface QuotationNotification {
   tsm_approved_status?: string;
 }
 
-type NotificationTab = "all" | "spf" | "quotations";
+interface SupportTicketNotification {
+  ticket_id: string;
+  ticket_subject: string;
+  status: string;
+  date_created: string;
+  unseen_count: number;
+}
+
+type NotificationTab = "all" | "spf" | "quotations" | "support";
 
 export function UnifiedNotificationBell() {
   const { userId } = useUser();
   const [spfRequests, setSpfRequests] = useState<SPFRequest[]>([]);
   const [quotations, setQuotations] = useState<QuotationNotification[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicketNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -51,10 +61,11 @@ export function UnifiedNotificationBell() {
 
   const READ_KEY = `unified_notif_read_${userId}`;
   const ITEMS_PER_PAGE = 10;
-  const totalCount = spfRequests.length + quotations.length;
   const unreadSPF = spfRequests.filter(s => !readIds.has(`spf-${s.id}`)).length;
   const unreadQuotations = quotations.filter(q => !readIds.has(`q-${q.id}`)).length;
-  const totalUnread = unreadSPF + unreadQuotations;
+  const unreadSupport = supportTickets.reduce((sum, t) => sum + (t.unseen_count ?? 0), 0);
+  const totalUnread = unreadSPF + unreadQuotations + unreadSupport;
+  const totalCount = spfRequests.length + quotations.length + (unreadSupport > 0 ? 1 : 0);
 
   // Track user interaction for audio
   useEffect(() => {
@@ -120,6 +131,7 @@ export function UnifiedNotificationBell() {
       if (!referenceid) {
         setSpfRequests([]);
         setQuotations([]);
+        setSupportTickets([]);
         clearTimeout(timeoutId);
         if (append) setLoadingMore(false);
         else setLoading(false);
@@ -128,9 +140,10 @@ export function UnifiedNotificationBell() {
 
       // Fetch both SPF and Quotations in parallel with pagination
       const isTSA = window.location.pathname.includes('/roles/tsa/');
-      const [spfRes, qRes] = await Promise.all([
+      const [spfRes, qRes, supportRes] = await Promise.all([
         fetch(`/api/activity/tsa/spf/notifications?referenceid=${referenceid}&page=${page}&limit=${ITEMS_PER_PAGE}`),
-        fetch(`/api/activity/tsa/quotation/fetch?referenceid=${referenceid}&page=${page}&limit=${ITEMS_PER_PAGE}`)
+        fetch(`/api/activity/tsa/quotation/fetch?referenceid=${referenceid}&page=${page}&limit=${ITEMS_PER_PAGE}`),
+        fetch(`/api/support/my-tickets?requestor_id=${encodeURIComponent(referenceid)}`),
       ]);
 
       // Parse SPF
@@ -177,6 +190,16 @@ export function UnifiedNotificationBell() {
         console.log("🔔 UnifiedNotificationBell: Quotations fetch response:", qRes);
       }
 
+      // Parse Support Tickets
+      let supportData: SupportTicketNotification[] = [];
+      if (supportRes.ok) {
+        const d = await supportRes.json();
+        supportData = (d.tickets ?? []).filter((t: SupportTicketNotification) => (t.unseen_count ?? 0) > 0);
+      } else {
+        console.log("🔔 Support tickets fetch failed:", supportRes.status, await supportRes.text().catch(() => ""));
+      }
+      console.log("🔔 Support tickets with unseen:", supportData);
+
       // Check for new items and play sound using refs
       const newSpfIds = new Set(spfData.map(s => `spf-${s.id}`));
       const newQIds = new Set(qData.map(q => `q-${q.id}`));
@@ -195,12 +218,10 @@ export function UnifiedNotificationBell() {
       prevQuotationsRef.current = qData;
 
       if (append) {
-        // Append new items to existing ones
         setSpfRequests(prev => [...prev, ...spfData]);
         setQuotations(prev => [...prev, ...qData]);
         setCurrentPage(page);
       } else {
-        // Replace all items (initial load)
         setSpfRequests(spfData);
         setQuotations(qData);
         setCurrentPage(1);
@@ -245,6 +266,48 @@ export function UnifiedNotificationBell() {
       window.removeEventListener('tsmQuotationApproval', handleTSMApproval);
     };
   }, [fetchNotifications]);
+
+  // Dedicated lightweight support tickets refresh — doesn't touch SPF/quotations
+  const fetchSupportTickets = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const userRes = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
+      if (!userRes.ok) return;
+      const userData = await userRes.json();
+      const referenceid = userData.ReferenceID || "";
+      if (!referenceid) return;
+
+      const res = await fetch(`/api/support/my-tickets?requestor_id=${encodeURIComponent(referenceid)}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      const data = (d.tickets ?? []).filter((t: SupportTicketNotification) => (t.unseen_count ?? 0) > 0);
+      console.log("🔔 Support tickets with unseen:", data);
+      setSupportTickets(data);
+    } catch {}
+  }, [userId]);
+
+  // Fetch support tickets on mount
+  useEffect(() => {
+    fetchSupportTickets();
+  }, [fetchSupportTickets]);
+
+  // Realtime: refresh support tickets when a new non-user message is inserted
+  useEffect(() => {
+    const channel = supabase
+      .channel("bell_ticket_notifications")
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "ticket_conversations",
+      }, (payload) => {
+        const msg = payload.new as { sender?: string };
+        if (msg?.sender && msg.sender !== "user") {
+          fetchSupportTickets();
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchSupportTickets]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
@@ -295,15 +358,17 @@ export function UnifiedNotificationBell() {
   const filteredItems = () => {
     switch (activeTab) {
       case "spf":
-        return { spf: spfRequests, q: [] };
+        return { spf: spfRequests, q: [], support: [] };
       case "quotations":
-        return { spf: [], q: quotations };
+        return { spf: [], q: quotations, support: [] };
+      case "support":
+        return { spf: [], q: [], support: supportTickets };
       default:
-        return { spf: spfRequests, q: quotations };
+        return { spf: spfRequests, q: quotations, support: supportTickets };
     }
   };
 
-  const { spf: filteredSpf, q: filteredQ } = filteredItems();
+  const { spf: filteredSpf, q: filteredQ, support: filteredSupport } = filteredItems();
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -325,7 +390,7 @@ export function UnifiedNotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="end">
+      <PopoverContent className="w-[600px] p-0" align="end">
         {/* Header */}
         <div className="sticky top-0 bg-background z-10 border-b">
           <div className="flex items-center justify-between p-3">
@@ -380,6 +445,20 @@ export function UnifiedNotificationBell() {
                 <span className="ml-1 text-[10px] bg-muted px-1 rounded">{quotations.length}</span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab("support")}
+              className={`flex-1 py-2 text-xs font-medium transition-colors relative ${
+                activeTab === "support"
+                  ? "text-primary border-b-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <HeadphonesIcon className="inline h-3 w-3 mr-1" />
+              Support
+              {unreadSupport > 0 && (
+                <span className="ml-1 text-[10px] bg-red-100 text-red-600 px-1 rounded font-bold">{unreadSupport}</span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -389,7 +468,7 @@ export function UnifiedNotificationBell() {
               <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin mx-auto mb-2" />
               Loading notifications...
             </div>
-          ) : filteredSpf.length === 0 && filteredQ.length === 0 ? (
+          ) : filteredSpf.length === 0 && filteredQ.length === 0 && filteredSupport.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-8 text-muted-foreground gap-2">
               <Bell className="w-8 h-8 opacity-30" />
               <span className="text-sm">No notifications</span>
@@ -508,6 +587,43 @@ export function UnifiedNotificationBell() {
                   })}
                 </div>
               )}
+              {/* Support Tickets Section */}
+              {filteredSupport.length > 0 && (
+                <div>
+                  <div className="px-3 py-2 bg-muted/30">
+                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      <HeadphonesIcon className="h-3 w-3" />
+                      Support Replies
+                    </span>
+                  </div>
+                  {filteredSupport.map((ticket) => (
+                    <Link
+                      key={ticket.ticket_id}
+                      href={`/general/support?id=${encodeURIComponent(userId ?? "")}`}
+                      onClick={() => setOpen(false)}
+                    >
+                      <div className="p-3 hover:bg-muted transition-colors cursor-pointer bg-indigo-50/60">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                            <HeadphonesIcon className="h-4 w-4 text-indigo-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-indigo-600 font-mono">{ticket.ticket_id}</p>
+                              <span className="text-[9px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">
+                                {ticket.unseen_count} new
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 truncate mt-0.5">{ticket.ticket_subject}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(ticket.date_created)}</p>
+                          </div>
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0 mt-1 animate-pulse" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>
@@ -522,6 +638,11 @@ export function UnifiedNotificationBell() {
           <Link href="/roles/tsm/activity/quotation/pending" className="flex-1">
             <Button variant="ghost" className="w-full text-xs" size="sm">
               Quotations
+            </Button>
+          </Link>
+          <Link href={`/general/support?id=${encodeURIComponent(userId ?? "")}`} className="flex-1">
+            <Button variant="ghost" className="w-full text-xs" size="sm" onClick={() => setOpen(false)}>
+              Support
             </Button>
           </Link>
         </div>

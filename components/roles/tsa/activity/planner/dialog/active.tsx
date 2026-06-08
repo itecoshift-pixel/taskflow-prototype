@@ -34,9 +34,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { sileo } from "sileo";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { supabase } from "@/utils/supabase";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+const INDUSTRY_OPTIONS = [
+  "Technology / Manufacturing / Telco / Data Center / Agriculture",
+  "Healthcare / Education - Private",
+  "Energy / Mining",
+  "Finance / Commercial / Hospitality / Retail",
+  "Government / LGU",
+  "Government / Infra",
+  "End user",
+  "Trading / Individual-Reseller / Dealer / Influencer",
+  "Distributor",
+  "Transportation"
+] as const;
+
 const TYPECLIENT_OPTIONS = [
   { value: "Top 50",     description: "Top 50 key accounts with highest revenue potential." },
   { value: "Next 30",    description: "Next tier of 30 accounts for growth development." },
@@ -71,10 +83,18 @@ function cleanCompanyName(name: string): string {
   if (!name) return "";
   return name
     .toUpperCase()
-    .replace(/[-_.@!$%]/g, "")
+    .replace(/[^A-Z0-9 ]/g, "")
     .replace(/\s+/g, " ")
     .replace(/\d+$/, "")
     .trim();
+}
+
+// Lightweight version for on-keypress — keeps trailing space so user can type next word
+function sanitizeCompanyNameTyping(name: string): string {
+  if (!name) return "";
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, ""); // allow only letters, digits, spaces
 }
 
 function isValidEmail(email: string): boolean {
@@ -195,7 +215,7 @@ const DEFAULT_FORM: AccountFormData = {
   status: "For Approval",
   delivery_address: "",
   type_client: "New Client",
-  industry: "OTHER",
+  industry: "",
   company_group: "",
   tin_number: "",
   reason: "",
@@ -223,11 +243,6 @@ export function AccountDialog({
 
   const [step, setStep] = useState(0);
 
-  const [industries, setIndustries] = useState<string[]>([]);
-  const [loadingIndustries, setLoadingIndustries] = useState(false);
-  const [newIndustryInput, setNewIndustryInput] = useState("");
-  const [addingIndustry, setAddingIndustry] = useState(false);
-  const [showAddIndustry, setShowAddIndustry] = useState(false);
 
   const [regions, setRegions] = useState<string[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -253,8 +268,6 @@ export function AccountDialog({
       setCompanyError("");
       setDuplicateInfo([]);
       setShowAllDuplicates(false);
-      setNewIndustryInput("");
-      setShowAddIndustry(false);
       setCompanySuggestions([]);
       setShowSuggestions(false);
       setActiveSuggestionIndex(-1);
@@ -286,71 +299,7 @@ export function AccountDialog({
       .catch(console.error);
   }, [userDetails.referenceid]);
 
-  const fetchIndustries = useCallback(async () => {
-    setLoadingIndustries(true);
-    try {
-      const { data, error } = await supabase
-        .from("industry")
-        .select("industry_name")
-        .order("industry_name", { ascending: true });
-      if (error) throw error;
-      setIndustries((data ?? []).map((row) => row.industry_name as string).filter(Boolean));
-    } catch (err) {
-      console.error("Failed to fetch industries:", err);
-    } finally {
-      setLoadingIndustries(false);
-    }
-  }, []);
 
-  useEffect(() => {
-    fetchIndustries();
-  }, [fetchIndustries]);
-
-  const handleAddIndustry = async () => {
-    const name = newIndustryInput.trim().toUpperCase();
-    if (!name) return;
-
-    if (industries.includes(name)) {
-      sileo.error({
-        title: "Duplicate",
-        description: `"${name}" already exists in the industry list.`,
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-      return;
-    }
-
-    setAddingIndustry(true);
-    try {
-      const { error } = await supabase.from("industry").insert({ industry_name: name });
-      if (error) throw error;
-      setIndustries((prev) => [...prev, name].sort());
-      updateField("industry", name);
-      setNewIndustryInput("");
-      setShowAddIndustry(false);
-      sileo.success({
-        title: "Industry Added",
-        description: `"${name}" has been added successfully.`,
-        duration: 3000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } catch (err: any) {
-      sileo.error({
-        title: "Failed",
-        description: err?.message || "Failed to add industry.",
-        duration: 4000,
-        position: "top-right",
-        fill: "black",
-        styles: { title: "text-white!", description: "text-white" },
-      });
-    } finally {
-      setAddingIndustry(false);
-    }
-  };
 
   useEffect(() => {
     if (mode === "edit") {
@@ -615,13 +564,14 @@ export function AccountDialog({
                   required
                   value={formData.company_name}
                   onChange={(e) => {
-                    updateField("company_name", e.target.value);
+                    updateField("company_name", sanitizeCompanyNameTyping(e.target.value));
                     setActiveSuggestionIndex(-1);
                   }}
                   onFocus={() => {
                     if (companySuggestions.length > 0) setShowSuggestions(true);
                   }}
                   onBlur={() => {
+                    updateField("company_name", cleanCompanyName(formData.company_name));
                     setTimeout(() => setShowSuggestions(false), 150);
                   }}
                   onKeyDown={(e) => {
@@ -749,7 +699,12 @@ export function AccountDialog({
                       value={val}
                       onChange={(e) => {
                         const copy = [...formData.contact_person];
-                        copy[i] = e.target.value;
+                        copy[i] = e.target.value.toUpperCase().replace(/[^A-Z0-9 ]/g, "");
+                        updateField("contact_person", copy);
+                      }}
+                      onBlur={() => {
+                        const copy = [...formData.contact_person];
+                        copy[i] = copy[i].replace(/\s+/g, " ").trim();
                         updateField("contact_person", copy);
                       }}
                       placeholder="Contact Person"
@@ -1090,73 +1045,23 @@ export function AccountDialog({
                 </FieldDescription>
               </FieldContent>
               <div className="mt-1.5">
-                {loadingIndustries ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                    <Loader2 className="animate-spin h-4 w-4" />
-                    Loading industries...
-                  </div>
-                ) : (
-                  <Select
-                    value={formData.industry}
-                    onValueChange={(val) => updateField("industry", val)}
-                  >
-                    <SelectTrigger className="w-full rounded-none">
-                      <span>{formData.industry || "Select Industry"}</span>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {industries.map((ind) => (
-                        <SelectItem key={ind} value={ind}>{ind.replace(/_/g, " ")}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-
-                <div className="mt-2">
-                  {!showAddIndustry ? (
-                    <button
-                      type="button"
-                      className="text-xs text-blue-600 hover:underline"
-                      onClick={() => setShowAddIndustry(true)}
-                    >
-                      + Add new industry
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        value={newIndustryInput}
-                        onChange={(e) => setNewIndustryInput(e.target.value.toUpperCase())}
-                        placeholder="NEW_INDUSTRY_NAME"
-                        className="rounded-none uppercase text-xs flex-1"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddIndustry();
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        className="rounded-none text-xs"
-                        disabled={!newIndustryInput.trim() || addingIndustry}
-                        onClick={handleAddIndustry}
-                      >
-                        {addingIndustry ? <Loader2 className="animate-spin h-3 w-3" /> : "Save"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-none text-xs"
-                        onClick={() => { setShowAddIndustry(false); setNewIndustryInput(""); }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <Select
+                  value={formData.industry}
+                  onValueChange={(val) => updateField("industry", val)}
+                >
+                  <SelectTrigger className="w-full rounded-none">
+                    <span>{formData.industry || "Select Industry"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDUSTRY_OPTIONS.map((ind) => (
+                      <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
-            {/* Status — always "For Approval" on create, read-only indicator */}
+              {/* Status — always "For Approval" on create, read-only indicator */}
             <div>
               <FieldContent>
                 <FieldLabel className="font-semibold text-sm">Status</FieldLabel>

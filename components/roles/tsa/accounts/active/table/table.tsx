@@ -1243,16 +1243,6 @@ export function AccountsTable({
           }}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <AccountDialog
-              mode="create"
-              userDetails={userDetails}
-              onSaveAction={async (data) => {
-                await onSaveAccountAction(data);
-                setIsCreateDialogOpen(false);
-              }}
-              open={isCreateDialogOpen}
-              onOpenChangeAction={setIsCreateDialogOpen}
-            />
             <Button
               className="cursor-pointer h-8 text-xs font-semibold shrink-0 shadow-sm"
               onClick={() => setIsCreateDialogOpen(true)}
@@ -1567,6 +1557,18 @@ export function AccountsTable({
           </div>
         )}
       </div>
+
+      {/* ── Create dialog ─────────────────────────────────────────────── */}
+      <AccountDialog
+        mode="create"
+        userDetails={userDetails}
+        onSaveAction={async (data) => {
+          await onSaveAccountAction(data);
+          setIsCreateDialogOpen(false);
+        }}
+        open={isCreateDialogOpen}
+        onOpenChangeAction={setIsCreateDialogOpen}
+      />
 
       {/* ── Edit dialog ───────────────────────────────────────────────────── */}
       {editingAccount && (

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Globe, Calendar, MapPin, MapPinOff,
-  Lock, Loader2, CheckCircle2, Send, Grid3X3
+  Lock, Loader2, CheckCircle2, Send, Grid3X3, MoonStar, Clock
 } from "lucide-react";
 import Link from "next/link";
 
@@ -72,6 +72,33 @@ const DEFAULT_STYLES: LoginFormStyles = {
   tab_active: "#4f46e5",
   link_color: "#4f46e5",
 };
+
+// ─── Time lock helpers ────────────────────────────────────────────────────────
+function getManilaHour(): number {
+  // Always evaluate in Asia/Manila timezone
+  const now = new Date();
+  const manilaTime = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    hour12: false,
+  }).format(now);
+  return parseInt(manilaTime, 10);
+}
+
+function isLoginLocked(): boolean {
+  const hour = getManilaHour();
+  // Locked from 18:00 (6PM) to 23:59 and 00:00 to 05:59
+  return hour >= 18 || hour < 6;
+}
+
+function getManilaTimeString(): string {
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date());
+}
 
 // ─── Loading overlay ──────────────────────────────────────────────────────────
 function LoadingOverlay() {
@@ -134,6 +161,20 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [ticketSubmitting, setTicketSubmitting] = useState(false);
   const [ticketDone,       setTicketDone]       = useState(false);
   const [ticket, setTicket] = useState<Ticket[]>([]);
+
+  // ── Time-based lockout (6PM–6AM Manila time) ───────────────────────────────
+  const [locked, setLocked] = useState(() => isLoginLocked());
+  const [manilaTime, setManilaTime] = useState(() => getManilaTimeString());
+
+  useEffect(() => {
+    const tick = () => {
+      setLocked(isLoginLocked());
+      setManilaTime(getManilaTimeString());
+    };
+    // Update every 30 seconds
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   // ── Login form styles from API ─────────────────────────────────────────────
   const [formStyles, setFormStyles] = useState<LoginFormStyles>(DEFAULT_STYLES);
@@ -228,6 +269,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   // ── PIN Login ──────────────────────────────────────────────────────────────
   const handlePinLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (locked) return;
     if (pin.length !== 4) {
       sileo.warning({ title: "Invalid PIN", description: "Please enter a 4-digit PIN.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
@@ -269,6 +311,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   // ── Password Login ──────────────────────────────────────────────────────────
   const handlePasswordLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (locked) return;
     if (!Email || !Password) {
       sileo.warning({ title: "Required", description: "All fields are required.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
@@ -495,14 +538,31 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               {/* Submit */}
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || locked}
                 className="w-full h-10 text-sm font-semibold rounded-xl transition-all duration-150 gap-2"
-                style={{ backgroundColor: s.btn_bg, color: s.btn_text }}
+                style={{ backgroundColor: locked ? "#94a3b8" : s.btn_bg, color: s.btn_text }}
               >
                 {loading ? (
                   <><Loader2 size={14} className="animate-spin" /> Signing in...</>
                 ) : activeTab === "password" ? "Sign In" : "Login with PIN"}
               </Button>
+
+              {/* Lockout notice */}
+              {locked && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-slate-900 border border-slate-700">
+                  <MoonStar size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-white">System Access Restricted</p>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Login is disabled from <span className="text-indigo-400 font-semibold">6:00 PM</span> to <span className="text-indigo-400 font-semibold">6:00 AM</span> (Manila time).
+                    </p>
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 pt-0.5">
+                      <Clock size={10} />
+                      Current time: <span className="text-slate-300 font-mono">{manilaTime}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer links */}
