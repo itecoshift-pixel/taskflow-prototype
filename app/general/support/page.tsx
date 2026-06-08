@@ -28,6 +28,7 @@ const TICKET_SUBJECTS: Record<string, string[]> = {
     "Client Duplication",
     "Client Not Assigned ID of TSM / Manager",
     "Client Wrong Company Name",
+    "Client Missing / Not Found",
     "Account Creation",
     "Account Locked",
     "Reset Password / Unable to Login",
