@@ -1133,7 +1133,10 @@ export const TaskList: React.FC<CompletedProps> = ({
                 <PaginationItem>
                   <PaginationPrevious
                     href="#"
-                    onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page > 1) fetchActivities(page - 1);
+                    }}
                     aria-disabled={page === 1}
                     className={`text-[10px] border font-bold uppercase tracking-widest transition-all ${page === 1 ? "pointer-events-none opacity-30" : ""}`}
                     style={{ color: tableStyles.pagination_text, borderColor: tableStyles.pagination_border, borderRadius: tableStyles.pagination_radius }}
@@ -1147,7 +1150,10 @@ export const TaskList: React.FC<CompletedProps> = ({
                 <PaginationItem>
                   <PaginationNext
                     href="#"
-                    onClick={(e) => { e.preventDefault(); if (page < pageCount) setPage(page + 1); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (page < pageCount) fetchActivities(page + 1);
+                    }}
                     aria-disabled={page === pageCount}
                     className={`text-[10px] border font-bold uppercase tracking-widest transition-all ${page === pageCount ? "pointer-events-none opacity-30" : ""}`}
                     style={{ color: tableStyles.pagination_text, borderColor: tableStyles.pagination_border, borderRadius: tableStyles.pagination_radius }}

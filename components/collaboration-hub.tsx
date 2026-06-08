@@ -545,7 +545,7 @@ export function CollaborationHub({
 
                           {msg.isResolved && (
                             <div className="flex items-center gap-1 mb-1 text-[9px] font-black uppercase text-green-500 bg-green-50 px-2 py-0.5 rounded-full w-fit">
-                              <CheckCircle2 size={10} /> Resolvedd
+                              <CheckCircle2 size={10} /> Resolved
                             </div>
                           )}
 
