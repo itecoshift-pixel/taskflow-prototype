@@ -1024,8 +1024,17 @@ function SupportContent() {
 
                 {/* Reply input — always visible, never scrolls */}
                 <div className="shrink-0 border-t px-6 py-4">
-                  {/* File preview strip */}
-                  {attachedFile && (
+                  {viewingTicket?.status === "Resolved" ? (
+                    <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-emerald-50 border border-emerald-100">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                      <p className="text-[11px] text-emerald-700 font-semibold">
+                        This ticket has been resolved. Messaging is disabled.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* File preview strip */}
+                      {attachedFile && (
                     <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
                       {attachPreview ? (
                         <img src={attachPreview} alt="preview" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
@@ -1078,6 +1087,8 @@ function SupportContent() {
                   <p className="text-[9px] text-slate-400 text-center mt-2">
                     Press Enter to send · Attach images or PDFs
                   </p>
+                    </>
+                  )}
                 </div>
               </>
             ) : (
