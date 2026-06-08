@@ -49,6 +49,7 @@ const TICKET_SUBJECTS: Record<string, string[]> = {
     "CSR Endorsement Issue / Not Working",
     "Slow Loading / Glitch",
     "Domain IP Whitelist Request (OB TSA/TSM/Manager)",
+    "Request / Remove Function",
   ],
   "Email": [
     "Unable / Not Working to Send Email",
