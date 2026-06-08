@@ -12,8 +12,8 @@ export default async function handler(
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
-  if (!search || typeof search !== "string") {
-    return res.status(400).json({ message: "Missing search term" });
+  if (!search || typeof search !== "string" || search.trim().length < 2) {
+    return res.status(200).json({ activities: [], history: [], total_activities: 0, total_history: 0 });
   }
 
   const searchTerm = search.toLowerCase().trim();
@@ -38,7 +38,8 @@ export default async function handler(
       .select("*")
       .eq("referenceid", referenceid)
       .ilike("company_name", `%${searchTerm}%`)
-      .order("date_updated", { ascending: false });
+      .order("date_updated", { ascending: false })
+      .limit(100);
 
     if (fromISO) activityQuery = activityQuery.gte("date_created", fromISO);
     if (toISO) activityQuery = activityQuery.lt("date_created", toISO);
@@ -58,7 +59,8 @@ export default async function handler(
       const { data: historyData, error: historyError } = await supabase
         .from("history")
         .select("*")
-        .in("activity_reference_number", activityRefNumbers);
+        .in("activity_reference_number", activityRefNumbers)
+        .limit(200);
 
       if (historyError) throw historyError;
       history = historyData || [];
@@ -71,7 +73,8 @@ export default async function handler(
       .from("history")
       .select("activity_reference_number, quotation_number, so_number")
       .eq("referenceid", referenceid)
-      .or(`quotation_number.ilike.%${searchTerm}%,so_number.ilike.%${searchTerm}%`);
+      .or(`quotation_number.ilike.%${searchTerm}%,so_number.ilike.%${searchTerm}%`)
+      .limit(100);
 
     if (historySearchError) throw historySearchError;
 
@@ -90,43 +93,54 @@ export default async function handler(
         .select("*")
         .eq("referenceid", referenceid)
         .in("activity_reference_number", historyMatchedRefs)
-        .order("date_updated", { ascending: false });
+        .order("date_updated", { ascending: false })
+        .limit(100);
 
       if (matchedError) throw matchedError;
       historyMatchedActivities = matchedActivities || [];
     }
 
     // Merge activities from both searches, removing duplicates
-    const allActivities = [
-      ...(activities || []),
-      ...historyMatchedActivities
-    ].filter((activity, index, self) =>
-      index === self.findIndex((a) => a.id === activity.id)
-    );
+    const activitiesMap = new Map();
+    [...(activities || []), ...historyMatchedActivities].forEach(a => {
+      activitiesMap.set(a.id, a);
+    });
+    const allActivities = Array.from(activitiesMap.values());
 
     // Fetch history for history-matched activities
     if (historyMatchedRefs.length > 0) {
       const { data: additionalHistory, error: additionalHistoryError } = await supabase
         .from("history")
         .select("*")
-        .in("activity_reference_number", historyMatchedRefs);
+        .in("activity_reference_number", historyMatchedRefs)
+        .limit(200);
 
       if (additionalHistoryError) throw additionalHistoryError;
-      history = [...history, ...(additionalHistory || [])];
+      
+      const historyMap = new Map();
+      [...history, ...(additionalHistory || [])].forEach(h => {
+        historyMap.set(h.id, h);
+      });
+      const uniqueHistory = Array.from(historyMap.values());
+
+      res.status(200).json({
+        activities: allActivities,
+        history: uniqueHistory,
+        total_activities: allActivities.length,
+        total_history: uniqueHistory.length,
+      });
+    } else {
+      res.status(200).json({
+        activities: allActivities,
+        history: history,
+        total_activities: allActivities.length,
+        total_history: history.length,
+      });
     }
-
-    // Deduplicate history
-    const uniqueHistory = history.filter((item, index, self) =>
-      index === self.findIndex((h) => h.id === item.id)
-    );
-
-    res.status(200).json({
-      activities: allActivities,
-      history: uniqueHistory,
-      total_activities: allActivities.length,
-      total_history: uniqueHistory.length,
-    });
   } catch (err: any) {
+    if (err.code === "57014") {
+      return res.status(504).json({ message: "Search timed out. Please try a more specific search term." });
+    }
     console.error("[search] Server error:", err);
     res.status(500).json({ message: err.message || "Server error" });
   }
