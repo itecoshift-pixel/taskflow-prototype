@@ -105,11 +105,19 @@ export const Preview: React.FC<PreviewProps> = ({
         : "/disruptive-banner.png";
 
     // ── Computed totals (use actual line item totals, not payload.totalPrice which may be stale) ──
-    // Calculate gross total first (unitPrice * qty), then subtract discount to avoid double-discounting
+    // Calculate gross total first (unitPrice * qty)
     const grossTotal = (payload.items || []).reduce((acc, item) => acc + ((Number(item.qty) || 0) * (item.unitPrice || 0)), 0);
-    const tradeDiscount = (payload.items || []).reduce((acc, item) => acc + ((item.discountAmount || 0) * (Number(item.qty) || 0)), 0);
-    const netSales = grossTotal - tradeDiscount;
-    const totalInvoiceAmount = netSales + (Number(payload.deliveryFee) || 0) + (Number(payload.restockingFee) || 0);
+    // Net Sales is the sum of rounded line item totals to avoid floating point butal
+    const netSales = parseFloat((payload.items || []).reduce((acc, item) => acc + (item.totalAmount || 0), 0).toFixed(2));
+    // Trade Discount is the difference between gross and net
+    const tradeDiscount = parseFloat((grossTotal - netSales).toFixed(2));
+    const totalInvoiceAmount = parseFloat((netSales + (Number(payload.deliveryFee) || 0) + (Number(payload.restockingFee) || 0)).toFixed(2));
+
+    // Round components to 2 decimal places to ensure summary adds up exactly
+    const vatAmount = parseFloat((totalInvoiceAmount * (12 / 112)).toFixed(2));
+    const netOfVat = parseFloat((totalInvoiceAmount / 1.12).toFixed(2));
+    const whtAmount = payload.whtType !== "none" ? parseFloat((netOfVat * (payload.whtType === "wht_1" ? 0.01 : 0.02)).toFixed(2)) : 0;
+    const finalAmountDue = totalInvoiceAmount - whtAmount;
 
     // ── QR Code Security ──────────────────────────────────────────────────────
     const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
@@ -685,8 +693,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                             Less: VAT (12%)
                                                         </td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-500 tabular-nums">
-                                                            ₱{(netSales * (12 / 112))
-                                                                .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
 
@@ -697,8 +704,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                             Net of VAT (Tax Base)
                                                         </td>
                                                         <td className="px-3 py-1.5 text-right font-bold text-gray-500 tabular-nums">
-                                                            ₱{(netSales / 1.12)
-                                                                .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            ₱{netOfVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                     </tr>
 
@@ -708,8 +714,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                                 Less: {payload.whtLabel}
                                                             </td>
                                                             <td className="px-3 py-2 text-right font-black text-blue-700 tabular-nums">
-                                                                − ₱{(Number(payload.whtAmount) || 0)
-                                                                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                − ₱{whtAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                             </td>
                                                         </tr>
                                                     )}
@@ -724,7 +729,7 @@ export const Preview: React.FC<PreviewProps> = ({
                                                         : "Total Amount Due"}
                                                 </td>
                                                 <td className="px-3 py-3 text-right font-black text-[15px] tabular-nums">
-                                                    ₱{totalInvoiceAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ₱{finalAmountDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
                                             </tr>
                                         </tbody>

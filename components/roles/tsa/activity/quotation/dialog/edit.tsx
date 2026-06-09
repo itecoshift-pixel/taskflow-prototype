@@ -1226,7 +1226,7 @@ export default function TaskListEditDialog({
 
       const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
       const restockingFeeNum = parseFloat(restockingFeeState) || 0;
-      const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
+      const totalPriceWithDelivery = subtotal + deliveryFeeNum + restockingFeeNum;
       // Calculate EWT deduction if applicable
       const whtAmount = whtTypeState !== "none"
         ? (vatTypeState === "vat_inc"
@@ -1234,7 +1234,7 @@ export default function TaskListEditDialog({
           : totalPriceWithDelivery
         ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
         : 0;
-      const totalQuotationAmount = totalPriceWithDelivery - whtAmount;
+      const totalQuotationAmount = Math.round((totalPriceWithDelivery - whtAmount) * 100) / 100;
 
       const bodyData: Completed & {
         vat_type?: "vat_inc" | "vat_exe" | "zero_rated";
@@ -1352,7 +1352,12 @@ export default function TaskListEditDialog({
           : (unitPrice * rowDiscount) / 100)
         : 0;
       const discountedAmount = Math.max(0, unitPrice - unitDiscountAmount); // net unit price
-      const totalAmount = discountedAmount * qty;
+      // Fix: Round net unit price to 2 decimal places to match UI display and avoid butal
+      const fixedNetPrice = parseFloat(discountedAmount.toFixed(2));
+      const totalAmount = fixedNetPrice * qty;
+      
+      // Fix: Recalculate unitDiscountAmount based on fixedNetPrice to keep everything consistent
+      const fixedUnitDiscountAmount = parseFloat((unitPrice - fixedNetPrice).toFixed(2));
 
       return {
         itemNo: index + 1,
@@ -1366,8 +1371,8 @@ export default function TaskListEditDialog({
           : p.product_description || "",
         unitPrice,
         discount: rowDiscount,
-        discountAmount: unitDiscountAmount,
-        discountedAmount,
+        discountAmount: fixedUnitDiscountAmount,
+        discountedAmount: fixedNetPrice,
         totalAmount,
         isPromo: p.isPromo ?? false,
         hideDiscountInPreview: p.isHidden ?? p.hideDiscountInPreview ?? false,
@@ -1395,13 +1400,24 @@ export default function TaskListEditDialog({
 
     const deliveryFeeNum = parseFloat(deliveryFeeState) || 0;
     const restockingFeeNum = parseFloat(restockingFeeState) || 0;
-    const totalPriceWithDelivery = (quotationAmount || 0) + deliveryFeeNum + restockingFeeNum;
+    // Fix: Use subtotal directly which is already rounded-sum of rounded line items
+    const totalPriceWithDelivery = subtotal + deliveryFeeNum + restockingFeeNum;
 
     const activeItem = selectedRevisedQuotation || item;
     const activeItemAny = activeItem as any;
     
     const displayDate = activeItemAny.date_updated ?? activeItemAny.date_created ?? activeItemAny.start_date ?? new Date();
     
+    const whtBase = vatTypeState === "vat_inc"
+      ? totalPriceWithDelivery / 1.12
+      : totalPriceWithDelivery;
+    
+    const whtAmount = whtTypeState !== "none"
+      ? Math.round((whtBase * (whtTypeState === "wht_1" ? 0.01 : 0.02)) * 100) / 100
+      : 0;
+      
+    const netAmountToCollect = Math.round((totalPriceWithDelivery - whtAmount) * 100) / 100;
+
     return {
       referenceNo: activeItemAny.quotation_number ?? "DRAFT-XXXX",
       version: activeItemAny.version,
@@ -1434,25 +1450,9 @@ export default function TaskListEditDialog({
       whtLabel:
         whtTypeState === "wht_1" ? "EWT 1% (Goods)" :
           whtTypeState === "wht_2" ? "EWT 2% (Services)" : "None",
-      whtBase: vatTypeState === "vat_inc"
-        ? totalPriceWithDelivery / 1.12
-        : totalPriceWithDelivery,
-      whtAmount:
-        whtTypeState !== "none"
-          ? (vatTypeState === "vat_inc"
-            ? totalPriceWithDelivery / 1.12
-            : totalPriceWithDelivery
-          ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
-          : 0,
-      netAmountToCollect:
-        totalPriceWithDelivery - (
-          whtTypeState !== "none"
-            ? (vatTypeState === "vat_inc"
-              ? totalPriceWithDelivery / 1.12
-              : totalPriceWithDelivery
-            ) * (whtTypeState === "wht_1" ? 0.01 : 0.02)
-            : 0
-        ),
+      whtBase: whtBase,
+      whtAmount: whtAmount,
+      netAmountToCollect: netAmountToCollect,
       agentSignature: loadedAgentSignature ?? agentSignature ?? null,
       agentContactNumber: loadedAgentContactNumber ?? agentContactNumber ?? null,
       agentEmailAddress: loadedAgentEmailAddress ?? agentEmailAddress ?? null,
@@ -2435,15 +2435,13 @@ export default function TaskListEditDialog({
       const _total = Number(payload.totalPrice) || 0;
 
       // ✅ Calculations (rounded properly) - Match preview.tsx logic exactly
-      // Gross Sales = sum of (unitPrice * qty) - undiscounted gross amount
+      // Gross Sales = sum of (unitPrice * qty)
       const _grossSales = round2((payload.items || []).reduce((acc, item) => acc + ((Number(item.qty) || 0) * (item.unitPrice || 0)), 0));
-      // Total Trade Discount = sum of (discountAmount * qty) for all items
-      const _totalDiscount = round2((payload.items || []).reduce((acc, item) => {
-        const disc = item.discountAmount ?? 0;
-        return acc + (disc * (Number(item.qty) || 0));
-      }, 0));
-      // Net Sales = Gross Sales - Total Discount
-      const _netSales = round2(_grossSales - _totalDiscount);
+      // Net Sales is the sum of rounded line item totals to avoid floating point butal
+      const _netSales = round2((payload.items || []).reduce((acc, item) => acc + (item.totalAmount || 0), 0));
+      // Total Trade Discount is the difference between gross and net
+      const _totalDiscount = round2(_grossSales - _netSales);
+      
       const _vatAmount = round2(_total * (12 / 112));
       const _netOfVat = round2(_total / 1.12);
       const _whtAmount = round2(payload.whtAmount || 0);
@@ -3137,7 +3135,9 @@ ${payload.whtType && payload.whtType !== "none"
           ? product.discountAmount
           : (unitPrice * discPct) / 100;
         const netUnitPrice = Math.max(0, unitPrice - unitDiscountAmount);
-        return acc + netUnitPrice * qty;
+        // Fix: Round net unit price to 2 decimal places to match UI display and avoid butal
+        const fixedNetPrice = parseFloat(netUnitPrice.toFixed(2));
+        return acc + fixedNetPrice * qty;
       }
       return acc + unitPrice * qty;
     }, 0);
@@ -4664,7 +4664,9 @@ ${payload.whtType && payload.whtType !== "none"
                                 : (amt * rowDiscountPct) / 100)
                               : 0;
                             const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-                            const totalAfterDiscount = discountedUnitPrice * qty;
+                            // Round net price to 2 decimal places to match UI display and avoid floating point butal in total
+                            const fixedNetPrice = parseFloat(discountedUnitPrice.toFixed(2));
+                            const totalAfterDiscount = fixedNetPrice * qty;
                             return (
                               <React.Fragment key={index}>
                                 <tr
@@ -5529,7 +5531,9 @@ ${payload.whtType && payload.whtType !== "none"
                               // discountAmount in state is always per-unit
                               let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
                               const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-                              return acc + (discountedUnitPrice * qty);
+                              // Fix: Use 2-decimal rounded net price for total
+                              const fixedNetPrice = parseFloat(discountedUnitPrice.toFixed(2));
+                              return acc + (fixedNetPrice * qty);
                             }, 0).toFixed(2)}
                           </td>
                           {/* Total */}
@@ -5540,7 +5544,9 @@ ${payload.whtType && payload.whtType !== "none"
                               // discountAmount in state is always per-unit
                               let unitDiscountAmt = p.isDiscounted ? (p.discountAmount ?? (amt * (p.discount ?? 0)) / 100) : 0;
                               const discountedUnitPrice = Math.max(0, amt - unitDiscountAmt);
-                              return acc + (discountedUnitPrice * qty);
+                              // Fix: Use 2-decimal rounded net price for total
+                              const fixedNetPrice = parseFloat(discountedUnitPrice.toFixed(2));
+                              return acc + (fixedNetPrice * qty);
                             }, 0).toFixed(2)}
                           </td>
                           {/* Actions */}
