@@ -481,6 +481,11 @@ export function AccountsTable({
         },
       },
       {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <StatusBadge value={row.original.status ?? "—"} />,
+      },
+      {
         accessorKey: "company_name",
         header: "Company",
         cell: ({ row }) => (
@@ -637,11 +642,6 @@ export function AccountsTable({
             {row.original.tin_number ?? "—"}
           </p>
         ),
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => <StatusBadge value={row.original.status ?? "—"} />,
       },
       {
         accessorKey: "date_created",
