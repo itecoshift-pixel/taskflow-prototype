@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 500;
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 200;
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
 const HARD_MAX_FOR_FETCH_ALL = 10000; // For fetchAll mode, allow up to 10k per request

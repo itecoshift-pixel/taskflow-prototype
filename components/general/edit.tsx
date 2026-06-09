@@ -25,8 +25,15 @@ import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 import {
   Eye, EyeOff, WandSparkles, ImagePlus, Save,
   PenTool, Eraser, UploadCloud, X, User, Phone,
-  Mail, MapPin, KeyRound, ShieldCheck, Loader2,
+  Mail, MapPin, KeyRound, ShieldCheck, Loader2, QrCode, Smartphone,
 } from "lucide-react";
+import QRCode from "qrcode";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,6 +55,7 @@ interface UserDetails {
   Address: string;
   Birthday: string;
   Gender: string;
+  twoFactorEnabled?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -177,10 +185,18 @@ export default function ProfileClient() {
   >("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [activeCredentialTab, setActiveCredentialTab] = useState<"password" | "pin">("password");
+  const [activeCredentialTab, setActiveCredentialTab] = useState<"password" | "pin" | "2fa">("password");
   const [pin, setPin] = useState("");
   const [showPinDialog, setShowPinDialog] = useState(false);
   const [tempPin, setTempPin] = useState("");
+
+  // 2FA States
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [twoFactorSecret, setTwoFactorSecret] = useState("");
+  const [otpToken, setOtpToken] = useState("");
+  const [verifying2FA, setVerifying2FA] = useState(false);
 
   const [dateCreatedFilterRange, setDateCreatedFilterRangeAction] =
     useState<DateRange | undefined>(undefined);
@@ -234,8 +250,10 @@ export default function ProfileClient() {
           Address: data.Address || "",
           Birthday: data.Birthday || "",
           Gender: data.Gender || "",
+          twoFactorEnabled: data.twoFactorEnabled || false,
         });
         
+        setTwoFactorEnabled(data.twoFactorEnabled || false);
         // Set the PIN from localStorage
         setPin(userPin);
       } catch (e) {
@@ -354,6 +372,58 @@ export default function ProfileClient() {
     }
     
     sileo.success({ title: "Success", description: "PIN removed successfully", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
+  };
+
+  const handleSetup2FA = async () => {
+    try {
+      const res = await fetch("/api/auth/2fa/setup", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to setup 2FA");
+
+      setTwoFactorSecret(data.secret);
+      const qrCode = await QRCode.toDataURL(data.otpauth);
+      setQrCodeUrl(qrCode);
+      setShow2FASetup(true);
+    } catch (err: any) {
+      sileo.error({ title: "Error", description: err.message });
+    }
+  };
+
+  const handleVerify2FA = async () => {
+    if (otpToken.length !== 6) return;
+    setVerifying2FA(true);
+    try {
+      const res = await fetch("/api/auth/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ secret: twoFactorSecret, token: otpToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Verification failed");
+
+      setTwoFactorEnabled(true);
+      setShow2FASetup(false);
+      setOtpToken("");
+      sileo.success({ title: "Success", description: "2FA enabled successfully" });
+    } catch (err: any) {
+      sileo.error({ title: "Error", description: err.message });
+    } finally {
+      setVerifying2FA(false);
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    if (!confirm("Are you sure you want to disable 2FA? This will make your account less secure.")) return;
+    try {
+      const res = await fetch("/api/auth/2fa/disable", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to disable 2FA");
+
+      setTwoFactorEnabled(false);
+      sileo.success({ title: "Success", description: "2FA disabled successfully" });
+    } catch (err: any) {
+      sileo.error({ title: "Error", description: err.message });
+    }
   };
 
   // Upload to Cloudinary — accepts File or data URL string
@@ -870,6 +940,17 @@ export default function ProfileClient() {
                         >
                           PIN
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveCredentialTab("2fa")}
+                          className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                            activeCredentialTab === "2fa"
+                              ? "border-b-2 border-gray-900 text-gray-900"
+                              : "text-gray-400 hover:text-gray-600"
+                          }`}
+                        >
+                          Two-Factor (2FA)
+                        </button>
                       </div>
 
                       {/* Password Tab */}
@@ -993,6 +1074,114 @@ export default function ProfileClient() {
                                </Button>
                              )}
                            </div>
+                         </div>
+                       )}
+
+                       {/* 2FA Tab */}
+                       {activeCredentialTab === "2fa" && (
+                         <div className="space-y-4">
+                           <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100">
+                             <div className={`p-2 rounded-full ${twoFactorEnabled ? "bg-emerald-100 text-emerald-600" : "bg-gray-200 text-gray-500"}`}>
+                               <ShieldCheck className="w-5 h-5" />
+                             </div>
+                             <div>
+                               <p className="text-xs font-bold text-gray-800">
+                                 Two-Factor Authentication (TOTP)
+                               </p>
+                               <p className="text-[10px] text-gray-500">
+                                 {twoFactorEnabled 
+                                   ? "Your account is secured with 2FA." 
+                                   : "Add an extra layer of security to your account."}
+                               </p>
+                             </div>
+                           </div>
+
+                           {!twoFactorEnabled && !show2FASetup && (
+                             <Button
+                               type="button"
+                               size="sm"
+                               className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700"
+                               onClick={handleSetup2FA}
+                             >
+                               <QrCode className="w-3 h-3" />
+                               Enable 2FA
+                             </Button>
+                           )}
+
+                           {show2FASetup && (
+                             <div className="space-y-4 border border-indigo-100 p-4 bg-indigo-50/30">
+                               <div className="flex flex-col items-center gap-3">
+                                 <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-tight">
+                                   1. Scan this QR Code
+                                 </p>
+                                 <div className="bg-white p-2 border border-indigo-100">
+                                   {qrCodeUrl && <img src={qrCodeUrl} alt="2FA QR Code" className="w-32 h-32" />}
+                                 </div>
+                                 <p className="text-[10px] text-gray-500 text-center max-w-[200px]">
+                                   Use an authenticator app like Google Authenticator or Microsoft Authenticator.
+                                 </p>
+                               </div>
+
+                               <div className="space-y-2">
+                                 <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-tight text-center">
+                                   2. Enter Verification Code
+                                 </p>
+                                 <div className="flex justify-center">
+                                   <InputOTP
+                                     maxLength={6}
+                                     value={otpToken}
+                                     onChange={(val) => setOtpToken(val)}
+                                   >
+                                     <InputOTPGroup>
+                                       <InputOTPSlot index={0} />
+                                       <InputOTPSlot index={1} />
+                                       <InputOTPSlot index={2} />
+                                     </InputOTPGroup>
+                                     <InputOTPSeparator />
+                                     <InputOTPGroup>
+                                       <InputOTPSlot index={3} />
+                                       <InputOTPSlot index={4} />
+                                       <InputOTPSlot index={5} />
+                                     </InputOTPGroup>
+                                   </InputOTP>
+                                 </div>
+                               </div>
+
+                               <div className="flex gap-2">
+                                 <Button
+                                   type="button"
+                                   variant="outline"
+                                   size="sm"
+                                   className="flex-1 rounded-none text-[10px] font-bold uppercase h-8"
+                                   onClick={() => setShow2FASetup(false)}
+                                 >
+                                   Cancel
+                                 </Button>
+                                 <Button
+                                   type="button"
+                                   size="sm"
+                                   className="flex-1 rounded-none text-[10px] font-bold uppercase h-8 bg-indigo-600 hover:bg-indigo-700"
+                                   onClick={handleVerify2FA}
+                                   disabled={otpToken.length !== 6 || verifying2FA}
+                                 >
+                                   {verifying2FA ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify & Enable"}
+                                 </Button>
+                               </div>
+                             </div>
+                           )}
+
+                           {twoFactorEnabled && (
+                             <Button
+                               type="button"
+                               variant="outline"
+                               size="sm"
+                               className="rounded-none text-[10px] font-bold uppercase gap-1.5 h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                               onClick={handleDisable2FA}
+                             >
+                               <X className="w-3 h-3" />
+                               Disable 2FA
+                             </Button>
+                           )}
                          </div>
                        )}
                     </Section>

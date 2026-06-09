@@ -39,6 +39,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 const INDUSTRY_OPTIONS = [
   "Technology / Manufacturing / Telco / Data Center / Agriculture",
   "Healthcare / Education - Private",
+  "Construction / Real Estate",
   "Energy / Mining",
   "Finance / Commercial / Hospitality / Retail",
   "Government / LGU",

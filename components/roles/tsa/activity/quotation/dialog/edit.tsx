@@ -887,7 +887,7 @@ export default function TaskListEditDialog({
       const discountedAmountArr = splitAndTrim(item.discounted_amount);
       const qtyNum = parseFloat(qty) || 1;
       let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
-      if (savedDiscountAmt > 0 && qtyNum > 1) {
+      if (savedDiscountAmt > 0 && qtyNum > 0) {
         savedDiscountAmt = savedDiscountAmt / qtyNum;
       }
       // Fall back to percent-derived if no saved amount
@@ -1660,8 +1660,15 @@ export default function TaskListEditDialog({
         const discountPct = parseFloat(discountedPrices[i] ?? "0") || 0;
         const isDiscounted = discountPct > 0;
         const unitPrice = parseFloat(amounts[i] ?? "0") || 0;
+        const qtyNum = parseFloat(quantities[i] ?? "0") || 1;
         let savedDiscountAmtR = parseFloat(discountedAmounts[i] ?? "0") || 0;
-        // Don't divide discount amount by quantity at all
+        
+        // discounted_amount in DB is stored as the TOTAL discount (unit discount × qty).
+        // Always divide by qty to get the per-unit discount amount.
+        if (savedDiscountAmtR > 0 && qtyNum > 0) {
+          savedDiscountAmtR = savedDiscountAmtR / qtyNum;
+        }
+
         const unitDiscountAmount = savedDiscountAmtR > 0
           ? savedDiscountAmtR
           : isDiscounted ? (unitPrice * discountPct) / 100 : 0;
@@ -2905,9 +2912,15 @@ ${payload.whtType && payload.whtType !== "none"
           newCheckedRows[i] = true;
         }
         const unitPrice = parseFloat(amt) || 0;
-        const discountedAmountArr = splitAndTrim(data.discounted_amount);
-        let savedDiscountAmt = parseFloat(discountedAmountArr[i] ?? "0") || 0;
-        // Don't divide discount amount by quantity at all
+        const qtyNum = parseFloat(qty) || 1;
+        let savedDiscountAmt = parseFloat(discountedAmounts[i] ?? "0") || 0;
+
+        // discounted_amount in DB is stored as the TOTAL discount (unit discount × qty).
+        // Always divide by qty to get the per-unit discount amount.
+        if (savedDiscountAmt > 0 && qtyNum > 0) {
+          savedDiscountAmt = savedDiscountAmt / qtyNum;
+        }
+
         const unitDiscountAmount = savedDiscountAmt > 0
           ? savedDiscountAmt
           : isDiscounted ? (unitPrice * discountPct) / 100 : 0;

@@ -15,8 +15,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   Globe, Calendar, MapPin, MapPinOff,
-  Lock, Loader2, CheckCircle2, Send, Grid3X3, MoonStar, Clock
+  Lock, Loader2, CheckCircle2, Send, Grid3X3, MoonStar, Clock, ShieldCheck, Smartphone
 } from "lucide-react";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import Link from "next/link";
 
 // Firestore
@@ -173,6 +179,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [ticketDone,       setTicketDone]       = useState(false);
   const [ticket, setTicket] = useState<Ticket[]>([]);
 
+  // ── 2FA States ─────────────────────────────────────────────────────────────
+  const [show2FADialog, setShow2FADialog] = useState(false);
+  const [otpToken, setOtpToken] = useState("");
+  const [verifying2FA, setVerifying2FA] = useState(false);
+  const [temp2FAData, setTemp2FAData] = useState<{ userId: string; deviceId: string } | null>(null);
+
   // ── Time-based lockout (12AM–6AM Manila time) ───────────────────────────────
   const [locked, setLocked] = useState(() => isLoginLocked());
   const [manilaTime, setManilaTime] = useState(() => getManilaTimeString());
@@ -322,6 +334,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         return;
       }
 
+      if (result.requires2FA) {
+        setTemp2FAData({ userId: result.userId, deviceId });
+        setShow2FADialog(true);
+        return;
+      }
+
       setPendingLoginData({ Email: pinData.email, deviceId, result });
       setShowLocationDialog(true);
     } catch {
@@ -361,6 +379,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         }
         else { sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } }); }
         setLoading(false);
+        return;
+      }
+
+      if (result.requires2FA) {
+        setTemp2FAData({ userId: result.userId, deviceId });
+        setShow2FADialog(true);
         return;
       }
 
@@ -414,7 +438,38 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   };
 
   const onAllowLocation = async () => { setShowLocationDialog(false); const loc = await getLocation(); await handlePostLogin(loc); };
-  const onDenyLocation  = async () => { setShowLocationDialog(false); await handlePostLogin(null); };
+  const handleDenyLocation  = async () => { setShowLocationDialog(false); await handlePostLogin(null); };
+
+  // ── 2FA Verification ───────────────────────────────────────────────────────
+  const handle2FAVerify = async () => {
+    if (otpToken.length !== 6 || !temp2FAData) return;
+    setVerifying2FA(true);
+    try {
+      const res = await fetch("/api/auth/2fa/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: temp2FAData.userId,
+          token: otpToken,
+          deviceId: temp2FAData.deviceId,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        sileo.error({ title: "Invalid Code", description: result.message || "The code you entered is incorrect." });
+        setOtpToken("");
+        return;
+      }
+
+      setShow2FADialog(false);
+      setPendingLoginData({ Email: result.Email || result.email || Email, deviceId: temp2FAData.deviceId, result });
+      setShowLocationDialog(true);
+    } catch (err) {
+      sileo.error({ title: "Error", description: "Verification failed. Please try again." });
+    } finally {
+      setVerifying2FA(false);
+    }
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const s = formStyles; // shorthand
@@ -694,6 +749,73 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         </DialogContent>
       </Dialog>
 
+      {/* ── 2FA Verification Dialog ── */}
+      <Dialog open={show2FADialog} onOpenChange={(v) => { if (!verifying2FA) setShow2FADialog(v); }}>
+        <DialogContent className="max-w-sm w-full">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 shrink-0">
+                <ShieldCheck size={14} className="text-indigo-500" />
+              </span>
+              Two-Factor Authentication
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Enter the 6-digit verification code from your authenticator app.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center gap-6 py-4">
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-slate-50 border border-slate-100">
+              <Smartphone size={32} className="text-slate-400" />
+            </div>
+
+            <InputOTP
+              maxLength={6}
+              value={otpToken}
+              onChange={(val) => setOtpToken(val)}
+              onComplete={handle2FAVerify}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+              </InputOTPGroup>
+              <InputOTPSeparator />
+              <InputOTPGroup>
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-xs flex-1" 
+              onClick={() => setShow2FADialog(false)}
+              disabled={verifying2FA}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="text-xs flex-1 gap-1.5"
+              style={{ backgroundColor: s.btn_bg, color: s.btn_text }}
+              onClick={handle2FAVerify}
+              disabled={otpToken.length !== 6 || verifying2FA}
+            >
+              {verifying2FA ? (
+                <><Loader2 size={12} className="animate-spin" /> Verifying...</>
+              ) : (
+                <><ShieldCheck size={12} /> Verify Code</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Location Dialog ── */}
       <Dialog open={showLocationDialog} onOpenChange={setShowLocationDialog}>
         <DialogContent className="max-w-sm w-full">
@@ -715,7 +837,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
             />
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" className="text-xs flex-1 gap-1.5" onClick={onDenyLocation}>
+            <Button variant="outline" size="sm" className="text-xs flex-1 gap-1.5" onClick={handleDenyLocation}>
               <MapPinOff size={13} /> Deny
             </Button>
             <Button

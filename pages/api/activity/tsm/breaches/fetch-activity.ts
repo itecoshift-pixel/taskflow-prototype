@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 500;
 
 // Based on overdue.tsx: only these statuses are considered overdue
 const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];

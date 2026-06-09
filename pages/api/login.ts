@@ -217,8 +217,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   /* =========================================
-     SUCCESS LOGIN
+     SUCCESS LOGIN (OR 2FA STEP)
   ========================================= */
+
+  // Check if 2FA is enabled
+  const credentials = user.credentials || {};
+  if (user.twoFactorEnabled && credentials.twoFactorSecret) {
+    return res.status(200).json({
+      message: "2FA required",
+      requires2FA: true,
+      userId: user.id.toString(),
+      Email: userEmail,
+    });
+  }
 
   await supabase
     .from("users")

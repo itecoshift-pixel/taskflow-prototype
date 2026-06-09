@@ -2,7 +2,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 500;
+const HISTORY_CHUNK_SIZE = 200;
 const ALLOWED_STATUSES = ["Assisted", "Quote-Done"];
 
 function toLocalDateString(date: Date | string | null | undefined): string {
@@ -48,8 +49,8 @@ async function fetchHistoryForActivities(activityRefs: string[]) {
   const uniqueRefs = [...new Set(activityRefs)];
   const allHistory: any[] = [];
 
-  for (let i = 0; i < uniqueRefs.length; i += BATCH_SIZE) {
-    const chunk = uniqueRefs.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < uniqueRefs.length; i += HISTORY_CHUNK_SIZE) {
+    const chunk = uniqueRefs.slice(i, i + HISTORY_CHUNK_SIZE);
     const { data, error } = await supabase
       .from("history")
       .select("activity_reference_number, call_type")

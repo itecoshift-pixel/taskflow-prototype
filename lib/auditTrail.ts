@@ -192,6 +192,25 @@ export function createAuditMessage(
 }
 
 /**
+ * Recursively remove undefined values from an object and replace with null
+ * Firestore does not support undefined values
+ */
+function sanitizeForFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  if (typeof obj === "object") {
+    const sanitized: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        sanitized[key] = sanitizeForFirestore(obj[key]);
+      }
+    }
+    return sanitized;
+  }
+  return obj;
+}
+
+/**
  * Log an audit trail entry to Firebase Firestore
  */
 export async function logAuditTrail(data: AuditTrailData): Promise<void> {
@@ -204,7 +223,7 @@ export async function logAuditTrail(data: AuditTrailData): Promise<void> {
       data.entityName
     );
 
-    const auditEntry = {
+    const auditEntry = sanitizeForFirestore({
       userId: data.userId,
       firstName: data.firstName,
       lastName: data.lastName,
@@ -224,7 +243,7 @@ export async function logAuditTrail(data: AuditTrailData): Promise<void> {
       userAgent: data.userAgent || null,
       timestamp: serverTimestamp(),
       createdAt: new Date().toISOString(),
-    };
+    });
 
     await addDoc(collection(db, "audit_trails"), auditEntry);
     console.log(`Audit trail logged: ${message}`);
