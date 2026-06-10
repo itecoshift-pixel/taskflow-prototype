@@ -1,16 +1,21 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from "react";
 
 interface UserContextType {
   userId: string | null;
-  setUserId: (id: string) => void;
+  user: any | null;
+  loading: boolean;
+  setUserId: (id: string | null) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userId, setUserIdState] = useState<string | null>(null);
+  const [user, setUser] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Initialize from localStorage
   useEffect(() => {
@@ -36,17 +41,50 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const setUserId = (id: string) => {
+  const fetchUser = useCallback(async (id: string) => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/user?id=${encodeURIComponent(id)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Error fetching user in context:", error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (userId) {
+      fetchUser(userId);
+    } else {
+      setUser(null);
+    }
+  }, [userId, fetchUser]);
+
+  const setUserId = (id: string | null) => {
+    if (id === userId) return; // Prevent redundant updates
     setUserIdState(id);
     if (id) {
       localStorage.setItem("userId", id);
     } else {
       localStorage.removeItem("userId");
+      setUser(null);
     }
   };
 
+  const refreshUser = async () => {
+    if (userId) await fetchUser(userId);
+  };
+
   return (
-    <UserContext.Provider value={{ userId, setUserId }}>
+    <UserContext.Provider value={{ userId, user, loading, setUserId, refreshUser }}>
       {children}
     </UserContext.Provider>
   );

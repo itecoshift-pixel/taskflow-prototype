@@ -25,6 +25,7 @@ import { RevisionDialog } from "../../activity/spf/dialog/revision-dialog";
 import { CollaborationHubRowTrigger } from "@/components/collaboration-row-trigger";
 import { CancelledButton } from "./cancelled-button";
 import { CancelDialog } from "./cancel-dialog";
+import { getTableStyles, DEFAULT_TABLE_STYLES, type TableStyles } from "@/lib/table-styles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -239,53 +240,10 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
 
     const endTimerRef = useRef<number | null>(null);
 
-    const [tableStyles, setTableStyles] = useState({
-        th_bg: "#f9fafb",
-        layout: "datatable",
-        td_text: "#111827",
-        th_text: "#374151",
-        table_bg: "#ffffff",
-        tfoot_bg: "#ffffff",
-        td_border: "#f3f4f6",
-        th_border: "#e5e7eb",
-        tr_border: "#f3f4f6",
-        td_padding: "12",
-        tfoot_text: "#6b7280",
-        th_padding: "12",
-        toolbar_bg: "#f9fafb",
-        tr_hover_bg: "#f9fafb",
-        table_border: "#e5e7eb",
-        table_shadow: "0 4px 6px -1px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)",
-        td_font_size: "13",
-        tfoot_border: "#e5e7eb",
-        th_font_size: "12",
-        pagination_bg: "#ffffff",
-        tfoot_padding: "12",
-        th_font_weight: "600",
-        toolbar_border: "#e5e7eb",
-        toolbar_btn_bg: "#ffffff",
-        pagination_text: "#374151",
-        tfoot_font_size: "12",
-        toolbar_btn_text: "#374151",
-        toolbar_input_bg: "#ffffff",
-        pagination_border: "#d1d5db",
-        pagination_radius: "8",
-        table_font_family: "'Inter', 'Segoe UI', Arial, sans-serif",
-        th_letter_spacing: "0.01em",
-        toolbar_btn_border: "#d1d5db",
-        toolbar_input_text: "#374151",
-        table_border_radius: "16",
-        pagination_active_bg: "#3b82f6",
-        toolbar_input_border: "#d1d5db",
-        pagination_active_text: "#ffffff"
-
-    });
+    const [tableStyles, setTableStyles] = useState<TableStyles>(DEFAULT_TABLE_STYLES);
 
     useEffect(() => {
-        fetch("/api/table-styles")
-            .then((res) => res.json())
-            .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-            .catch(() => { });
+        getTableStyles().then(setTableStyles);
     }, []);
 
     // ─── Fetch accounts (paginated with search) ────────────────────────

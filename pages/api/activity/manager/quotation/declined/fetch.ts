@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
-import { connectToDatabase } from "@/lib/mongodb";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { 
@@ -99,37 +98,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Fetch TSM and Agent names from MongoDB
-    const db = await connectToDatabase();
-    
+    // Fetch TSM and Agent names from Supabase
     // Get all unique TSM and Agent reference IDs
     const tsmIds = [...new Set(filteredData.map((item: any) => item.tsm).filter(Boolean))];
     const agentIds = [...new Set(filteredData.map((item: any) => item.referenceid).filter(Boolean))];
     
-    // Fetch TSM data
+    // Fetch TSM data from Supabase
     const tsmMap = new Map<string, any>();
     if (tsmIds.length > 0) {
-      const tsmUsers = await db
-        .collection("users")
-        .find({ ReferenceID: { $in: tsmIds } })
-        .project({ ReferenceID: 1, Firstname: 1, Lastname: 1, _id: 0 })
-        .toArray();
+      const { data: tsmUsers } = await supabase
+        .from("users")
+        .select("ReferenceID, Firstname, Lastname")
+        .in("ReferenceID", tsmIds);
       
-      tsmUsers.forEach((tsm: any) => {
+      tsmUsers?.forEach((tsm: any) => {
         tsmMap.set(tsm.ReferenceID, `${tsm.Firstname} ${tsm.Lastname}`);
       });
     }
     
-    // Fetch Agent data
+    // Fetch Agent data from Supabase
     const agentMap = new Map<string, any>();
     if (agentIds.length > 0) {
-      const agentUsers = await db
-        .collection("users")
-        .find({ ReferenceID: { $in: agentIds } })
-        .project({ ReferenceID: 1, Firstname: 1, Lastname: 1, _id: 0 })
-        .toArray();
+      const { data: agentUsers } = await supabase
+        .from("users")
+        .select("ReferenceID, Firstname, Lastname")
+        .in("ReferenceID", agentIds);
       
-      agentUsers.forEach((agent: any) => {
+      agentUsers?.forEach((agent: any) => {
         agentMap.set(agent.ReferenceID, `${agent.Firstname} ${agent.Lastname}`);
       });
     }

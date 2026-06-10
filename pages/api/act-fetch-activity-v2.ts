@@ -31,7 +31,7 @@ async function connectToDatabase() {
     return { client: cachedClient, db: cachedDb };
   }
 
-  const client = new MongoClient(mongoUri);
+  const client = new MongoClient(mongoUri, { maxPoolSize: 5, minPoolSize: 1, serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 });
 
   await client.connect();
 

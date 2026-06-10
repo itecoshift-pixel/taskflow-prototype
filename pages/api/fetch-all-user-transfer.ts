@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -8,33 +8,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
-
     // Fetch only users with role Territory Sales Associate
-    // and Status NOT in ['Resigned', 'Terminated'], sorted by Lastname ascending
-    const agents = await db
-      .collection("users")
-      .find({
-        Role: "Territory Sales Associate",
-        Status: { $nin: ["Resigned", "Terminated"] },
-      })
-      .project({
-        Firstname: 1,
-        Lastname: 1,
-        ReferenceID: 1,
-        profilePicture: 1,
-        _id: 0,
-      })
-      .sort({ Lastname: 1 })  // <-- Sorting by Lastname ascending
-      .toArray();
+    // and Status NOT in ['Resigned', 'Terminated'] from Supabase
+    const { data: agents, error } = await supabase
+      .from("users")
+      .select("Firstname, Lastname, ReferenceID, profilePicture")
+      .eq("Role", "Territory Sales Associate")
+      .not("Status", "in", '("Resigned", "Terminated")')
+      .order("Lastname", { ascending: true });
 
-    if (agents.length === 0) {
+    if (error) throw error;
+
+    if (!agents || agents.length === 0) {
       return res.status(404).json({ error: "No agents found" });
     }
 
     res.status(200).json(agents);
   } catch (error) {
-    console.error("Error fetching agents:", error);
+    console.error("Error fetching agents from Supabase:", error);
     res.status(500).json({ error: "Server error fetching agents" });
   }
 }

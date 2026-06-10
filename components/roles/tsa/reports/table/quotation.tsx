@@ -6,9 +6,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Pagination, PaginationContent, PaginationItem, PaginationPrevious, PaginationNext } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/utils/supabase";
-import ExcelJS from "exceljs";
-import { Download, Search } from "lucide-react";
-import { ta } from "date-fns/locale";
+import { Search } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,7 +73,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
   const [filterQuotationSubStatus, setFilterQuotationSubStatus] = useState("all");
   const [page, setPage] = useState(1);
 
-  const [tableStyles, setTableStyles] = useState({
+  const tableStyles = {
     th_bg: "#f9fafb",
     layout: "datatable",
     td_text: "#111827",
@@ -114,15 +112,7 @@ export const QuotationTable: React.FC<QuotationProps> = ({
     pagination_active_bg: "#3b82f6",
     toolbar_input_border: "#d1d5db",
     pagination_active_text: "#ffffff"
-
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-      .catch(() => { });
-  }, []);
+  };
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchActivities = useCallback(() => {

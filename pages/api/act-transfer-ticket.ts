@@ -18,7 +18,7 @@ async function connectToMongo() {
   if (!MONGODB_URI) throw new Error("Please define the MONGODB_URI environment variable");
   if (!MONGODB_DB) throw new Error("Please define the MONGODB_DB environment variable");
 
-  const client = new MongoClient(MONGODB_URI);
+  const client = new MongoClient(MONGODB_URI, { maxPoolSize: 5, minPoolSize: 1, serverSelectionTimeoutMS: 5000, socketTimeoutMS: 45000 });
   await client.connect();
   const db = client.db(MONGODB_DB);
 

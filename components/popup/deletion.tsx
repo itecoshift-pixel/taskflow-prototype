@@ -22,7 +22,7 @@ export function ApproveDeletionDialog() {
     const [deletions, setDeletions] = useState<Deletion[]>([]);
     const [open, setOpen] = useState(false);
     const [showDismissConfirm, setShowDismissConfirm] = useState(false);
-    const { userId, setUserId } = useUser();
+    const { userId, user, setUserId } = useUser();
     const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "" });
     const [loadingUser, setLoadingUser] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -38,38 +38,16 @@ export function ApproveDeletionDialog() {
         }
     }, [queryUserId, userId, setUserId]);
 
-    // Fetch user details based on userId
+    // Update userDetails from centralized user context
     useEffect(() => {
-        if (!userId) {
-            setLoadingUser(false);
-            return;
+        if (user) {
+            setUserDetails({
+                referenceid: user.ReferenceID || "",
+            });
+        } else {
+            setUserDetails({ referenceid: "" });
         }
-
-        const fetchUserData = async () => {
-            setError(null);
-            setLoadingUser(true);
-            try {
-                const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-                if (!response.ok) throw new Error("Failed to fetch user data");
-                const data = await response.json();
-
-                setUserDetails({
-                    referenceid: data.ReferenceID || "",
-                });
-
-                toast.success("User data loaded successfully!");
-            } catch (err) {
-                console.error("Error fetching user data:", err);
-                toast.error(
-                    "Failed to connect to server. Please try again later or refresh your network connection"
-                );
-            } finally {
-                setLoadingUser(false);
-            }
-        };
-
-        fetchUserData();
-    }, [userId]);
+    }, [user]);
 
     // Fetch active deletions for the user
     useEffect(() => {

@@ -32,7 +32,7 @@ const QuotationNotificationContext = createContext<QuotationNotificationContextV
 });
 
 export function QuotationNotificationProvider({ children }: { children: React.ReactNode }) {
-  const { userId } = useUser();
+  const { userId, user } = useUser();
   const [referenceid, setReferenceid] = useState<string | null>(null);
   const quotationAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -45,31 +45,17 @@ export function QuotationNotificationProvider({ children }: { children: React.Re
     }
   }, []);
 
-  // ─── Fetch user details to get correct referenceid ─────────────────────────────────────
+  // ─── Update referenceid from user context ───────────────────────────────────────────
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !user) {
       setReferenceid(null);
       return;
     }
 
-    const fetchUserDetails = async () => {
-      try {
-        console.log("🔔 Quotation Context: Fetching user details for userId:", userId);
-        const response = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!response.ok) throw new Error("Failed to fetch user data");
-        const data = await response.json();
-        
-        const refId = data.ReferenceID || "";
-        console.log("🔔 Quotation Context: Got referenceid:", refId, "from userId:", userId);
-        setReferenceid(refId);
-      } catch (err) {
-        console.log("🔔 Quotation Context: Error fetching user details:", err);
-        setReferenceid(null);
-      }
-    };
-
-    fetchUserDetails();
-  }, [userId]);
+    const refId = user.ReferenceID || "";
+    console.log("🔔 Quotation Context: Got referenceid from user context:", refId);
+    setReferenceid(refId);
+  }, [userId, user]);
 
   // ─── Play quotation notification sound ───────────────────────────────────────────────
   const playQuotationNotificationSound = useCallback(() => {

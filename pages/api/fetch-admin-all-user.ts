@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -8,12 +8,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
     const referenceId = req.query.id as string; // This is the TSM ReferenceID passed as query param
     const role = req.query.role as string;
     const department = req.query.department as string;
 
-    let query = {};
+    let supabaseQuery = supabase.from("users").select(`
+        Firstname,
+        Lastname,
+        ReferenceID,
+        TSM,
+        Manager,
+        profilePicture,
+        Position,
+        Status,
+        Role,
+        TargetQuota,
+        Connection
+      `);
 
     const isSuperAdmin = role === "SuperAdmin";
     const isProcurement = department === "Procurement";
@@ -22,38 +33,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!referenceId) {
         return res.status(400).json({ error: "ReferenceID (TSM) is required" });
       }
-      query = { TSM: referenceId };
+      supabaseQuery = supabaseQuery.eq("TSM", referenceId);
     }
 
-    // Fetch all agents based on the query
-    const agents = await db
-      .collection("users")
-      .find({
-        ...query,
-        Status: { $nin: ["Resigned", "Terminated"] },
-        Department: "Sales",
-      })
-      .project({
-        Firstname: 1,
-        Lastname: 1,
-        ReferenceID: 1,
-        TSM: 1,
-        Manager: 1,
-        profilePicture: 1,
-        Position: 1,
-        Status: 1,
-        Role: 1,
-        TargetQuota: 1,
-        Connection: 1,
-        _id: 0,
-      })
-      .toArray();
+    // Fetch all agents from Supabase based on the query
+    const { data: agents, error } = await supabaseQuery
+      .not("Status", "in", '("Resigned", "Terminated")')
+      .eq("Department", "Sales");
 
+    if (error) throw error;
 
-    // Return only relevant agent info, excluding sensitive data like passwords
-    res.status(200).json(agents);
+    // Return only relevant agent info
+    res.status(200).json(agents || []);
   } catch (error) {
-    console.error("Error fetching agents:", error);
+    console.error("Error fetching agents from Supabase:", error);
     res.status(500).json({ error: "Server error fetching agents" });
   }
 }

@@ -8,6 +8,18 @@ if (!process.env.MONGODB_URI) {
 
 const uri = process.env.MONGODB_URI;
 
+// ── Connection options: keep pool small for M0 Free Tier (500 conn max) ──────
+const MONGO_OPTIONS = {
+  maxPoolSize: 10,
+  minPoolSize: 1,
+  serverSelectionTimeoutMS: 10000,
+  socketTimeoutMS: 45000,
+  connectTimeoutMS: 15000,
+  // Force modern TLS
+  tls: true,
+  tlsInsecure: false,
+};
+
 // 🔹 Reuse Mongo client across hot reloads in dev
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
@@ -19,13 +31,15 @@ declare global {
 }
 
 if (process.env.NODE_ENV === "development") {
+  // In dev, reuse the global client to survive HMR reloads
   if (!global._mongoClient) {
-    global._mongoClient = new MongoClient(uri);
+    global._mongoClient = new MongoClient(uri, MONGO_OPTIONS);
   }
   client = global._mongoClient;
   clientPromise = client.connect();
 } else {
-  client = new MongoClient(uri);
+  // In production (serverless), create once per cold start
+  client = new MongoClient(uri, MONGO_OPTIONS);
   clientPromise = client.connect();
 }
 

@@ -43,7 +43,7 @@ const SOUND_KEY      = "ticketSoundPlayedFor";
 
 export function TicketEndorsed() {
   const searchParams = useSearchParams();
-  const { userId, setUserId } = useUser();
+  const { userId, user, setUserId } = useUser();
 
   const [referenceid,   setReferenceid]   = useState("");
   const [tickets,       setTickets]       = useState<EndorsedTicket[]>([]);
@@ -57,17 +57,19 @@ export function TicketEndorsed() {
 
   // ── Sync userId from URL ───────────────────────────────────────────────────
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
+    if (queryUserId && queryUserId !== userId) {
+      setUserId(queryUserId);
+    }
   }, [queryUserId, userId, setUserId]);
 
-  // ── Fetch user details ─────────────────────────────────────────────────────
+  // ── Update referenceid from user context ───────────────────────────────────
   useEffect(() => {
-    if (!userId) return;
-    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => setReferenceid(data.ReferenceID || ""))
-      .catch(() => {/* silently fail — component just won't show */});
-  }, [userId]);
+    if (user) {
+      setReferenceid(user.ReferenceID || "");
+    } else {
+      setReferenceid("");
+    }
+  }, [user]);
 
   // ── Fetch agents ───────────────────────────────────────────────────────────
   useEffect(() => {

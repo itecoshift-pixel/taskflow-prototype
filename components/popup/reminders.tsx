@@ -104,7 +104,7 @@ function isSnoozeExpired(snoozeTimeISO: string | undefined): boolean {
 // ─── Component ────────────────────────────────────────────────────────────────
 export function Reminders() {
   const searchParams = useSearchParams();
-  const { userId, setUserId } = useUser();
+  const { userId, user, setUserId } = useUser();
 
   const [loadingUser, setLoadingUser] = useState(false);
   const [referenceId, setReferenceId] = useState<string>("");
@@ -120,26 +120,23 @@ export function Reminders() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevMeeting = useRef(false);
 
-  const queryUserId = searchParams?.get("id") ?? "";
+  const queryUserId = searchParams?.get("id");
 
   // ── Sync URL param with userId context ──────────────────────────────────────
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
+    if (queryUserId && queryUserId !== userId) {
+      setUserId(queryUserId);
+    }
   }, [queryUserId, userId, setUserId]);
 
-  // ── Fetch user details ──────────────────────────────────────────────────────
+  // ── Get referenceId from centralized user context ───────────────────────────
   useEffect(() => {
-    if (!userId) return;
-    setLoadingUser(true);
-    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch user");
-        return res.json();
-      })
-      .then((data) => setReferenceId(data.ReferenceID || ""))
-      .catch(console.error)
-      .finally(() => setLoadingUser(false));
-  }, [userId]);
+    if (user) {
+      setReferenceId(user.ReferenceID || "");
+    } else {
+      setReferenceId("");
+    }
+  }, [user]);
 
   // ── Initialize audio + localStorage ────────────────────────────────────────
   useEffect(() => {

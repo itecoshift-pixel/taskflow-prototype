@@ -1,7 +1,7 @@
-// pages/api/fetch-all-users.ts
+// pages/api/fetch-agent.ts
 
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -10,21 +10,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
+    // Fetch all users from Supabase, exclude Password
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("*, Password") // select all, then we filter out Password
+      .order("Firstname", { ascending: true });
 
-    // Fetch all users, exclude sensitive fields like password
-    const users = await db
-      .collection("users")
-      .find({})
-      .project({
-        password: 0,
-        // You can add other sensitive fields to exclude here
-      })
-      .toArray();
+    if (error) throw error;
 
-    res.status(200).json(users);
+    // Filter out Password manually to be safe
+    const sanitizedUsers = users.map(({ Password, ...rest }) => rest);
+
+    res.status(200).json(sanitizedUsers);
   } catch (error) {
-    console.error("Error fetching users:", error);
+    console.error("Error fetching users from Supabase:", error);
     res.status(500).json({ error: "Server error fetching users" });
   }
 }

@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -44,20 +45,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let agentReferenceIds: string[] = [];
 
     if (tsm) {
-      // Filter by TSM - find all agents under this TSM
-      const agents = await db
-        .collection("users")
-        .find({ TSM: tsm })
-        .toArray();
+      // Filter by TSM - find all agents under this TSM from Supabase
+      const { data: agents, error: agentsError } = await supabase
+        .from("users")
+        .select("ReferenceID")
+        .eq("TSM", tsm);
+      
+      if (agentsError) throw agentsError;
       agentReferenceIds = agents.map(agent => agent.ReferenceID);
     } else if (manager) {
-      // Filter by Manager - find all TSMs under this Manager, then agents under those TSMs
+      // Filter by Manager - find all TSMs under this Manager, then agents under those TSMs from Supabase
       // First, get all TSMs under this Manager
-      const tsms = await db
-        .collection("users")
-        .find({ Manager: manager, Role: "Territory Sales Manager" })
-        .toArray();
+      const { data: tsms, error: tsmsError } = await supabase
+        .from("users")
+        .select("ReferenceID")
+        .eq("Manager", manager)
+        .eq("Role", "Territory Sales Manager");
       
+      if (tsmsError) throw tsmsError;
       const tsmIds = tsms.map(tsm => tsm.ReferenceID);
       
       if (tsmIds.length === 0) {
@@ -65,11 +70,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Then get all agents under those TSMs
-      const agents = await db
-        .collection("users")
-        .find({ TSM: { $in: tsmIds } })
-        .toArray();
+      const { data: agents, error: agentsError } = await supabase
+        .from("users")
+        .select("ReferenceID")
+        .in("TSM", tsmIds);
       
+      if (agentsError) throw agentsError;
       agentReferenceIds = agents.map(agent => agent.ReferenceID);
     }
 
@@ -81,10 +87,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     filter.ReferenceID = { $in: agentReferenceIds };
 
     // Query TaskLog collection
+    // Added limit to prevent performance issues with large datasets
     const taskLogs = await db
       .collection("TaskLog")
       .find(filter)
       .sort({ date_created: -1 })
+      .limit(500)
       .toArray();
 
     // Map to expected format - handle all possible field name variations
@@ -113,9 +121,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    res.status(200).json({ taskLogs: formattedLogs });
+    res.status(200).json({ success: true, taskLogs: formattedLogs });
   } catch (error) {
-    // Error occurred but don't log to console
+    console.error("Error fetching task logs:", error);
     res.status(500).json({ error: "Server error fetching task logs" });
   }
 }

@@ -85,9 +85,20 @@ function getManilaHour(): number {
   return parseInt(manilaTime, 10);
 }
 
-function isLoginLocked(): boolean {
+const allowedEmails = [
+  "l.roluna@disruptivesolutionsinc.com",
+  "tsa.taskflowtest@ecoshiftcorp.com",
+  "b.rodriguez@ecoshiftcorp.com",
+];
+
+function isLoginLocked(email?: string): boolean {
+  // Check if user is whitelisted - they can login anytime
+  if (email && allowedEmails.includes(email.toLowerCase())) {
+    return false;
+  }
+  
   const hour = getManilaHour();
-  // Locked from 18:00 (6PM) to 23:59 and 00:00 to 05:59
+  // Locked from 18:00 (6 PM) to 05:59 (6 AM)
   return hour >= 18 || hour < 6;
 }
 
@@ -162,19 +173,21 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   const [ticketDone,       setTicketDone]       = useState(false);
   const [ticket, setTicket] = useState<Ticket[]>([]);
 
-  // ── Time-based lockout (6PM–6AM Manila time) ───────────────────────────────
+  // ── Time-based lockout (12AM–6AM Manila time) ───────────────────────────────
   const [locked, setLocked] = useState(() => isLoginLocked());
   const [manilaTime, setManilaTime] = useState(() => getManilaTimeString());
 
+  // Update locked state when email changes or time changes
   useEffect(() => {
-    const tick = () => {
-      setLocked(isLoginLocked());
+    const update = () => {
+      setLocked(isLoginLocked(Email));
       setManilaTime(getManilaTimeString());
     };
-    // Update every 30 seconds
-    const id = setInterval(tick, 30_000);
+    
+    update(); // Initial update
+    const id = setInterval(update, 30_000); // Update every 30 seconds
     return () => clearInterval(id);
-  }, []);
+  }, [Email]);
 
   // ── Login form styles from API ─────────────────────────────────────────────
   const [formStyles, setFormStyles] = useState<LoginFormStyles>(DEFAULT_STYLES);
@@ -269,7 +282,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   // ── PIN Login ──────────────────────────────────────────────────────────────
   const handlePinLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (locked) return;
     if (pin.length !== 4) {
       sileo.warning({ title: "Invalid PIN", description: "Please enter a 4-digit PIN.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
@@ -295,10 +307,21 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       const result = await res.json();
       if (!res.ok) {
         if (result.locked) { setTicketDone(false); setShowTicketDialog(true); }
+        else if (result.timeLocked) {
+          sileo.warning({
+            title: "Access Restricted",
+            description: result.message || "Login is currently disabled during off-hours.",
+            duration: 4000,
+            position: "top-right",
+            fill: "black",
+            styles: { title: "text-white!", description: "text-white" }
+          });
+        }
         else { sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } }); }
         setLoading(false);
         return;
       }
+
       setPendingLoginData({ Email: pinData.email, deviceId, result });
       setShowLocationDialog(true);
     } catch {
@@ -306,12 +329,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     } finally {
       setLoading(false);
     }
-  }, [pin]);
+  }, [pin, locked]);
 
   // ── Password Login ──────────────────────────────────────────────────────────
   const handlePasswordLogin = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (locked) return;
     if (!Email || !Password) {
       sileo.warning({ title: "Required", description: "All fields are required.", duration: 3000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } });
       return;
@@ -327,10 +349,21 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       const result = await res.json();
       if (!res.ok) {
         if (result.locked) { setTicketDone(false); setShowTicketDialog(true); }
+        else if (result.timeLocked) {
+          sileo.warning({
+            title: "Access Restricted",
+            description: result.message || "Login is currently disabled during off-hours.",
+            duration: 4000,
+            position: "top-right",
+            fill: "black",
+            styles: { title: "text-white!", description: "text-white" }
+          });
+        }
         else { sileo.error({ title: "Login Failed", description: result.message || "Invalid credentials.", duration: 4000, position: "top-right", fill: "black", styles: { title: "text-white!", description: "text-white" } }); }
         setLoading(false);
         return;
       }
+
       setPendingLoginData({ Email, deviceId, result });
       setShowLocationDialog(true);
       localStorage.setItem("userPin", JSON.stringify({ email: Email, password: Password, pin: "1234" }));
@@ -339,7 +372,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     } finally {
       setLoading(false);
     }
-  }, [Email, Password]);
+  }, [Email, Password, locked]);
 
   // ── Post-login redirect ────────────────────────────────────────────────────
   const handlePostLogin = async (location: any) => {
@@ -538,9 +571,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
               {/* Submit */}
               <Button
                 type="submit"
-                disabled={loading || locked}
+                disabled={loading}
                 className="w-full h-10 text-sm font-semibold rounded-xl transition-all duration-150 gap-2"
-                style={{ backgroundColor: locked ? "#94a3b8" : s.btn_bg, color: s.btn_text }}
+                style={{ backgroundColor: s.btn_bg, color: s.btn_text }}
               >
                 {loading ? (
                   <><Loader2 size={14} className="animate-spin" /> Signing in...</>

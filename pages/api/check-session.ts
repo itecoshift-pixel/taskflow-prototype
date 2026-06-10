@@ -1,9 +1,8 @@
 // pages/api/check-session.ts
 
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
 import { parse } from "cookie";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const cookies = req.headers.cookie ? parse(req.headers.cookie) : {};
@@ -14,11 +13,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const db = await connectToDatabase();
-  const users = db.collection("users");
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", sessionUserId)
+    .single();
 
-  const user = await users.findOne({ _id: new ObjectId(sessionUserId) });
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (userError || !user) return res.status(401).json({ error: "Unauthorized" });
 
   // Check if user logged in with master password (no DeviceId set)
   const isMasterPasswordLogin = !user.DeviceId;

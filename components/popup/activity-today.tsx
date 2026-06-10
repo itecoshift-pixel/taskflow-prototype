@@ -74,7 +74,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function ActivityToday() {
   const searchParams  = useSearchParams();
-  const { userId, setUserId } = useUser();
+  const { userId, user, setUserId } = useUser();
 
   const [referenceid,  setReferenceid]  = useState("");
   const [activities,   setActivities]   = useState<Activity[]>([]);
@@ -85,17 +85,19 @@ export function ActivityToday() {
 
   // ── Sync userId from URL ───────────────────────────────────────────────────
   useEffect(() => {
-    if (queryUserId && queryUserId !== userId) setUserId(queryUserId);
+    if (queryUserId && queryUserId !== userId) {
+      setUserId(queryUserId);
+    }
   }, [queryUserId, userId, setUserId]);
 
-  // ── Fetch user ─────────────────────────────────────────────────────────────
+  // ── Update referenceid from user context ───────────────────────────────────
   useEffect(() => {
-    if (!userId) return;
-    fetch(`/api/user?id=${encodeURIComponent(userId)}`)
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((data) => setReferenceid(data.ReferenceID || ""))
-      .catch(() => {/* silently fail */});
-  }, [userId]);
+    if (user) {
+      setReferenceid(user.ReferenceID || "");
+    } else {
+      setReferenceid("");
+    }
+  }, [user]);
 
   // ── Fetch activities ───────────────────────────────────────────────────────
   const fetchActivities = useCallback(async () => {

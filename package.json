@@ -103,6 +103,7 @@
     "react-select": "^5.10.2",
     "react-signature-canvas": "^1.1.0-alpha.2",
     "recharts": "^2.15.4",
+    "resend": "^6.12.4",
     "sharp": "^0.34.5",
     "sileo": "^0.1.5",
     "sonner": "^2.0.7",

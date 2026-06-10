@@ -90,7 +90,7 @@ const markShownToday = () => {
 
 export function FollowUpToday() {
   const searchParams = useSearchParams();
-  const { userId, setUserId } = useUser();
+  const { userId, user, setUserId } = useUser();
 
   const [userDetails, setUserDetails] = useState<UserDetails>({ referenceid: "" });
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -108,22 +108,15 @@ export function FollowUpToday() {
     }
   }, [queryUserId, userId, setUserId]);
 
-  /* ================= FETCH USER ================= */
+  /* ================= UPDATE USER DETAILS FROM CONTEXT ================= */
 
   useEffect(() => {
-    if (!userId) return;
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/user?id=${encodeURIComponent(userId)}`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        setUserDetails({ referenceid: data.ReferenceID });
-      } catch {
-        toast.error("Failed to load user details");
-      }
-    })();
-  }, [userId]);
+    if (user) {
+      setUserDetails({ referenceid: user.ReferenceID || "" });
+    } else {
+      setUserDetails({ referenceid: "" });
+    }
+  }, [user]);
 
   /* ================= FETCH HISTORY ================= */
 

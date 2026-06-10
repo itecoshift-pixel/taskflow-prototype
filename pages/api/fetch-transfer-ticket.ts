@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -8,36 +8,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
-
     const { tsm } = req.query;
 
     // Base query: users with Role 'Territory Sales Associate' and not resigned/terminated
-    const query: any = {
-      Status: { $nin: ["Resigned", "Terminated"] },
-      Role: "Territory Sales Associate",
-    };
+    let queryBuilder = supabase
+      .from("users")
+      .select("Firstname, Lastname, TSM, ReferenceID, profilePicture")
+      .eq("Role", "Territory Sales Associate")
+      .not("Status", "in", '("Resigned", "Terminated")');
 
     // Filter by TSM if tsm query param exists
     if (tsm && typeof tsm === "string") {
-      query.TSM = tsm;  // Assuming your field is capitalized 'TSM' as per project()
+      queryBuilder = queryBuilder.eq("TSM", tsm);
     }
 
-    const users = await db
-      .collection("users")
-      .find(query)
-      .project({
-        Firstname: 1,
-        Lastname: 1,
-        TSM: 1,
-        ReferenceID: 1,
-        profilePicture: 1,
-        _id: 0,
-      })
-      .sort({ Lastname: 1 })
-      .toArray();
+    const { data: users, error } = await queryBuilder.order("Lastname", { ascending: true });
 
-    if (users.length === 0) {
+    if (error) {
+      console.error("Error fetching users from Supabase:", error);
+      return res.status(500).json({ error: "Server error fetching users" });
+    }
+
+    if (!users || users.length === 0) {
       return res.status(404).json({ error: "No Territory Sales Associate users found" });
     }
 

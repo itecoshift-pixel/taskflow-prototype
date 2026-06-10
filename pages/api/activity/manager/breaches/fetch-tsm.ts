@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
@@ -8,38 +8,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
-    const referenceid = req.query.id as string; // This is the TSM ReferenceID passed as query param
+    const referenceid = req.query.id as string; // This is the Manager ReferenceID passed as query param
 
     if (!referenceid) {
-      return res.status(400).json({ error: "ReferenceID (TSM) is required" });
+      return res.status(400).json({ error: "ReferenceID (Manager) is required" });
     }
 
-    // Fetch all agents whose TSM field matches the provided ReferenceID
-    // and whose Status is NOT "Resigned" or "Terminated"
-    const agents = await db
-      .collection("users")
-      .find({
-        Manager: referenceid,
-        Role: "Territory Sales Manager",
-        Status: { $nin: ["Resigned", "Terminated", "Inactive"] }, // exclude resigned or terminated
-      })
-      .project({
-        Firstname: 1,
-        Lastname: 1,
-        ReferenceID: 1,
-        profilePicture: 1,
-        Position: 1,
-        Status: 1,
-        Role: 1,
-        TargetQuota: 1,
-        Connection: 1,
-        _id: 0,
-      })
-      .toArray();
+    // Fetch all TSMs whose Manager field matches the provided ReferenceID
+    // and whose Status is NOT "Resigned", "Terminated", or "Inactive"
+    const { data: agents, error } = await supabase
+      .from("users")
+      .select("Firstname, Lastname, ReferenceID, profilePicture, Position, Status, Role, TargetQuota, Connection")
+      .eq("Manager", referenceid)
+      .eq("Role", "Territory Sales Manager")
+      .not("Status", "in", '("Resigned", "Terminated", "Inactive")');
 
-    if (agents.length === 0) {
-      return res.status(404).json({ error: "No agents found for this TSM" });
+    if (error) {
+      console.error("Error fetching TSMs from Supabase:", error);
+      return res.status(500).json({ error: "Server error fetching TSMs" });
+    }
+
+    if (!agents || agents.length === 0) {
+      return res.status(404).json({ error: "No TSMs found for this Manager" });
     }
 
     // Return only relevant agent info, excluding sensitive data like passwords

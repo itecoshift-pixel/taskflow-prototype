@@ -1,9 +1,8 @@
 // pages/api/override-session.ts
 
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
 import { parse } from "cookie";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -19,11 +18,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
-    const users = db.collection("users");
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", sessionUserId)
+      .single();
 
-    const user = await users.findOne({ _id: new ObjectId(sessionUserId) });
-    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    if (userError || !user) return res.status(401).json({ error: "Unauthorized" });
 
     // Check if this is a master password login (no DeviceId set)
     const isMasterPasswordLogin = !user.DeviceId;
@@ -35,10 +36,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updateData.DeviceId = deviceId;
     }
     
-    await users.updateOne(
-      { _id: new ObjectId(sessionUserId) },
-      { $set: updateData }
-    );
+    const { error: updateError } = await supabase
+      .from("users")
+      .update(updateData)
+      .eq("id", sessionUserId);
+
+    if (updateError) throw updateError;
 
     return res.status(200).json({ message: "Session overridden successfully" });
   } catch (error) {

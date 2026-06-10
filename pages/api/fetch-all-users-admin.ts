@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(
   req: NextApiRequest,
@@ -13,34 +13,18 @@ export default async function handler(
   }
 
   try {
-    const db = await connectToDatabase();
+    const { data: agents, error } = await supabase
+      .from("users")
+      .select("Firstname, Lastname, ReferenceID, profilePicture, Position, Status, Role, TargetQuota, Department, Connection, Manager, TSM")
+      .eq("Department", "Sales")
+      .not("Status", "in", '("Resigned", "Terminated")');
 
-    const agents = await db
-      .collection("users")
-      .find({
-        Department: "Sales",
-        Status: {
-          $nin: ["Resigned", "Terminated"],
-        },
-      })
-      .project({
-        Firstname: 1,
-        Lastname: 1,
-        ReferenceID: 1,
-        profilePicture: 1,
-        Position: 1,
-        Status: 1,
-        Role: 1,
-        TargetQuota: 1,
-        Department: 1,
-        Connection: 1,
-        Manager: 1,
-        TSM: 1,
-        _id: 0,
-      })
-      .toArray();
+    if (error) {
+      console.error("Error fetching agents from Supabase:", error);
+      return res.status(500).json({ error: "Server error fetching agents" });
+    }
 
-    if (agents.length === 0) {
+    if (!agents || agents.length === 0) {
       return res
         .status(404)
         .json({ error: "No agents found" });

@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { MongoClient } from 'mongodb';
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -13,30 +13,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Connect to MongoDB
-    const client = new MongoClient(process.env.MONGODB_URI || '');
-    await client.connect();
-    
-    const db = client.db('taskflow');
-    const usersCollection = db.collection('users');
+    // Find user by referenceid from Supabase
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("ReferenceID", referenceid)
+      .single();
 
-    // Find user by referenceid
-    const user = await usersCollection.findOne({ 
-      referenceid: referenceid 
-    });
-
-    await client.close();
-
-    if (!user) {
+    if (error || !user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Return user data (excluding sensitive fields)
-    const { _id, password, ...userData } = user;
+    const { Password, ...userData } = user;
     
     res.status(200).json(userData);
   } catch (error) {
-    console.error('Error fetching user by referenceid:', error);
+    console.error('Error fetching user by referenceid from Supabase:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

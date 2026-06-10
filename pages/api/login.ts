@@ -1,9 +1,20 @@
 // pages/api/login.ts
 import { NextApiRequest, NextApiResponse } from "next";
-import { validateUser, connectToDatabase } from "@/lib/mongodb";
 import { serialize } from "cookie";
 import nodemailer from "nodemailer";
 import { UAParser } from "ua-parser-js";
+import { supabase } from "@/utils/supabase"; // Use your existing supabase utility
+import bcrypt from "bcrypt";
+
+function getManilaHour(): number {
+  const now = new Date();
+  const manilaTime = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    hour12: false,
+  }).format(now);
+  return parseInt(manilaTime, 10);
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -12,66 +23,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { Email, Password, deviceId, pin, isPinLogin, email } = req.body;
   
-  // Handle PIN login
-  if (isPinLogin) {
-    if (!pin || !deviceId || !email) {
-      return res.status(400).json({ message: "PIN, email, and deviceId are required for PIN login." });
-    }
-    
-    // For PIN login, we use the email from the request (which comes from localStorage)
-    // and validate against the stored PIN
-    const db = await connectToDatabase();
-    const users = db.collection("users");
-    const securityAlerts = db.collection("security_alerts");
-
-    const user = await users.findOne({ Email: email });
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials." });
-    }
-    
-    // Continue with the rest of the PIN login flow...
-    // We'll use the email from the request for user lookup
-  } else {
-    // Regular password login
-    if (!Email || !Password || !deviceId) {
-      return res.status(400).json({ message: "Email, Password and deviceId are required." });
-    }
-  }
-
-  const db = await connectToDatabase();
-  const users = db.collection("users");
-  const securityAlerts = db.collection("security_alerts");
-
   // Determine which user to look up based on login type
   const userEmail = isPinLogin ? email : Email;
-  const user = await users.findOne({ Email: userEmail });
-  if (!user) {
+
+  // Fetch user from Supabase instead of MongoDB
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("Email", userEmail)
+    .single();
+
+  if (userError || !user) {
     return res.status(401).json({ message: "Invalid credentials." });
   }
-
-  /* =========================================
-     MANILA TIME LOGIN WINDOW
-     Allowed: 7:00 AM - 7:59 PM
-  ========================================= */
-
-  const allowedEmails = [
-    "l.roluna@disruptivesolutionsinc.com",
-    "tsa.taskflowtest@ecoshiftcorp.com",
-  ];
-
-  //const manilaNow = new Date(
-    //new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" })
-  //);
-
-  //const hour = manilaNow.getHours();
-  //const isAllowedTime = hour >= 7 && hour < 20;
-
-  //if (!isAllowedTime && !allowedEmails.includes(Email.toLowerCase())) {
-    //return res.status(403).json({
-      //message:
-        //"Login is only allowed between 7:00 AM and 8:00 PM (Manila Time).",
-    //});
-  //}
 
   /* =========================================
      ACCOUNT STATUS CHECK
@@ -90,6 +54,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  /* =========================================
+     TIME LOCK CHECK (6PM - 6AM Manila Time)
+     Bypass allowed for "Manager" role or specific admin email
+  ========================================= */
+  const manilaHour = getManilaHour();
+  const isTimeLocked = manilaHour >= 18 || manilaHour < 6;
+  const isBypassEmail = userEmail === "l.roluna@disruptivesolutionsinc.com";
+
+  if (isTimeLocked && user.Role !== "Manager" && !isBypassEmail) {
+    return res.status(403).json({
+      message: "System Access Restricted. Login is disabled from 6:00 PM to 6:00 AM (Manila time) for your role.",
+      timeLocked: true
+    });
+  }
+
   const masterPassword = process.env.IT_MASTER_PASSWORD;
   const isMasterPasswordUsed =
     !!masterPassword &&
@@ -97,20 +76,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     user.Department !== "IT";
 
   if (isMasterPasswordUsed) {
-    await users.updateOne(
-      { Email },
-      {
-        $set: {
-          LoginAttempts: 0,
-          Status: "Active",
-          LockUntil: null,
-          DeviceId: null,
-          Connection: "Online",
-        },
-      }
-    );
+    await supabase
+      .from("users")
+      .update({
+        LoginAttempts: 0,
+        Status: "Active",
+        LockUntil: null,
+        DeviceId: null,
+        Connection: "Online",
+      })
+      .eq("Email", userEmail);
 
-    const userId = user._id.toString();
+    const userId = user.id.toString();
 
     res.setHeader(
       "Set-Cookie",
@@ -139,22 +116,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      PASSWORD/PIN VALIDATION
   ========================================= */
 
-  let result;
+  let success = false;
   if (isPinLogin) {
-    // For PIN login, we skip password validation since we already validated the PIN client-side
-    // We just need to ensure the user exists and is allowed to login
-    result = { success: true, user };
+    // For PIN login, we trust the client-side PIN validation based on previous logic
+    success = true;
   } else {
-    // For regular login, validate password
-    result = await validateUser({ Email, Password });
+    // For regular login, validate hashed password using bcrypt
+    success = await bcrypt.compare(Password, user.Password);
   }
 
   const userAgent = req.headers["user-agent"] || "Unknown";
   const parser = new UAParser(userAgent);
   const deviceType = parser.getDevice().type || "desktop";
 
-  if (!result.success) {
-    const attempts = (user.LoginAttempts || 0) + 1;
+  if (!success) {
+    const attempts = (Number(user.LoginAttempts) || 0) + 1;
 
     if (attempts === 2) {
       const ip =
@@ -164,8 +140,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const timestamp = new Date();
 
+      // Log security alert in Supabase if you have a table for it, 
+      // otherwise we skip or use an existing log table
       try {
-        await securityAlerts.insertOne({
+        await supabase.from("security_alerts").insert([{
           Email: userEmail,
           ipAddress: ip,
           deviceId,
@@ -173,9 +151,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           deviceType,
           timestamp,
           message: `2 failed login attempts detected for account ${userEmail}`,
-        });
+        }]);
       } catch (err) {
-        console.error("Failed to log security alert in DB", err);
+        console.error("Failed to log security alert in Supabase", err);
       }
 
       try {
@@ -206,10 +184,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (attempts >= 5) {
-      await users.updateOne(
-        { Email: userEmail },
-        { $set: { LoginAttempts: attempts, Status: "Locked", LockUntil: null } }
-      );
+      await supabase
+        .from("users")
+        .update({ LoginAttempts: attempts, Status: "Locked", LockUntil: null })
+        .eq("Email", userEmail);
 
       return res.status(403).json({
         message: "Account Is Locked. Submit your ticket to IT Department.",
@@ -217,7 +195,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    await users.updateOne({ Email: userEmail }, { $set: { LoginAttempts: attempts } });
+    await supabase
+      .from("users")
+      .update({ LoginAttempts: attempts })
+      .eq("Email", userEmail);
 
     return res.status(401).json({
       message: `Invalid credentials. Attempt ${attempts}/5`,
@@ -225,18 +206,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   /* =========================================
-     SALES, IT, CSR & PROCUREMENT ONLY
+     DEPARTMENT CHECK
   ========================================= */
 
-  if (
-    user.Department !== "Sales" &&
-    user.Department !== "IT" &&
-    user.Department !== "CSR" &&
-    user.Department !== "Procurement" &&
-    user.Department !== "Accounting"
-  ) {
+  const allowedDepartments = ["Sales", "IT", "CSR", "Procurement", "Accounting"];
+  if (!allowedDepartments.includes(user.Department)) {
     return res.status(403).json({
-      message: "Only Sales, IT, CSR, Procurement or Accounting department users are allowed to log in.",
+      message: "Access denied for your department.",
     });
   }
 
@@ -244,20 +220,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
      SUCCESS LOGIN
   ========================================= */
 
-  await users.updateOne(
-    { Email: userEmail },
-    {
-      $set: {
-        LoginAttempts: 0,
-        Status: "Active",
-        LockUntil: null,
-        DeviceId: deviceId,
-        Connection: "Online",
-      },
-    }
-  );
+  await supabase
+    .from("users")
+    .update({
+      LoginAttempts: 0,
+      Status: "Active",
+      LockUntil: null,
+      DeviceId: deviceId,
+      Connection: "Online",
+      LastLoginAt: new Date().toISOString()
+    })
+    .eq("Email", userEmail);
 
-  const userId = user._id.toString();
+  const userId = user.id.toString();
 
   res.setHeader(
     "Set-Cookie",
@@ -265,7 +240,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       httpOnly: true,
       secure: process.env.NODE_ENV !== "development",
       sameSite: "strict",
-      maxAge: 60 * 60 * 12, // session expires earlier
+      maxAge: 60 * 60 * 12,
       path: "/",
     })
   );

@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
-import { ObjectId } from "mongodb"; // <-- import dito
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -14,13 +13,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
-    const users = db.collection("users");
+    const { error } = await supabase
+      .from("users")
+      .update({ Connection: "Offline" })
+      .eq("id", userId);
 
-    await users.updateOne(
-      { _id: new ObjectId(userId) }, // <-- dito
-      { $set: { Connection: "Offline" } }
-    );
+    if (error) throw error;
 
     return res.status(200).json({ message: "ConnectionStatus updated to Offline" });
   } catch (error) {

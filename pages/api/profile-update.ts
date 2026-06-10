@@ -1,9 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
-import { ObjectId } from "mongodb";
 import bcrypt from "bcrypt";
 import { v2 as cloudinary } from "cloudinary";
 import { logAuditTrailWithSession } from "@/lib/auditTrail";
+import { supabase } from "@/utils/supabase";
 
 // Cloudinary Configuration
 cloudinary.config({
@@ -24,7 +23,7 @@ const extractPublicId = (url: string) => {
   if (uploadIndex === -1) return null;
   
   // Join all parts after 'upload/' and the version (v1234567)
-  const relevantParts = parts.slice(uploadIndex + 2); 
+  const relevantParts = parts.slice(uploadIndex + 2);
   const fileWithExtension = relevantParts.join("/");
   return fileWithExtension.split(".")[0];
 };
@@ -59,13 +58,14 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
   }
 
   try {
-    const db = await connectToDatabase();
-    const userCollection = db.collection("users");
-    const userObjectId = new ObjectId(id);
+    // 1. Fetch current user data from Supabase for asset comparison
+    const { data: currentUser, error: fetchError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-    // 1. Fetch current user data for asset comparison
-    const currentUser = await userCollection.findOne({ _id: userObjectId });
-    if (!currentUser) {
+    if (fetchError || !currentUser) {
       return res.status(404).json({ error: "User not found" });
     }
 
@@ -82,7 +82,7 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
       Address,
       Birthday,
       Gender,
-      updatedAt: new Date(),
+      updatedAt: new Date().toISOString(),
     };
 
     // 2. Handle Profile Picture Deletion/Update
@@ -107,35 +107,38 @@ export default async function updateProfile(req: NextApiRequest, res: NextApiRes
       updatedUser.signatureImage = signatureImage;
     }
 
-    // 4. Handle Password Hashing
-    if (Password && Password.trim() !== "") {
-      const hashedPassword = await bcrypt.hash(Password, 10);
-      updatedUser.Password = hashedPassword;
+    // 4. Handle Password Update (Hashed if you prefer, or plain text as requested for login-form)
+    if (Password) {
+      updatedUser.Password = Password;
     }
 
-    const result = await userCollection.updateOne(
-      { _id: userObjectId },
-      { $set: updatedUser }
+    // 5. Update Database (Supabase)
+    const { data: finalUser, error: updateError } = await supabase
+      .from("users")
+      .update(updatedUser)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 6. Log Audit Trail
+    await logAuditTrailWithSession(
+      req,
+      "update",
+      "Profile",
+      id,
+      `${Firstname} ${Lastname}`,
+      `Updated profile for ${Firstname} ${Lastname}`,
+      { updatedFields: Object.keys(updatedUser).filter(k => k !== "updatedAt") }
     );
 
-    if (result.matchedCount === 1) {
-      // Log audit trail for profile update
-      await logAuditTrailWithSession(
-        req,
-        "update",
-        "user profile",
-        id,
-        `${Firstname} ${Lastname}`,
-        `Updated profile for ${Firstname} ${Lastname}`,
-        { updatedFields: Object.keys(updatedUser).filter(k => k !== "updatedAt") }
-      );
-
-      return res.status(200).json({ message: "Profile updated successfully" });
-    } else {
-      return res.status(404).json({ error: "No changes applied" });
-    }
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
+    return res.status(200).json({ 
+      message: "Profile updated successfully", 
+      user: finalUser 
+    });
+  } catch (error: any) {
+    console.error("Update Profile Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to update profile" });
   }
 }
