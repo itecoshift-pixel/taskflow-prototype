@@ -3,8 +3,9 @@ import { supabase } from "@/utils/supabase";
 import fs from "fs";
 import path from "path";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 1000;
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const MAX_TOTAL_RECORDS = 10000;
 
 // ===========================
 // Base64 Encode/Decode Helpers
@@ -20,14 +21,14 @@ function decodeBase64(text: string) {
 // ===========================
 // Fetch Supabase in Batches
 // ===========================
-async function fetchHistory(referenceid: string, fromDate?: string, toDate?: string) {
+async function fetchHistory(referenceid: string, fromDate?: string, toDate?: string, fields: string = "*") {
   let lastId: number | null = null;
   const results: any[] = [];
 
-  while (true) {
+  while (results.length < MAX_TOTAL_RECORDS) {
     let query = supabase
       .from("history")
-      .select("*")
+      .select(fields)
       .eq("referenceid", referenceid)
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
@@ -37,20 +38,27 @@ async function fetchHistory(referenceid: string, fromDate?: string, toDate?: str
 
     const { data, error } = await query;
     if (error) throw error;
-    if (!data || data.length === 0) break;
+    if (!data || (data as any[]).length === 0) break;
 
-    results.push(...data);
-    lastId = data[data.length - 1].id;
+    results.push(...(data as any[]));
+    lastId = (data as any[])[(data as any[]).length - 1].id;
+    if ((data as any[]).length < BATCH_SIZE) break;
   }
 
   return results;
 }
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 // ===========================
 // API Handler
 // ===========================
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to, refresh } = req.query;
+  const { referenceid, from, to, refresh, fields } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
@@ -59,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
   const forceRefresh = refresh === "true";
+  const selectFields = typeof fields === "string" ? fields : "*";
 
   try {
     // Auto-create cache/historical folder
@@ -107,7 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Fetch latest from Supabase
-    const data = await fetchHistory(referenceid, fromDate, toDate);
+    const data = await fetchHistory(referenceid, fromDate, toDate, selectFields);
 
     // Save Base64 encoded cache
     const encoded = encodeBase64(JSON.stringify(data, null, 2));

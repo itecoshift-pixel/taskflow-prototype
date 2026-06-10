@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 1000; // Reduced batch size to prevent strain
 
 async function* fetchRowsInBatches(
   table: string,
@@ -10,26 +10,38 @@ async function* fetchRowsInBatches(
   toDate?: string
 ) {
   let offset = 0;
+  
+  // Identify the correct date column for this table
+  let dateColumn = "date_created";
+  if (table === "meetings") dateColumn = "date_updated";
+  if (table === "revised_quotations") dateColumn = "date_updated";
+  // Add other table-specific columns if needed
 
-  while (true) {
+  while (offset < 5000) { // Safety limit: don't fetch more than 5k total per table in one dashboard call
     let query = supabase
       .from(table)
       .select("*")
       .eq("referenceid", referenceid)
-      .order("date_created", { ascending: false })
+      .order(dateColumn, { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (fromDate && toDate) {
-      query = query.gte("date_created", fromDate).lte("date_created", toDate);
+      // Use inclusive range for timestamps
+      query = query
+        .gte(dateColumn, `${fromDate}T00:00:00.000Z`)
+        .lte(dateColumn, `${toDate}T23:59:59.999Z`);
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error(`Error fetching from ${table}:`, error);
+      break; // stop fetching this table but don't crash the whole API
+    }
 
     if (!data || data.length === 0) break;
 
-    yield data; // yield each batch instead of storing all in memory
+    yield data;
 
     if (data.length < BATCH_SIZE) break;
     offset += BATCH_SIZE;
@@ -51,7 +63,7 @@ export default async function handler(
 
   try {
     // For multiple tables, we process sequentially to reduce memory usage
-    const tables = ["history", "revised_quotations", "meetings", "documentation"];
+    const tables = ["history", "revised_quotations", "meetings", "documentation", "spf_request", "spf"];
     let totalCount = 0;
 
     // Store merged activities in a temporary array if needed for sorting
@@ -59,13 +71,29 @@ export default async function handler(
 
     for (const table of tables) {
       for await (const batch of fetchRowsInBatches(table, referenceid, fromDate, toDate)) {
-        const normalized = batch.map((item) => ({ source: table, ...item }));
+        const normalized = batch.map((item) => {
+          // Identify the actual date to use for dashboard display and sorting
+          const dateToUse = item.date_created || item.date_updated || item.created_at || item.updated_at;
+          
+          const base = { 
+            source: table, 
+            ...item,
+            // Ensure every item has date_created for the frontend filter
+            date_created: dateToUse 
+          };
+
+          // If it's from spf_request or spf, set type_activity to "SPF Creation"
+          if (table === "spf_request" || table === "spf") {
+            return { ...base, type_activity: "SPF Creation" };
+          }
+          return base;
+        });
         totalCount += normalized.length;
-        activities.push(...normalized); // optional: process each batch immediately instead of pushing if needed
+        activities.push(...normalized);
       }
     }
 
-    // Sort at the end by date_created
+    // Sort at the end by date_created (now guaranteed to exist)
     activities.sort(
       (a, b) => new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
     );

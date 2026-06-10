@@ -14,18 +14,19 @@ function toLocalDateString(date: Date | string | null | undefined): string {
 }
 
 /* ------------------ Fetch overdue activities ------------------ */
-async function fetchOverdueActivities(referenceid: string) {
+async function fetchOverdueActivities(referenceid: string, fields: string = "*") {
   const todayStr = new Date().toLocaleDateString("en-CA", {
     timeZone: "Asia/Manila",
   });
 
   let allActivities: any[] = [];
   let offset = 0;
+  const MAX_RECORDS = 5000;
 
-  while (true) {
+  while (offset < MAX_RECORDS) {
     const { data, error } = await supabase
       .from("activity")
-      .select("*")
+      .select(fields)
       .eq("referenceid", referenceid)
       .in("status", ALLOWED_STATUSES)
       .lt("scheduled_date", todayStr) // server-side: past dates only
@@ -41,6 +42,12 @@ async function fetchOverdueActivities(referenceid: string) {
 
   return allActivities;
 }
+
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
 
 /* ------------------ Fetch history for activity refs ------------------ */
 async function fetchHistoryForActivities(activityRefs: string[]) {
@@ -68,15 +75,17 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { referenceid } = req.query;
+  const { referenceid, fields } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
+  const selectFields = typeof fields === "string" ? fields : "*";
+
   try {
     // 1️⃣ Fetch overdue activities (past dates, allowed statuses only)
-    const overdueActivities = await fetchOverdueActivities(referenceid);
+    const overdueActivities = await fetchOverdueActivities(referenceid, selectFields);
 
     if (!overdueActivities.length) {
       return res.status(200).json({ activities: [] });

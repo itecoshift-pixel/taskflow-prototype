@@ -6,62 +6,39 @@ const BATCH_SIZE = 5000;
 const COMPLETED_STATUSES = ["Cancelled", "Done", "Completed", "Delivered"];
 
 async function fetchOverdueActivities(referenceid: string) {
-  let allActivities: any[] = [];
-  let offset = 0;
-
+  const COMPLETED_STATUSES = ["Cancelled", "Done", "Completed", "Delivered"];
   const todayDate = new Date();
   todayDate.setHours(0, 0, 0, 0);
+  const todayISO = todayDate.toISOString();
 
-  while (true) {
-    const { data, error } = await supabase
-      .from("activity")
-      .select("*")
-      .eq("referenceid", referenceid)
-      .range(offset, offset + BATCH_SIZE - 1);
+  const { data, error } = await supabase
+    .from("activity")
+    .select("*")
+    .eq("referenceid", referenceid)
+    .lt("scheduled_date", todayISO)
+    .not("status", "in", `(${COMPLETED_STATUSES.join(",")})`)
+    .order("scheduled_date", { ascending: false })
+    .limit(1000); // Limit to 1000 most recent overdue to prevent strain
 
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    const filtered = data.filter((a) => {
-      const scheduled = new Date(a.scheduled_date);
-      scheduled.setHours(0, 0, 0, 0);
-      return scheduled < todayDate && !COMPLETED_STATUSES.includes(a.status);
-    });
-
-    allActivities.push(...filtered);
-
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
-  return allActivities;
+  if (error) throw error;
+  return data || [];
 }
 
 async function fetchUnsuccessfulHistory(activityIds: string[]) {
   if (!activityIds.length) return [];
 
-  let allData: any[] = [];
-  let offset = 0;
+  const { data, error } = await supabase
+    .from("history")
+    .select("*")
+    .in("activity_reference_number", activityIds)
+    .eq("call_status", "Unsuccessful")
+    .eq("type_activity", "Outbound Calls")
+    .order("date_created", { ascending: false })
+    .limit(1000);
 
-  while (true) {
-    const { data, error } = await supabase
-      .from("history")
-      .select("*")
-      .in("activity_reference_number", activityIds)
-      .eq("call_status", "Unsuccessful")
-      .eq("type_activity", "Outbound Calls")
-      .order("date_created", { ascending: false })
-      .range(offset, offset + BATCH_SIZE - 1);
+  if (error) throw error;
 
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    allData.push(...data);
-
-    if (data.length < BATCH_SIZE) break;
-    offset += BATCH_SIZE;
-  }
-
+  // Filter out those that eventually became successful
   const { data: successfulData, error: errSuccess } = await supabase
     .from("history")
     .select("activity_reference_number")
@@ -72,7 +49,7 @@ async function fetchUnsuccessfulHistory(activityIds: string[]) {
   if (errSuccess) throw errSuccess;
 
   const successfulSet = new Set(successfulData?.map((h) => h.activity_reference_number));
-  return allData.filter((h) => !successfulSet.has(h.activity_reference_number));
+  return (data || []).filter((h) => !successfulSet.has(h.activity_reference_number));
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

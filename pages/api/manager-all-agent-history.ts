@@ -1,21 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 1000;
 
 // Async generator to fetch any table in batches
 async function* fetchTableBatches(
   table: string,
   manager: string,
   from?: string,
-  to?: string
+  to?: string,
+  fields: string = "*"
 ) {
   let lastId: number | null = null;
+  let totalFetched = 0;
+  const MAX_RECORDS = 5000;
 
-  while (true) {
+  while (totalFetched < MAX_RECORDS) {
     let query = supabase
       .from(table)
-      .select("*")
+      .select(fields)
       .eq("manager", manager)
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
@@ -26,10 +29,12 @@ async function* fetchTableBatches(
 
     const { data, error } = await query;
     if (error) throw error;
-    if (!data || data.length === 0) break;
+    if (!data || (data as any[]).length === 0) break;
 
     yield data;
-    lastId = data[data.length - 1].id;
+    totalFetched += (data as any[]).length;
+    lastId = (data as any[])[(data as any[]).length - 1].id;
+    if ((data as any[]).length < BATCH_SIZE) break;
   }
 }
 
@@ -49,15 +54,22 @@ function normalizeRecord(item: any, source: string) {
   }
 }
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to } = req.query;
+  const { referenceid, from, to, fields } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
-    return res.status(400).json({ message: "referenceid (agent manager) is required" });
+    return res.status(400).json({ message: "referenceid (manager) is required" });
   }
 
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
+  const selectFields = typeof fields === "string" ? fields : "*";
 
   try {
     // Tables to fetch
@@ -65,7 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const allActivities: any[] = [];
 
     for (const table of tables) {
-      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate)) {
+      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate, selectFields)) {
         const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
         allActivities.push(...normalizedBatch);
       }

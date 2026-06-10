@@ -250,7 +250,8 @@ export default function TSAReports() {
     if (!refId) return;
     setLoadingActivities(true);
     try {
-      const res = await fetch(`/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}&fetchAll=true`);
+      const fields = "id,date_created,status,actual_sales,source,call_status,quotation_status,call_type,company_name,activity_reference_number,start_date,end_date,type_activity,type_client";
+      const res = await fetch(`/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}&fetchAll=true&fields=${fields}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActivities(data.activities || []);

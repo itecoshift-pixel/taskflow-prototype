@@ -50,7 +50,7 @@ interface CCGItem {
   company_name?: string;
   remarks?: string;
   // source discriminator added by the API (normalized)
-  _source?: "history" | "meetings" | "documentation";
+  _source?: "history" | "meetings" | "documentation" | "spf_request";
 }
 
 interface Account {
@@ -161,6 +161,7 @@ function calculateDuration(startDate: Date, endDate: Date): string {
 
 const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
   const isDocumentation = ev._source === "documentation";
+  const isSpf = ev._source === "spf_request";
   const isMeeting = ev.type_activity === "Meeting" && ev.start_date && ev.end_date;
   const statusClass =
     STATUS_STYLES[ev.status ?? ""] ?? "bg-slate-100 text-slate-600 border-slate-200";
@@ -190,7 +191,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
       );
     }
   } else {
-    const eventDate = parseDate(ev.end_date || ev.start_date || (isDocumentation ? ev.date_created : undefined));
+    const eventDate = parseDate(ev.end_date || ev.start_date || ((isDocumentation || isSpf) ? ev.date_created : undefined));
     if (eventDate) {
       timeDisplay = (
         <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
@@ -202,13 +203,18 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
   }
 
   return (
-    <div className={`group relative rounded-xl border bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150 ${isDocumentation ? "border-sky-400" : "border-green-400"}`}>
+    <div className={`group relative rounded-xl border bg-white px-4 py-3 shadow-sm hover:shadow-md transition-all duration-150 ${isDocumentation ? "border-sky-400" : isSpf ? "border-purple-400" : "border-green-400"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {isDocumentation && (
               <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-sky-100 text-sky-700 border border-sky-200 shrink-0">
                 Doc
+              </span>
+            )}
+            {isSpf && (
+              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-purple-100 text-purple-700 border border-purple-200 shrink-0">
+                SPF
               </span>
             )}
             <p className="text-xs font-bold text-slate-800 truncate">
@@ -226,7 +232,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {!isMeeting && timeDisplay}
-          {!isDocumentation && (
+          {!isDocumentation && !isSpf && (
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${statusClass}`}
             >
@@ -236,7 +242,7 @@ const EventCard: React.FC<{ ev: CCGItem }> = ({ ev }) => {
         </div>
       </div>
       {isMeeting && timeDisplay && (
-        <div className={`mt-2 pt-2 border-t ${isDocumentation ? "border-sky-100" : "border-green-100"}`}>
+        <div className={`mt-2 pt-2 border-t ${isDocumentation ? "border-sky-100" : isSpf ? "border-purple-100" : "border-green-100"}`}>
           {timeDisplay}
         </div>
       )}
@@ -404,10 +410,53 @@ export const CCG: React.FC<{
       )
       .subscribe();
 
+    const spfChannel = supabase
+      .channel(`public:spf_request:referenceid=eq.${referenceid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "spf_request",
+          filter: `referenceid=eq.${referenceid}`,
+        },
+        (payload: any) => {
+          const normalize = (rec: any): CCGItem => ({
+            ...rec,
+            type_activity: "SPF Creation",
+            activity_reference_number: rec.spf_number,
+            company_name: rec.customer_name,
+            remarks: [rec.special_instructions, rec.item_description].filter(Boolean).join(" | "),
+            date_updated: rec.date_updated || rec.date_created,
+            _source: "spf_request" as const,
+          });
+          const newRec = payload.new ? normalize(payload.new) : null;
+          const oldRec = payload.old as CCGItem;
+          setActivities((curr) => {
+            switch (payload.eventType) {
+              case "INSERT":
+                return newRec && curr.some((a) => a.id === newRec.id && a._source === "spf_request")
+                  ? curr
+                  : newRec ? [...curr, newRec] : curr;
+              case "UPDATE":
+                return newRec
+                  ? curr.map((a) => (a.id === newRec.id && a._source === "spf_request" ? newRec : a))
+                  : curr;
+              case "DELETE":
+                return curr.filter((a) => !(a.id === oldRec.id && a._source === "spf_request"));
+              default:
+                return curr;
+            }
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(historyChannel);
       supabase.removeChannel(meetingsChannel);
       supabase.removeChannel(documentationChannel);
+      supabase.removeChannel(spfChannel);
     };
   }, [referenceid, fetchActivities]);
 
@@ -416,10 +465,10 @@ export const CCG: React.FC<{
   const sortedActivities = useMemo(
     () =>
       [...activities].sort((a, b) => {
-        const aDateStr = a._source === "documentation"
+        const aDateStr = (a._source === "documentation" || a._source === "spf_request")
           ? (a.date_created || a.date_updated)
           : (a.end_date || a.date_updated);
-        const bDateStr = b._source === "documentation"
+        const bDateStr = (b._source === "documentation" || b._source === "spf_request")
           ? (b.date_created || b.date_updated)
           : (b.end_date || b.date_updated);
         const aDate = parseDate(aDateStr);
@@ -483,8 +532,8 @@ export const CCG: React.FC<{
     const map: Record<string, number> = {};
     
     for (const item of sortedActivities) {
-      // documentation items use date_created; others use end_date or date_updated
-      const dateStr = item._source === "documentation"
+      // documentation and spf_request items use date_created; others use end_date or date_updated
+      const dateStr = (item._source === "documentation" || item._source === "spf_request")
         ? (item.date_created || item.date_updated)
         : (item.end_date || item.date_updated);
       const eventDate = parseDate(dateStr);
@@ -524,7 +573,7 @@ export const CCG: React.FC<{
   const selectedDayEvents = useMemo(() => {
     if (!selectedDateStr) return [];
     return filteredActivities.filter((item) => {
-      const dateStr = item._source === "documentation"
+      const dateStr = (item._source === "documentation" || item._source === "spf_request")
         ? (item.date_created || item.date_updated)
         : (item.end_date || item.date_updated);
       const eventDate = parseDate(dateStr);

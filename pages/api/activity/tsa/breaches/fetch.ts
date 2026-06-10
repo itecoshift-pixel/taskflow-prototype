@@ -11,7 +11,8 @@ async function fetchAllRows(
   referenceid: string,
   fromDate?: string,
   toDate?: string,
-  limit?: number
+  limit?: number,
+  fields: string = "*"
 ) {
   let allData: any[] = [];
   let offset = 0;
@@ -20,7 +21,7 @@ async function fetchAllRows(
   while (true) {
     let query = supabase
       .from(table)
-      .select("*")
+      .select(fields)
       .eq("referenceid", referenceid)
       .order("date_created", { ascending: false })
       .order("id", { ascending: false })
@@ -57,11 +58,17 @@ async function fetchAllRows(
   return { data: allData, hasMore };
 }
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { referenceid, from, to, limit, fetchAll, cursor } = req.query;
+  const { referenceid, from, to, limit, fetchAll, cursor, fields } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
@@ -69,6 +76,7 @@ export default async function handler(
 
   // Check if this is a fetch-all request
   const isFetchAll = fetchAll === "true";
+  const selectFields = typeof fields === "string" ? fields : "*";
 
   // Parse limit - allow higher limit for fetchAll mode but cap at HARD_MAX
   let parsedLimit: number;
@@ -94,22 +102,22 @@ export default async function handler(
 
     /* -------------------- 1️⃣ HISTORY -------------------- */
     const { data: historyData, hasMore: historyHasMore } = await fetchAllRows(
-      "history", referenceid, fromDate, toDate, perTableLimit
+      "history", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
     /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
     const { data: revisedData, hasMore: revisedHasMore } = await fetchAllRows(
-      "revised_quotations", referenceid, fromDate, toDate, perTableLimit
+      "revised_quotations", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
     /* -------------------- 3️⃣ MEETINGS -------------------- */
     const { data: meetingsData, hasMore: meetingsHasMore } = await fetchAllRows(
-      "meetings", referenceid, fromDate, toDate, perTableLimit
+      "meetings", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
     /* -------------------- 4️⃣ DOCUMENTATION -------------------- */
     const { data: documentationData, hasMore: docHasMore } = await fetchAllRows(
-      "documentation", referenceid, fromDate, toDate, perTableLimit
+      "documentation", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
     /* -------------------- 5️⃣ NORMALIZE + MERGE -------------------- */

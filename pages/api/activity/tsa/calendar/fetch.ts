@@ -146,7 +146,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       offset += BATCH_SIZE;
     }
 
-    const combinedData = [...allData, ...allMeetings, ...allDocumentation].sort(
+    // Fetch SPF Creation
+    let allSpf: any[] = [];
+    offset = 0;
+
+    while (true) {
+      let query = supabase
+        .from("spf_request")
+        .select(`
+          id,
+          spf_number,
+          referenceid,
+          tsm,
+          manager,
+          customer_name,
+          special_instructions,
+          item_description,
+          start_date,
+          end_date,
+          date_created,
+          date_updated
+        `)
+        .eq("referenceid", referenceid)
+        .order("date_updated", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + BATCH_SIZE - 1);
+
+      if (fromDate && toDate) {
+        query = query.gte("date_updated", fromDate).lte("date_updated", toDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Supabase error (spf_request):", error);
+        return res.status(500).json({ message: error.message });
+      }
+
+      if (!data || data.length === 0) break;
+
+      allSpf.push(...data.map((d) => ({
+        ...d,
+        type_activity: "SPF Creation",
+        activity_reference_number: d.spf_number,
+        company_name: d.customer_name,
+        remarks: [d.special_instructions, d.item_description].filter(Boolean).join(" | "),
+        date_updated: d.date_updated || d.date_created
+      })));
+
+      if (data.length < BATCH_SIZE) break;
+      offset += BATCH_SIZE;
+    }
+
+    const combinedData = [...allData, ...allMeetings, ...allDocumentation, ...allSpf].sort(
       (a, b) => new Date(b.date_updated).getTime() - new Date(a.date_updated).getTime()
     );
 

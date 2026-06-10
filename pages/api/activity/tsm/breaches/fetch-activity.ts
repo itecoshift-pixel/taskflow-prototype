@@ -15,19 +15,20 @@ function toLocalDateString(date: Date | string | null | undefined): string {
 }
 
 /* ------------------ Fetch overdue activities ------------------ */
-async function fetchOverdueActivities(tsm: string) {
+async function fetchOverdueActivities(tsm: string, fields: string = "*") {
   console.log("📌 fetchOverdueActivities:", { tsm });
 
   let allActivities: any[] = [];
   let offset = 0;
+  const MAX_RECORDS = 5000;
 
   const todayStr = toLocalDateString(new Date());
 
-  while (true) {
+  while (offset < MAX_RECORDS) {
     try {
       const { data, error } = await supabase
         .from("activity")
-        .select("*")
+        .select(fields)
         .eq("tsm", tsm)
         .in("status", ALLOWED_STATUSES) // Only show statuses that can be overdue
         .range(offset, offset + BATCH_SIZE - 1);
@@ -66,20 +67,28 @@ async function fetchOverdueActivities(tsm: string) {
   return allActivities;
 }
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 /* ------------------ API Handler ------------------ */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log("📥 fetch-activity called with query:", req.query);
 
-  const { tsm } = req.query;
+  const { tsm, fields } = req.query;
 
   if (!tsm || typeof tsm !== "string") {
     console.warn("⚠️ Missing or invalid tsm parameter");
     return res.status(400).json({ message: "Missing or invalid tsm" });
   }
 
+  const selectFields = typeof fields === "string" ? fields : "*";
+
   try {
     // 1️⃣ Fetch overdue activities (past days only)
-    const overdueActivities = await fetchOverdueActivities(tsm);
+    const overdueActivities = await fetchOverdueActivities(tsm, selectFields);
 
     console.log("✅ Overdue activities to return:", overdueActivities.length);
 

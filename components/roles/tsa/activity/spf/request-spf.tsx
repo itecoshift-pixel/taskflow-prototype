@@ -78,6 +78,25 @@ interface SPFProps {
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
+const calculateTimeSpent = (start?: string, end?: string) => {
+    if (!start || !end) return "—";
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diffMs = endDate.getTime() - startDate.getTime();
+    if (diffMs < 0) return "—";
+
+    const diffHrs = Math.floor(diffMs / 3600000);
+    const diffMins = Math.floor((diffMs % 3600000) / 60000);
+    const diffSecs = Math.floor((diffMs % 60000) / 1000);
+
+    let result = "";
+    if (diffHrs > 0) result += `${diffHrs}h `;
+    if (diffMins > 0 || diffHrs > 0) result += `${diffMins}m `;
+    result += `${diffSecs}s`;
+
+    return result.trim();
+};
+
 const StatusBadge = ({ status }: { status?: string }) => {
     const s = (status || "").toLowerCase();
 
@@ -824,7 +843,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             "Contact Person", "Contact No.", "Reg. Address",
                                             "Delivery", "Billing", "Collection",
                                             "Payment", "Warranty", "Delivery Date",
-                                            "Prepared By", "Approved By", "Date Modified"
+                                            "Prepared By", "Approved By", "Time Spent", "Date Modified"
                                         ].map((h) => (
                                             <TableHead key={h} style={{
                                                 color: tableStyles.th_text,
@@ -969,6 +988,16 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                     padding: `${tableStyles.td_padding}px 12px`,
                                                     borderColor: tableStyles.td_border,
                                                 }}>{item.approved_by || "—"}</TableCell>
+                                                <TableCell style={{
+                                                    color: tableStyles.td_text,
+                                                    fontSize: `${tableStyles.td_font_size}px`,
+                                                    padding: `${tableStyles.td_padding}px 12px`,
+                                                    borderColor: tableStyles.td_border,
+                                                }}>
+                                                    <span className="font-mono text-zinc-500">
+                                                        {calculateTimeSpent(item.start_date, item.end_date)}
+                                                    </span>
+                                                </TableCell>
                                                 <TableCell style={{
                                                     color: tableStyles.td_text,
                                                     fontSize: `${tableStyles.td_font_size}px`,

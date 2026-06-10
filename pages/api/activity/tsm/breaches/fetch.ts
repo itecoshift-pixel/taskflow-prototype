@@ -3,14 +3,15 @@ import { supabase } from "@/utils/supabase";
 
 const BATCH_SIZE = 1000;
 
-async function fetchAllRows(table: string, referenceid: string, fromDate?: string, toDate?: string) {
+async function fetchAllRows(table: string, referenceid: string, fromDate?: string, toDate?: string, fields: string = "*") {
   let allData: any[] = [];
   let offset = 0;
+  const MAX_RECORDS = 5000; // Safety cap
 
-  while (true) {
+  while (offset < MAX_RECORDS) {
     let query = supabase
       .from(table)
-      .select("*")
+      .select(fields)
       .eq("tsm", referenceid)
       .order("date_created", { ascending: false })
       .order("id", { ascending: false }) // secondary sort to avoid skipping
@@ -34,11 +35,17 @@ async function fetchAllRows(table: string, referenceid: string, fromDate?: strin
   return allData;
 }
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { tsm, from, to } = req.query;
+  const { tsm, from, to, fields } = req.query;
 
   if (!tsm || typeof tsm !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
@@ -46,18 +53,19 @@ export default async function handler(
 
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
+  const selectFields = typeof fields === "string" ? fields : "*";
 
   try {
     /* -------------------- 1️⃣ HISTORY -------------------- */
-    const historyData = await fetchAllRows("history", tsm, fromDate, toDate);
+    const historyData = await fetchAllRows("history", tsm, fromDate, toDate, selectFields);
 
     /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
-    const revisedData = await fetchAllRows("revised_quotations", tsm, fromDate, toDate);
+    const revisedData = await fetchAllRows("revised_quotations", tsm, fromDate, toDate, selectFields);
 
     /* -------------------- 3️⃣ MEETINGS -------------------- */
-    const meetingsData = await fetchAllRows("meetings", tsm, fromDate, toDate);
+    const meetingsData = await fetchAllRows("meetings", tsm, fromDate, toDate, selectFields);
 
-    const documentationData = await fetchAllRows("documentation", tsm, fromDate, toDate);
+    const documentationData = await fetchAllRows("documentation", tsm, fromDate, toDate, selectFields);
 
     /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [

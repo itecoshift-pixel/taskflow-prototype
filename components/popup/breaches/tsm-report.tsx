@@ -308,7 +308,9 @@ export default function TSMReports() {
     if (!refId) return;
     setLoadingActivities(true);
     try {
-      const res = await fetch(`/api/activity/tsm/breaches/fetch?tsm=${encodeURIComponent(refId)}&fetchAll=true`);
+      const fields = "id,account_reference_number,company_name,date_created,type_activity,type_client,start_date,end_date,source,call_status,quotation_amount,status,tsm_approved_status,manager_approval_date,tsm_approval_date,date_updated,quotation_number,activity_reference_number,actual_sales";
+      const url = `/api/activity/tsm/breaches/fetch?tsm=${encodeURIComponent(refId)}&from=${startDate}&to=${endDate}&fields=${fields}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActivities(data.activities || []);
@@ -317,7 +319,7 @@ export default function TSMReports() {
     } finally {
       setLoadingActivities(false);
     }
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchOverdue = useCallback(async (refId: string) => {
     if (!refId) return;

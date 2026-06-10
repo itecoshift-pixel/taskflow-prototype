@@ -64,10 +64,21 @@ export function TimemotionCard({ activities, loading, error }: Props) {
 
   // ---------- Duration per activity type ----------
   const durationPerType = activities.reduce((acc, entry) => {
-    if (entry.start_date && entry.end_date && entry.type_activity) {
+    const type = entry.type_activity || "Other";
+    let duration = 0;
+
+    if (entry.start_date && entry.end_date) {
       const start = new Date(entry.start_date).getTime();
       const end = new Date(entry.end_date).getTime();
-      if (!isNaN(start) && !isNaN(end) && end > start) acc[entry.type_activity] = (acc[entry.type_activity] || 0) + (end - start);
+      if (!isNaN(start) && !isNaN(end) && end > start) {
+        duration = end - start;
+      }
+    } else if (entry.duration) {
+      duration = entry.duration * 1000;
+    }
+
+    if (duration > 0) {
+      acc[type] = (acc[type] || 0) + duration;
     }
     return acc;
   }, {} as Record<string, number>);

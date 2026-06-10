@@ -4,21 +4,29 @@ import { supabase } from "@/utils/supabase";
 const MAX_LIMIT = 1000; // Supabase hard limit - don't exceed this
 const DEFAULT_LIMIT = 1000; // Use maximum allowed per request
 
+export const config = {
+  api: {
+    responseLimit: false, // Disable the 4MB warning/limit in Next.js
+  },
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ success: false, error: "Method not allowed" });
   }
 
   try {
-    const { referenceid, from, to, limit, offset, company_name, fetchAll } = req.query;
+    const { referenceid, from, to, limit, offset, company_name, fetchAll, fields } = req.query;
 
     if (!referenceid || typeof referenceid !== "string") {
       return res.status(400).json({ success: false, error: "Missing referenceid" });
     }
 
+    const selectFields = typeof fields === "string" ? fields : "*";
+
     // If fetchAll=true, use batch processing for large datasets
     if (fetchAll === "true") {
-      return await fetchAllActivities(req, res, referenceid, from, to, company_name);
+      return await fetchAllActivities(req, res, referenceid, from, to, company_name, selectFields);
     }
 
     // Parse pagination params
@@ -31,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Build query
     let query = supabase
       .from("history")
-      .select("*", { count: "exact" })
+      .select(selectFields, { count: "exact" })
       .eq("referenceid", referenceid);
 
     // Filter by date range if provided
@@ -81,7 +89,8 @@ async function fetchAllActivities(
   referenceid: string,
   from?: string | string[],
   to?: string | string[],
-  company_name?: string | string[]
+  company_name?: string | string[],
+  fields: string = "*"
 ) {
   const BATCH_SIZE = 1000; // Supabase limit
   let allActivities: any[] = [];
@@ -89,13 +98,14 @@ async function fetchAllActivities(
   let hasMore = true;
   let totalProcessed = 0;
   const startTime = Date.now();
-  const MAX_RUNTIME = 55000; // 55 seconds max to avoid timeout
+  const MAX_RUNTIME = 45000; // Reduced to 45 seconds to be safer
+  const MAX_TOTAL_RECORDS = 10000; // Absolute safety cap
 
-  while (hasMore) {
+  while (hasMore && totalProcessed < MAX_TOTAL_RECORDS) {
     // Build query for this batch
     let query = supabase
       .from("history")
-      .select("*", { count: "exact" })
+      .select(fields, { count: "exact" })
       .eq("referenceid", referenceid);
 
     // Apply date filters if provided

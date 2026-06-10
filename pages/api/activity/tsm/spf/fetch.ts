@@ -1,19 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 1000;
 
 async function* fetchHistoryBatches(
   referenceid: string,
   fromDate?: string,
-  toDate?: string
+  toDate?: string,
+  fields: string = "*"
 ) {
   let lastId: number | null = null;
+  let totalFetched = 0;
+  const MAX_RECORDS = 5000;
 
-  while (true) {
+  while (totalFetched < MAX_RECORDS) {
     let query = supabase
       .from("spf_request")
-      .select("*")
+      .select(fields)
       .eq("tsm", referenceid)
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
@@ -24,10 +27,10 @@ async function* fetchHistoryBatches(
     const { data, error } = await query;
     if (error) throw error;
 
-    if (!data || data.length === 0) break;
+    if (!data || (data as any[]).length === 0) break;
 
     // Fetch status and creation id from spf_creation table for each SPF request
-    const spfNumbers = data.map(item => item.spf_number).filter(Boolean);
+    const spfNumbers = (data as any[]).map(item => item.spf_number).filter(Boolean);
     let statusMap = new Map();
     let creationIdMap = new Map();
     
@@ -46,20 +49,28 @@ async function* fetchHistoryBatches(
     }
 
     // Merge status and creation id into the data
-    const mergedData = data.map(item => ({
+    const mergedData = (data as any[]).map(item => ({
       ...item,
       status: statusMap.get(item.spf_number) || item.status || "pending",
       spf_creation_id: creationIdMap.get(item.spf_number) || null
     }));
 
     yield mergedData;
+    totalFetched += (data as any[]).length;
 
-    lastId = data[data.length - 1].id;
+    lastId = (data as any[])[(data as any[]).length - 1].id;
+    if ((data as any[]).length < BATCH_SIZE) break;
   }
 }
 
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to } = req.query;
+  const { referenceid, from, to, fields } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
@@ -67,6 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
+  const selectFields = typeof fields === "string" ? fields : "*";
 
   try {
     res.setHeader("Content-Type", "application/json");
@@ -74,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let first = true;
     let total = 0;
 
-    for await (const batch of fetchHistoryBatches(referenceid, fromDate, toDate)) {
+    for await (const batch of fetchHistoryBatches(referenceid, fromDate, toDate, selectFields)) {
       for (const row of batch) {
         const json = JSON.stringify(row);
         res.write(first ? json : `,${json}`);

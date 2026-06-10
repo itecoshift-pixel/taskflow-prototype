@@ -1,16 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/utils/supabase";
 
-const BATCH_SIZE = 5000;
+const BATCH_SIZE = 1000;
 
 // Async generator to fetch activity in batches by TSM
-async function* fetchActivityBatches(tsm?: string) {
+async function* fetchActivityBatches(tsm?: string, fields: string = "*") {
   let lastId: number | null = null;
+  let totalFetched = 0;
+  const MAX_RECORDS = 10000;
 
-  while (true) {
+  while (totalFetched < MAX_RECORDS) {
     let query = supabase
       .from("activity")
-      .select("*")
+      .select(fields)
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
@@ -19,29 +21,39 @@ async function* fetchActivityBatches(tsm?: string) {
 
     const { data, error } = await query;
     if (error) throw error;
-    if (!data || data.length === 0) break;
+    if (!data || (data as any[]).length === 0) break;
 
     yield data;
+    totalFetched += (data as any[]).length;
 
-    lastId = data[data.length - 1].id;
+    lastId = (data as any[])[(data as any[]).length - 1].id;
+    if ((data as any[]).length < BATCH_SIZE) break;
   }
 }
+
+export const config = {
+  api: {
+    responseLimit: false,
+  },
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const { referenceid } = req.query;
+  const { referenceid, fields } = req.query;
 
   if (referenceid && typeof referenceid !== "string") {
     return res.status(400).json({ error: "Invalid referenceid" });
   }
 
+  const selectFields = typeof fields === "string" ? fields : "*";
+
   try {
     // ---------------- Fetch from Supabase in batches ----------------
     const activities: any[] = [];
-    for await (const batch of fetchActivityBatches(referenceid as string | undefined)) {
+    for await (const batch of fetchActivityBatches(referenceid as string | undefined, selectFields)) {
       activities.push(...batch);
     }
 

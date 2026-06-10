@@ -621,7 +621,8 @@ function DashboardContent() {
   const fetchActivitiesForNoActivity = useCallback(async () => {
     if (!userDetails.referenceid) return;
     try {
-      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true`;
+      const fields = "id,account_reference_number,activity_reference_number,company_name,status,scheduled_date,date_created";
+      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true&fields=${fields}`;
       const actRes = await fetch(activitiesUrl);
       if (actRes.ok) {
         const actData = await actRes.json();
