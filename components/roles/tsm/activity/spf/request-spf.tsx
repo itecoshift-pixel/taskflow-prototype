@@ -71,6 +71,7 @@ const StatusBadge = ({ status }: { status?: string }) => {
             "approved by tsm":                 "Pending on PD",
             "approved by sales head":           "Pending on PD",
             "declined":                 "Declined",
+            "approved":                 "Approved",
             "endorsed to sales head":   "Endorsed to Sales Head",
         };
         return map[s] || raw || "—";
@@ -296,7 +297,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-gray-900 hover:bg-gray-900">
-                                    {["Actions", "Status", "SPF No.", "Customer", "Contact Person", "Contact No.", "Reg. Address", "Delivery", "Billing", "Collection", "Payment", "Warranty", "Delivery Date", "Prepared By", "Approved By", "Date Modified"].map((h) => (
+                                    {["Actions", "Status", "SPF No.", "Contact Person", "Contact No.", "Reg. Address", "Delivery", "Billing", "Collection", "Payment", "Warranty", "Delivery Date", "Prepared By", "Approved By", "Date Modified"].map((h) => (
                                         <TableHead key={h} className="text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap px-3 py-2.5">{h}</TableHead>
                                     ))}
                                 </TableRow>
@@ -333,7 +334,6 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by, first
                                             </TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap"><StatusBadge status={item.status} /></TableCell>
                                             <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-700 font-semibold">{item.spf_number}</TableCell>
-                                            <TableCell className="px-3 py-2 font-semibold whitespace-nowrap text-gray-900">{item.customer_name}</TableCell>
                                             <TableCell className="px-3 py-2 whitespace-nowrap text-gray-700 capitalize">{item.contact_person}</TableCell>
                                             <TableCell className="px-3 py-2 font-mono text-[11px] whitespace-nowrap text-gray-600">{item.contact_number}</TableCell>
                                             <TableCell className="px-3 py-2 max-w-[140px] truncate text-gray-600">{item.registered_address}</TableCell>

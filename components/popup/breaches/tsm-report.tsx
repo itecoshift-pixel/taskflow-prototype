@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RefreshCcw, Loader2, List } from "lucide-react";
+import { RefreshCcw, Loader2 } from "lucide-react";
 import { sileo } from "sileo";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
@@ -117,8 +117,8 @@ export default function TSMReports() {
   const queryUserId = searchParams?.get("id") ?? "";
 
   const today = new Date().toISOString().split("T")[0];
-  const [startDate, setStartDate] = useState<string>(today);
-  const [endDate, setEndDate] = useState<string>(today);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   const [userDetails, setUserDetails] = useState({
     referenceid: "", firstname: "", lastname: "", role: "",
@@ -305,7 +305,7 @@ export default function TSMReports() {
   }, []);
 
   const fetchActivities = useCallback(async (refId: string) => {
-    if (!refId) return;
+    if (!refId || !startDate || !endDate) return;
     setLoadingActivities(true);
     try {
       const fields = "id,account_reference_number,company_name,date_created,type_activity,type_client,start_date,end_date,source,call_status,quotation_amount,status,tsm_approved_status,manager_approval_date,tsm_approval_date,date_updated,quotation_number,activity_reference_number,actual_sales";
@@ -345,7 +345,7 @@ export default function TSMReports() {
   }, []);
 
   const fetchCsrMetrics = useCallback(async (refId: string, start: string, end: string) => {
-    if (!refId) return;
+    if (!refId || !start || !end) return;
     setLoadingCsrMetrics(true);
     try {
       const res = await fetch(`/api/activity/tsm/breaches/fetch-ecodesk?manager=${encodeURIComponent(refId)}`);
@@ -418,7 +418,16 @@ export default function TSMReports() {
 
   useEffect(() => {
     const refId = userDetails.referenceid;
-    if (!refId) return;
+    if (!refId || !startDate || !endDate) {
+      setActivities([]);
+      setOverdueByCompany({});
+      setOverdueCount(0);
+      setAvgResponseTime(0);
+      setAvgNonQuotationHT(0);
+      setAvgQuotationHT(0);
+      setAvgSpfHT(0);
+      return;
+    }
     fetchClusterData(refId);
     fetchActivities(refId);
     fetchOverdue(refId);
@@ -653,7 +662,10 @@ export default function TSMReports() {
 
   const handleManualSync = () => {
     const refId = userDetails.referenceid;
-    if (!refId) return;
+    if (!refId || !startDate || !endDate) {
+      sileo.warning({ title: "Date Range Required", description: "Please select both start and end dates before syncing.", duration: 4000 });
+      return;
+    }
     fetchClusterData(refId);
     fetchActivities(refId);
     fetchOverdue(refId);

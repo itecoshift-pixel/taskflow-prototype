@@ -144,15 +144,6 @@ export function AgentList({
         tsaClientCount: number | null;
     } | null>(null);
 
-    /* ========================= DEFAULT DATE = TODAY ========================= */
-    useEffect(() => {
-        if (!dateCreatedFilterRange?.from) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            setDateCreatedFilterRangeAction({ from: today, to: today });
-        }
-    }, [dateCreatedFilterRange, setDateCreatedFilterRangeAction]);
-
     /* ========================= FETCH AGENTS ========================= */
     useEffect(() => {
         if (!referenceid) return;
@@ -164,14 +155,19 @@ export function AgentList({
 
     /* ========================= FETCH HISTORY ========================= */
     useEffect(() => {
-        if (!referenceid) return;
+        if (!referenceid || !dateCreatedFilterRange?.from) return;
         setLoadingHistory(true);
-        fetch(`/api/all-agent-history?referenceid=${encodeURIComponent(referenceid)}`)
+
+        const from = dateCreatedFilterRange.from.toISOString().split("T")[0];
+        const to = dateCreatedFilterRange.to ? dateCreatedFilterRange.to.toISOString().split("T")[0] : from;
+        const agentParam = selectedAgent !== "all" ? `&agentId=${encodeURIComponent(selectedAgent)}` : "";
+
+        fetch(`/api/all-agent-history?referenceid=${encodeURIComponent(referenceid)}&from=${from}&to=${to}${agentParam}`)
             .then((res) => { if (!res.ok) throw new Error("Failed to fetch history"); return res.json(); })
             .then((data) => setHistory(data.activities ?? []))
             .catch((err) => setErrorHistory(err.message))
             .finally(() => setLoadingHistory(false));
-    }, [referenceid]);
+    }, [referenceid, dateCreatedFilterRange, selectedAgent]);
 
     /* ========================= FILTER LOGIC ========================= */
     const filteredHistory = useMemo(() => {
@@ -434,8 +430,22 @@ export function AgentList({
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">
-            {loadingHistory ? (
-                <div className="text-center py-10 text-sm text-gray-400">Loading history data...</div>
+            {!dateCreatedFilterRange?.from ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                        <Building2 className="w-8 h-8 text-gray-300" />
+                    </div>
+                    <h3 className="text-sm font-medium text-gray-900">No date selected</h3>
+                    <p className="text-xs text-gray-500 mt-1 max-w-[200px]">
+                        Please select a date range from the calendar to view agent activity and reports.
+                    </p>
+                </div>
+            ) : loadingHistory ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-10 h-10 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin mb-4" />
+                    <p className="text-sm text-gray-500 font-medium">Fetching data...</p>
+                    <p className="text-[10px] text-gray-400 mt-1">This may take a moment depending on the number of records.</p>
+                </div>
             ) : errorHistory ? (
                 <div className="text-center text-red-500 py-10 text-sm">{errorHistory}</div>
             ) : (

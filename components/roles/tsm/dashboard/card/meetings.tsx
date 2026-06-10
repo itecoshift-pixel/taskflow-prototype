@@ -27,8 +27,8 @@ interface Meeting {
 interface Props {
   agents: Agent[];
   selectedAgent: string;
-  dateCreatedFilterRange?: [Date, Date];
-  setDateCreatedFilterRangeAction?: (range: [Date, Date] | undefined) => void;
+  dateCreatedFilterRange?: { from?: Date; to?: Date } | null;
+  setDateCreatedFilterRangeAction?: (range: { from?: Date; to?: Date } | undefined) => void;
   formatDate?: (dateStr?: string | null) => string;
 }
 
@@ -99,7 +99,7 @@ export function AgentMeetings({
   const [loading, setLoading] = useState(false);
 
   const fmt = formatDate ?? defaultFormatDate;
-  const hasDateRange = !!(dateCreatedFilterRange?.length === 2);
+  const hasDateRange = !!(dateCreatedFilterRange?.from);
 
   const toggleAgent = (refId: string) => {
     setExpandedAgents((prev) => {
@@ -111,16 +111,27 @@ export function AgentMeetings({
 
   const fetchAllMeetingsForAgent = async (agentId: string): Promise<Meeting[]> => {
     let all: Meeting[] = [];
-    let from = 0;
+    let fromBatch = 0;
     const batch = 5000;
 
+    const fromDateStr = dateCreatedFilterRange?.from ? dateCreatedFilterRange.from.toISOString().split("T")[0] : "";
+    const toDateStr = dateCreatedFilterRange?.to ? dateCreatedFilterRange.to.toISOString().split("T")[0] : fromDateStr;
+
     while (true) {
-      const { data, error } = await supabase
+      let queryBuilder = supabase
         .from("meetings")
         .select("*")
         .eq("referenceid", agentId)
-        .order("date_created", { ascending: false })
-        .range(from, from + batch - 1);
+        .order("date_created", { ascending: false });
+
+      if (fromDateStr) queryBuilder = queryBuilder.gte("date_created", fromDateStr);
+      if (toDateStr) {
+        const d = new Date(toDateStr);
+        d.setHours(23, 59, 59, 999);
+        queryBuilder = queryBuilder.lte("date_created", d.toISOString());
+      }
+
+      const { data, error } = await queryBuilder.range(fromBatch, fromBatch + batch - 1);
 
       if (error || !data || data.length === 0) break;
 
@@ -133,7 +144,7 @@ export function AgentMeetings({
       })));
 
       if (data.length < batch) break;
-      from += batch;
+      fromBatch += batch;
     }
 
     return all;
@@ -156,11 +167,9 @@ export function AgentMeetings({
 
         // Filter: date range if set, otherwise only today
         if (hasDateRange) {
-          const [rangeStart, rangeEnd] = dateCreatedFilterRange!;
-          // Set start to 00:00:00 and end to 23:59:59 of local day to avoid UTC drift
-          const start = new Date(rangeStart);
+          const start = new Date(dateCreatedFilterRange!.from!);
           start.setHours(0, 0, 0, 0);
-          const end = new Date(rangeEnd);
+          const end = new Date(dateCreatedFilterRange!.to || dateCreatedFilterRange!.from!);
           end.setHours(23, 59, 59, 999);
           meetings = meetings.filter((m) => {
             if (!m.date_created) return false;

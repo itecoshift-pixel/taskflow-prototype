@@ -46,8 +46,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getTableStyles, DEFAULT_TABLE_STYLES, type TableStyles } from "@/lib/table-styles";
-
+import { TaskListDialog } from "../tasklist/dialog/filter";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { sileo } from "sileo";
 
 const QUOTATION_STATUS_OPTIONS = {
@@ -69,7 +75,6 @@ const QUOTATION_STATUS_OPTIONS = {
   ],
 };
 
-import { TaskListDialog } from "../tasklist/dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
 import { GenerateSODialog } from "./dialog/generate-so";
 import { AccountsActiveDeleteDialog } from "../planner/dialog/delete";
@@ -278,12 +283,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
   const [highlightedArn, setHighlightedArn] = useState<string | null>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
-  const [tableStyles, setTableStyles] = useState<TableStyles>(DEFAULT_TABLE_STYLES);
-
-  useEffect(() => {
-    getTableStyles().then(setTableStyles);
-  }, []);
-
   // ── Inline status edit state ─────────────────────────────────────────────
   const [editStatusMode, setEditStatusMode] = useState(false);
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, string>>({});
@@ -325,7 +324,7 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     }
   }, [referenceid, managerDetailsProp, tsmDetailsProp, fetchHierarchy]);
 
-  const fetchActivities = useCallback(async (page: number = 1, loadMore: boolean = false) => {
+  const fetchActivities = useCallback(async (targetPage: number = 1, loadMore: boolean = false) => {
     if (!referenceid) {
       setActivities([]);
       return;
@@ -349,8 +348,10 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     try {
       const url = new URL("/api/activity/tsa/quotation/fetch", window.location.origin);
       url.searchParams.append("referenceid", referenceid);
-      url.searchParams.append("page", String(page));
+      url.searchParams.append("page", String(targetPage));
       url.searchParams.append("limit", String(itemsPerPage));
+      // Only fetch required columns from the 'history' table to minimize payload size
+      url.searchParams.append("fields", "id,activity_reference_number,quotation_number,quotation_status,quotation_status_sub,tsm_approved_status,start_date,end_date,company_name,quotation_amount,date_updated,date_created,status,contact_number,email_address,address,contact_person,vat_type,delivery_fee,restocking_fee,quotation_vatable,quotation_subject,hide_discount_in_preview,show_discount_columns,show_summary_discounts,show_profit_margins,margin_alert_threshold,show_margin_alerts,product_view_mode,visible_columns");
 
       // Add search term if present
       if (searchTerm.trim()) {
@@ -374,18 +375,12 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
       if (!res.ok) throw new Error("Failed to fetch activities");
       const data = await res.json();
 
-      if (loadMore && page > 1) {
-        // Append new data for load more
-        setActivities(prev => [...prev, ...(data.activities || [])]);
-      } else {
-        // Replace data for initial load or new search
-        setActivities(data.activities || []);
-      }
+      setActivities(data.activities || []);
 
       // Update pagination info
       setTotalCount(data.totalCount || 0);
       setHasMore(data.hasMore || false);
-      setCurrentPage(page);
+      setCurrentPage(targetPage);
     } catch (err: any) {
       setError(err.message);
       setActivities([]);
@@ -426,14 +421,6 @@ export const RevisedQuotation: React.FC<CompletedProps> = ({
     setCurrentPage(1);
     fetchActivities(1, false);
   }, [fetchActivities]);
-
-  // Load more handler
-  const handleLoadMore = useCallback(() => {
-    if (hasMore && !loadingMore) {
-      const nextPage = currentPage + 1;
-      fetchActivities(nextPage, true);
-    }
-  }, [currentPage, hasMore, loadingMore, fetchActivities]);
 
   // ── Highlight + scroll ───────────────────────────────────────────────────
   useEffect(() => {
@@ -806,76 +793,52 @@ const OFF_WHITE = "#F9FAFA";
       `}</style>
 
       {/* ── Unified table container ── */}
-      <div
-        className="overflow-hidden border"
-        style={{
-          borderColor: tableStyles.table_border,
-          borderRadius: `${tableStyles.table_border_radius}px`,
-        }}
-      >
+      <div className="overflow-hidden border border-zinc-200 rounded-2xl bg-white shadow-sm">
 
         {/* ── Toolbar ── */}
-        <div
-          className="flex flex-wrap items-center gap-3 px-3 py-2.5 border-b"
-          style={{ backgroundColor: tableStyles.toolbar_bg, borderColor: tableStyles.toolbar_border }}
-        >
+        <div className="flex flex-wrap items-center gap-4 px-4 py-4 border-b bg-white border-zinc-100">
           {/* Title */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Search className="w-3.5 h-3.5" style={{ color: tableStyles.toolbar_btn_text }} />
-            <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: tableStyles.toolbar_btn_text }}>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="bg-zinc-900 rounded-full p-2">
+              <Search className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-[12px] font-bold tracking-tight text-zinc-900">
               Quotation History
             </span>
           </div>
 
           {/* Search input */}
-          <div className="relative flex-1 min-w-[180px] max-w-sm flex gap-2">
+          <div className="relative flex-1 min-w-[200px] max-w-md flex gap-2">
             <div className="relative flex-1">
-              <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 opacity-50"
-                style={{ color: tableStyles.toolbar_input_text }}
-              />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <Input
                 placeholder="Search company, reference ID, or quotation #..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-                className="h-8 text-[10px] rounded-none pl-8 uppercase tracking-widest border-0 focus-visible:ring-0"
-                style={{
-                  color: tableStyles.toolbar_input_text,
-                  fontSize: `${tableStyles.th_font_size}px`,
-                  backgroundColor: tableStyles.toolbar_input_bg,
-                  borderColor: tableStyles.toolbar_input_border,
-                  borderRadius: `${tableStyles.table_border_radius}px`,
-                }}
+                className="h-10 text-[11px] rounded-full pl-10 border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200 transition-all"
               />
             </div>
             <button
               onClick={handleSearch}
-              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-colors"
-              style={{
-                color: tableStyles.toolbar_btn_text,
-                borderColor: tableStyles.toolbar_btn_border,
-                backgroundColor: tableStyles.toolbar_btn_bg,
-                borderRadius: `${tableStyles.table_border_radius}px`,
-              }}
+              className="h-10 px-5 text-[11px] font-bold rounded-full bg-zinc-900 text-white hover:bg-zinc-800 transition-all shadow-sm active:scale-95 flex items-center gap-2"
             >
-              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Search"}
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Search"}
             </button>
           </div>
 
           {/* Status Edit Mode badge */}
           {editStatusMode && (
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border"
-              style={{ color: "#1d4ed8", borderColor: "#93c5fd", backgroundColor: "#eff6ff" }}
+              className="inline-flex items-center gap-2 px-4 py-1.5 text-[10px] font-bold rounded-full border border-blue-100 bg-blue-50 text-blue-600 shadow-sm"
             >
-              <PenIcon className="w-3 h-3" />
+              <PenIcon className="w-3.5 h-3.5" />
               Status Edit Mode
             </span>
           )}
 
           {/* Right side actions */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             <TaskListDialog
               filterStatus={filterStatus}
               filterTypeActivity={filterTypeActivity}
@@ -903,30 +866,21 @@ const OFF_WHITE = "#F9FAFA";
             {/* Delete selected */}
             {selectedIds.size > 0 && (
               <button
-                className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-colors bg-red-600 border-red-700 text-white hover:bg-red-700"
-                style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
+                className="h-10 px-5 text-[11px] font-bold rounded-full flex items-center gap-2 transition-all bg-red-500 text-white hover:bg-red-600 shadow-sm active:scale-95"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-4 h-4" />
                 Delete ({selectedIds.size})
               </button>
             )}
 
             {/* Record count */}
             {totalCount > 0 && (
-              <div
-                className="flex items-center gap-2 px-3 py-1 border text-[10px] font-bold uppercase tracking-widest"
-                style={{
-                  color: tableStyles.toolbar_btn_text,
-                  borderColor: tableStyles.toolbar_btn_border,
-                  backgroundColor: tableStyles.toolbar_btn_bg,
-                  borderRadius: `${tableStyles.table_border_radius}px`,
-                }}
-              >
-                <span className="border-r pr-2" style={{ borderColor: tableStyles.toolbar_btn_border }}>
+              <div className="flex items-center gap-2 px-4 py-2 border border-zinc-100 bg-zinc-50/50 text-[10px] font-bold rounded-full text-zinc-500 shadow-sm">
+                <span className="border-r border-zinc-200 pr-2">
                   {totalCount} records
                 </span>
-                <span className="font-mono">
+                <span className="font-mono text-zinc-900">
                   {activities.length} shown
                 </span>
               </div>
@@ -936,9 +890,9 @@ const OFF_WHITE = "#F9FAFA";
 
         {/* ── Error ── */}
         {error && (
-          <div className="p-4" style={{ backgroundColor: tableStyles.table_bg }}>
-            <Alert variant="destructive" className="rounded-none border-red-200 bg-red-50">
-              <AlertCircleIcon className="h-5 w-5 text-red-600" />
+          <div className="p-4 bg-white">
+            <Alert variant="destructive" className="rounded-xl border-red-100 bg-red-50 shadow-sm">
+              <AlertCircleIcon className="h-5 w-5 text-red-500" />
               <AlertTitle className="text-sm font-bold text-red-900">Sync Error</AlertTitle>
               <AlertDescription className="text-xs text-red-700">
                 Could not retrieve quotation data. Please try again.
@@ -949,12 +903,11 @@ const OFF_WHITE = "#F9FAFA";
 
         {/* ── Loading ── */}
         {loading && activities.length === 0 && (
-          <div
-            className="flex flex-col items-center justify-center py-20 gap-3"
-            style={{ backgroundColor: tableStyles.table_bg }}
-          >
-            <Loader2 className="h-8 w-8 animate-spin" style={{ color: tableStyles.td_text, opacity: 0.4 }} />
-            <p className="text-[11px] font-mono uppercase tracking-widest" style={{ color: tableStyles.td_text, opacity: 0.5 }}>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white">
+            <div className="bg-zinc-50 rounded-full p-4">
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-900" />
+            </div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
               Retrieving Quotations...
             </p>
           </div>
@@ -962,12 +915,11 @@ const OFF_WHITE = "#F9FAFA";
 
         {/* ── Empty state ── */}
         {!loading && !error && activities.length === 0 && (
-          <div
-            className="flex flex-col items-center justify-center py-20 gap-2"
-            style={{ backgroundColor: tableStyles.table_bg }}
-          >
-            <AlertCircleIcon className="h-10 w-10 opacity-20" style={{ color: tableStyles.td_text }} />
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: tableStyles.td_text, opacity: 0.5 }}>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white">
+            <div className="bg-zinc-50 rounded-full p-4">
+              <AlertCircleIcon className="h-10 w-10 text-zinc-200" />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">
               No quotation records found
             </p>
           </div>
@@ -975,45 +927,30 @@ const OFF_WHITE = "#F9FAFA";
 
         {/* ── Table ── */}
         {activities.length > 0 && (
-          <div className="overflow-x-auto" style={{ backgroundColor: tableStyles.table_bg }}>
+          <div className="overflow-x-auto bg-white">
             <Table>
               <TableHeader>
-                <TableRow style={{ backgroundColor: tableStyles.th_bg, borderColor: tableStyles.tr_border }}>
-                  {/* shared th style helper */}
-                  {(() => {
-                    const thStyle: React.CSSProperties = {
-                      color: tableStyles.th_text,
-                      fontSize: `${tableStyles.th_font_size}px`,
-                      padding: `${tableStyles.th_padding}px 12px`,
-                      borderColor: tableStyles.th_border,
-                      backgroundColor: tableStyles.th_bg,
-                    };
-                    return (
-                      <>
-                        <TableHead style={thStyle} className="uppercase font-black">
-                          <Checkbox
-                            checked={selectedIds.size === activities.length && activities.length > 0}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedIds(new Set(activities.map((a: Completed) => a.id)));
-                              } else {
-                                setSelectedIds(new Set());
-                              }
-                            }}
-                            className="h-4 w-4"
-                            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
-                          />
-                        </TableHead>
-                        {[
-                          "Edit", "Quotation #", "Quotation Status", "Quotation Remarks",
-                          "Status", "Duration", "Company", "Timeline",
-                          "Feedback / Notes", "Amount", "Updated",
-                        ].map((h) => (
-                          <TableHead key={h} style={thStyle} className="uppercase font-black whitespace-nowrap">{h}</TableHead>
-                        ))}
-                      </>
-                    );
-                  })()}
+                <TableRow className="bg-white border-zinc-100 hover:bg-white">
+                  <TableHead className="py-4 px-6 bg-zinc-50/50">
+                    <Checkbox
+                      checked={selectedIds.size === activities.length && activities.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedIds(new Set(activities.map((a: Completed) => a.id)));
+                        } else {
+                          setSelectedIds(new Set());
+                        }
+                      }}
+                      className="h-4 w-4 rounded-full border-zinc-300 data-[state=checked]:bg-zinc-900 data-[state=checked]:border-zinc-900"
+                    />
+                  </TableHead>
+                  {[
+                    "Edit", "Quotation #", "Quotation Status", "Quotation Remarks",
+                    "Status", "Duration", "Company", "Timeline",
+                    "Feedback / Notes", "Amount", "Updated",
+                  ].map((h) => (
+                    <TableHead key={h} className="uppercase font-bold text-zinc-400 text-[10px] tracking-widest py-4 px-6 bg-zinc-50/50 border-none whitespace-nowrap">{h}</TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
 
@@ -1023,13 +960,6 @@ const OFF_WHITE = "#F9FAFA";
                   const isHighlighted =
                     highlightedArn === item.activity_reference_number ||
                     highlightedArn === item.quotation_number;
-
-                  const tdStyle: React.CSSProperties = {
-                    color: tableStyles.td_text,
-                    fontSize: `${tableStyles.td_font_size}px`,
-                    padding: `${tableStyles.td_padding}px 12px`,
-                    borderColor: tableStyles.td_border,
-                  };
 
                   return (
                     <TableRow
@@ -1043,40 +973,29 @@ const OFF_WHITE = "#F9FAFA";
                           if (item.quotation_number) rowRefs.current.delete(item.quotation_number);
                         }
                       }}
-                      className={isHighlighted ? "rq-highlight-row" : ""}
-                      style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg; }}
+                      className={`border-zinc-50 transition-colors ${isHighlighted ? "rq-highlight-row" : ""} ${isSelected ? "bg-zinc-50" : "bg-white hover:bg-zinc-50/30"}`}
                     >
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6">
                         <Checkbox
-                          className="h-4 w-4"
+                          className="h-4 w-4 rounded-full border-zinc-300 data-[state=checked]:bg-zinc-900 data-[state=checked]:border-zinc-900"
                           checked={isSelected}
                           onCheckedChange={() => toggleSelect(item.id)}
-                          style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
                         />
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6">
                         <button
                           title="Edit Quotation"
                           onClick={() => openEditDialog(item)}
-                          className="h-7 w-7 flex items-center justify-center border transition-colors"
-                          style={{
-                            borderColor: tableStyles.td_border,
-                            color: tableStyles.td_text,
-                            borderRadius: `${tableStyles.table_border_radius}px`,
-                          }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#eff6ff"; (e.currentTarget as HTMLElement).style.color = "#2563eb"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = tableStyles.td_text; }}
+                          className="h-8 w-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 hover:shadow-sm transition-all rounded-full"
                         >
                           <PenIcon className="h-3.5 w-3.5" />
                         </button>
                       </TableCell>
 
-                      <TableCell style={tdStyle}>{displayValue(item.quotation_number)}</TableCell>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium">{displayValue(item.quotation_number)}</TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6">
                         {item.status === "Quote-Done" ? (
                           <Select
                             value={`${item.quotation_status || ""}__${item.quotation_status_sub || ""}`}
@@ -1085,39 +1004,36 @@ const OFF_WHITE = "#F9FAFA";
                               handleQuotationStatusUpdate(item.id, main, sub || "");
                             }}
                           >
-                            <SelectTrigger
-                              className="h-7 text-[10px] w-[140px] font-bold uppercase tracking-tight"
-                              style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
-                            >
+                            <SelectTrigger className="h-8 text-[10px] w-[150px] border-zinc-200 bg-zinc-50/50 hover:bg-zinc-100 font-bold rounded-full transition-all">
                               <SelectValue asChild><span>{item.quotation_status || "Select status"}</span></SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="rounded-xl">
                               {Object.entries(QUOTATION_STATUS_OPTIONS).map(([mainStatus, subStatuses]) => (
                                 <SelectGroup key={mainStatus}>
-                                  <SelectItem value={mainStatus} className="text-[10px] uppercase font-semibold">{mainStatus}</SelectItem>
+                                  <SelectItem value={mainStatus} className="text-[10px] uppercase font-bold text-zinc-900">{mainStatus}</SelectItem>
                                   {subStatuses.map((subStatus) => (
-                                    <SelectItem key={subStatus} value={`${mainStatus}__${subStatus}`} className="text-[10px] pl-8">{subStatus}</SelectItem>
+                                    <SelectItem key={subStatus} value={`${mainStatus}__${subStatus}`} className="text-[10px] pl-6 text-zinc-500">{subStatus}</SelectItem>
                                   ))}
                                 </SelectGroup>
                               ))}
                             </SelectContent>
                           </Select>
                         ) : (
-                          <span style={{ color: tableStyles.td_text }}>{displayValue(item.quotation_status)}</span>
+                          <span className="text-zinc-500 font-medium">{displayValue(item.quotation_status)}</span>
                         )}
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium">
                         <div className="flex items-center gap-1">
                           {displayValue(item.quotation_status_sub)}
                           {item.quotation_status === "Convert to SO" && "—"}
                         </div>
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6">
                         {editStatusMode ? (
                           <Input
-                            className="h-7 text-[10px] w-28 uppercase font-bold border-blue-200 bg-blue-50/50 focus:ring-0 focus:border-blue-400 rounded-none mx-auto text-center"
+                            className="h-8 text-[10px] w-28 uppercase font-bold border-blue-200 bg-blue-50/50 focus:ring-0 focus:border-blue-400 rounded-full mx-auto text-center"
                             value={pendingStatuses[item.id] ?? item.tsm_approved_status}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -1135,27 +1051,26 @@ const OFF_WHITE = "#F9FAFA";
                         ) : (
                           <Badge
                             variant="outline"
-                            className={`text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 border-transparent ${
+                            className={`text-[10px] font-bold px-3 py-1 border rounded-full shadow-sm ${
                               item.tsm_approved_status === "Approved" || item.tsm_approved_status === "Approved By Sales Head"
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                                 : item.tsm_approved_status === "Pending"
-                                ? "bg-orange-50 text-orange-700 border-orange-100"
+                                ? "bg-orange-50 text-orange-600 border-orange-100"
                                 : item.tsm_approved_status === "Decline"
-                                ? "bg-red-50 text-red-700 border-red-100"
-                                : "bg-zinc-100 text-zinc-600 border-zinc-200"
+                                ? "bg-red-50 text-red-600 border-red-100"
+                                : "bg-zinc-50 text-zinc-500 border-zinc-200"
                             }`}
-                            style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
                           >
                             {item.tsm_approved_status}
                           </Badge>
                         )}
                       </TableCell>
 
-                      <TableCell style={tdStyle}>{formatDuration(item.start_date, item.end_date)}</TableCell>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium">{formatDuration(item.start_date, item.end_date)}</TableCell>
 
-                      <TableCell style={{ ...tdStyle }} className="font-bold">{item.company_name}</TableCell>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-900 font-bold tracking-tight">{item.company_name}</TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium">
                         {item.tsm_approval_date && (
                           <div className="flex items-center gap-1">
                             <span className="text-zinc-400 uppercase font-bold tracking-tighter text-[9px]">TSM:</span>
@@ -1173,19 +1088,19 @@ const OFF_WHITE = "#F9FAFA";
                         )}
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
-                        <span className="block truncate max-w-[180px]">
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium">
+                        <span className="block truncate max-w-[180px]" title={item.tsm_remarks || ""}>
                           {item.tsm_remarks || "—"}{item.manager_remarks ? ` / ${item.manager_remarks}` : ""}
                         </span>
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium font-mono">
                         {item.quotation_amount
                           ? `₱${parseFloat(String(item.quotation_amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                           : "—"}
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-6 text-xs text-zinc-500 font-medium">
                         {new Date(item.date_updated!).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
                       </TableCell>
                     </TableRow>
@@ -1194,15 +1109,10 @@ const OFF_WHITE = "#F9FAFA";
               </TableBody>
 
               <tfoot>
-                <TableRow style={{ backgroundColor: tableStyles.tfoot_bg, borderColor: tableStyles.tfoot_border }}>
+                <TableRow className="bg-zinc-50/50 border-t border-zinc-100">
                   <TableCell
                     colSpan={12}
-                    className="uppercase tracking-wider"
-                    style={{
-                      color: tableStyles.tfoot_text,
-                      fontSize: `${tableStyles.tfoot_font_size}px`,
-                      padding: `${tableStyles.tfoot_padding}px 12px`,
-                    }}
+                    className="text-zinc-400 text-[10px] font-bold py-5 px-6 uppercase tracking-widest"
                   >
                     {totalCount} record{totalCount !== 1 ? "s" : ""} total
                   </TableCell>
@@ -1212,29 +1122,32 @@ const OFF_WHITE = "#F9FAFA";
           </div>
         )}
 
-        {/* ── Load More ── */}
-        {hasMore && (
-          <div
-            className="flex items-center justify-center border-t py-3"
-            style={{ backgroundColor: tableStyles.pagination_bg, borderColor: tableStyles.toolbar_border }}
-          >
-            <button
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-              className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest border transition-all disabled:pointer-events-none disabled:opacity-30"
-              style={{
-                color: tableStyles.pagination_text,
-                borderColor: tableStyles.pagination_border,
-                borderRadius: `${tableStyles.pagination_radius}px`,
-                backgroundColor: "transparent",
-              }}
-            >
-              {loadingMore ? (
-                <span className="flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Loading...</span>
-              ) : (
-                "Load More"
-              )}
-            </button>
+        {/* ── Pagination ── */}
+        {totalCount > itemsPerPage && (
+          <div className="flex items-center justify-center border-t border-zinc-100 bg-white py-4">
+            <Pagination className="text-zinc-600">
+              <PaginationContent className="flex items-center gap-4 justify-center">
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); if (currentPage > 1) fetchActivities(currentPage - 1); }}
+                    aria-disabled={currentPage === 1}
+                    className={`rounded-xl h-9 px-5 text-[11px] font-bold uppercase transition-all border-zinc-200 ${currentPage === 1 ? "pointer-events-none opacity-30 bg-zinc-50" : "hover:bg-zinc-50 active:scale-95 shadow-sm"}`}
+                  />
+                </PaginationItem>
+                <span className="font-mono text-[12px] font-bold select-none px-4 py-1.5 rounded-full border border-zinc-100 text-zinc-900 bg-zinc-50/50">
+                  {currentPage} / {Math.ceil(totalCount / itemsPerPage)}
+                </span>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); if (currentPage < Math.ceil(totalCount / itemsPerPage)) fetchActivities(currentPage + 1); }}
+                    aria-disabled={currentPage === Math.ceil(totalCount / itemsPerPage)}
+                    className={`rounded-xl h-9 px-5 text-[11px] font-bold uppercase transition-all border-zinc-200 ${currentPage === Math.ceil(totalCount / itemsPerPage) ? "pointer-events-none opacity-30 bg-zinc-50" : "hover:bg-zinc-50 active:scale-95 shadow-sm"}`}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
       </div>

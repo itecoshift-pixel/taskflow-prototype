@@ -9,6 +9,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { FormatProvider } from "@/contexts/FormatContext";
 import { SidebarLeft } from "@/components/sidebar-left";
 import { SidebarRight } from "@/components/sidebar-right";
+import { supabase } from "@/utils/supabase";
 
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage,
@@ -36,10 +37,9 @@ import { UnifiedNotificationBellLazy } from "@/components/unified-notification-b
 import ProtectedPageWrapper from "@/components/protected-page-wrapper";
 
 import {
-  PlusCircle, Loader2, Calendar, CheckCircle, ClipboardCheck,
+  PlusCircle, Loader2, Calendar, CheckCircle,
   AlertCircle, ChevronDown, ChevronRight, Bell, CheckCircle2,
-  XCircle, Eye, Download, Trash2, PackageCheck, Clock, List,
-  AlertTriangle, PhoneOff, Search,
+  XCircle, Trash2, AlertTriangle, Search,
 } from "lucide-react";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -93,16 +93,6 @@ interface SPFNotification {
   date_updated?: string;
   status: string;
   referenceid: string;
-}
-
-interface ActivityForCheck {
-  id: string;
-  account_reference_number: string;
-  activity_reference_number: string;
-  company_name: string;
-  status: string;
-  scheduled_date?: string;
-  date_created: string;
 }
 
 const REVISED_QUOTATION_ROUTE = "/roles/tsa/activity/revised-quotation";
@@ -476,7 +466,7 @@ function DashboardContent() {
   const [clearCacheOpen, setClearCacheOpen] = useState(false);
 
   // ─── No Activity Accounts State ────────────────────────────────────────────
-  const [activities, setActivities] = useState<ActivityForCheck[]>([]);
+  const [lastTouchMap, setLastTouchMap] = useState<Record<string, string>>({});
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingNoActivity, setLoadingNoActivity] = useState(false);
   const [noActivitySearch, setNoActivitySearch] = useState("");
@@ -617,21 +607,53 @@ function DashboardContent() {
     }
   }, []);
 
-  // ─── Fetch activities for no-activity calculation ─────────────────────────
-  const fetchActivitiesForNoActivity = useCallback(async () => {
+  // ─── Fetch last touch summary (optimized) ────────────────────────────────
+  const fetchLastTouchSummary = useCallback(async () => {
     if (!userDetails.referenceid) return;
     try {
-      const fields = "id,account_reference_number,activity_reference_number,company_name,status,scheduled_date,date_created";
-      const activitiesUrl = `/api/activities?referenceid=${encodeURIComponent(userDetails.referenceid)}&fetchAll=true&fields=${fields}`;
-      const actRes = await fetch(activitiesUrl);
-      if (actRes.ok) {
-        const actData = await actRes.json();
-        const list = Array.isArray(actData) ? actData : actData.data ?? [];
-        setActivities(list);
+      const url = `/api/activity/tsa/planner/last-touch-summary?referenceid=${encodeURIComponent(userDetails.referenceid)}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setLastTouchMap(data.lastTouchMap || {});
+        }
       }
     } catch (err) {
-      console.error("Error fetching activities:", err);
+      console.error("Error fetching last touch summary:", err);
     }
+  }, [userDetails.referenceid]);
+
+  // ─── Real-time subscription for automatic updates ────────────────────────
+  useEffect(() => {
+    if (!userDetails.referenceid) return;
+
+    const channel = supabase
+      .channel("history_changes_planner")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "history",
+          filter: `referenceid=eq.${userDetails.referenceid}`,
+        },
+        (payload: any) => {
+          const newRecord = payload.new;
+          if (newRecord && newRecord.account_reference_number && newRecord.date_created) {
+            const ref = newRecord.account_reference_number.toLowerCase().trim();
+            setLastTouchMap((prev) => ({
+              ...prev,
+              [ref]: newRecord.date_created,
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userDetails.referenceid]);
 
   // ─── Fetch accounts for no-activity calculation ──────────────────────────
@@ -665,34 +687,20 @@ function DashboardContent() {
 
   useEffect(() => {
     if (userDetails.referenceid) {
-      fetchActivitiesForNoActivity();
+      fetchLastTouchSummary();
       fetchAccountsForNoActivity();
     }
-  }, [userDetails.referenceid, fetchActivitiesForNoActivity, fetchAccountsForNoActivity]);
+  }, [userDetails.referenceid, fetchLastTouchSummary, fetchAccountsForNoActivity]);
 
   // ─── Last activity date per account (last touch) ─────────────────────────
-  // Keyed by both normalized company_name AND account_reference_number for accurate matching
-  const lastActivityDateMap = React.useMemo(() => {
+  // Keyed by account_reference_number for accurate matching
+  const lastActivityDateMapMemo = React.useMemo(() => {
     const m: Record<string, string> = {};
-    const updateIfNewer = (key: string, dateStr: string) => {
-      const existing = m[key];
-      if (!existing || new Date(dateStr).getTime() > new Date(existing).getTime()) {
-        m[key] = dateStr;
-      }
-    };
-    activities.forEach((a) => {
-      if (!a.date_created) return;
-      if (a.company_name) {
-        const nameKey = `name:${a.company_name.toLowerCase().trim().replace(/\./g, "")}`;
-        updateIfNewer(nameKey, a.date_created);
-      }
-      if (a.account_reference_number) {
-        const refKey = `ref:${a.account_reference_number.toLowerCase().trim()}`;
-        updateIfNewer(refKey, a.date_created);
-      }
+    Object.entries(lastTouchMap).forEach(([ref, date]) => {
+      m[`ref:${ref}`] = date;
     });
     return m;
-  }, [activities]);
+  }, [lastTouchMap]);
 
   // ─── Calculate aging from any date string ────────────────────────────────
   const calculateAging = (dateStr: string): number => {
@@ -706,20 +714,9 @@ function DashboardContent() {
   // Lookup tries account_reference_number first (unique), then falls back to company_name
   const filteredNoActivityAccounts = React.useMemo(() => {
     const enriched = accounts.map((account) => {
-      const byRef = account.account_reference_number
-        ? lastActivityDateMap[`ref:${account.account_reference_number.toLowerCase().trim()}`] ?? null
+      const lastTouch = account.account_reference_number
+        ? lastActivityDateMapMemo[`ref:${account.account_reference_number.toLowerCase().trim()}`] ?? null
         : null;
-      const byName = account.company_name
-        ? lastActivityDateMap[`name:${account.company_name.toLowerCase().trim().replace(/\./g, "")}`] ?? null
-        : null;
-
-      // Pick the most recent date between the two lookup results
-      let lastTouch: string | null = null;
-      if (byRef && byName) {
-        lastTouch = new Date(byRef).getTime() >= new Date(byName).getTime() ? byRef : byName;
-      } else {
-        lastTouch = byRef ?? byName;
-      }
 
       const referenceDate = lastTouch || account.date_created;
       const agingDays = calculateAging(referenceDate);
@@ -748,7 +745,7 @@ function DashboardContent() {
     }
 
     return sorted;
-  }, [accounts, lastActivityDateMap, noActivitySearch]);
+  }, [accounts, lastActivityDateMapMemo, noActivitySearch]);
 
   const displayedNoActivityAccounts = React.useMemo(() => {
     const noTouch = filteredNoActivityAccounts.filter((a) => !a.hasActivity);

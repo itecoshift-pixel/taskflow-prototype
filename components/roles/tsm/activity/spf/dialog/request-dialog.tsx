@@ -308,7 +308,7 @@ export function RequestDialog({
   }, [open, isReadyForQuotation, currentSPF?.spf_number]);
 
   // ── Submit ──
-  const handleSubmit = async (status: "Approved by TSM" | "Endorsed to Sales Head" | "Declined by TSM") => {
+  const handleSubmit = async (status: "Approved" | "Endorsed to Sales Head" | "Declined by TSM") => {
     setSubmitting(true);
     const updated = { ...currentSPF, approved_by: fullName, status };
     setCurrentSPF(updated);
@@ -633,26 +633,15 @@ export function RequestDialog({
                   </button>
 
                   <button
-                    onClick={() => handleSubmit("Declined by TSM")}
-                    disabled={submitting}
-                    style={{ ...F, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#fecaca", background: "#7f1d1d", border: "1px solid #ef4444", padding: "7px 16px", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", opacity: submitting ? 0.6 : 1 }}
-                    onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#991b1b"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "#7f1d1d"; }}
-                  >
-                    {submitting ? <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} /> : <ShieldX style={{ width: "10px", height: "10px" }} />}
-                    Decline
-                  </button>
-
-                  {/*<button
-                    onClick={() => handleSubmit("Approved by TSM")}
+                    onClick={() => handleSubmit("Approved")}
                     disabled={submitting}
                     style={{ ...F, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#d1fae5", background: "#065f46", border: "1px solid #10b981", padding: "7px 16px", cursor: submitting ? "not-allowed" : "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", opacity: submitting ? 0.6 : 1 }}
                     onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = "#047857"; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = "#065f46"; }}
                   >
                     {submitting ? <Loader2 style={{ width: "10px", height: "10px", animation: "spin 1s linear infinite" }} /> : <ShieldCheck style={{ width: "10px", height: "10px" }} />}
-                    Approve
-                  </button>*/}
+                    Approved
+                  </button>
                   
                 </div>
               </div>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
@@ -647,135 +647,10 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
     return (
         <div className="space-y-4">
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
-
-                {/* ── Accounts panel ──────────────────────────────────────────────── */}
-                <div className="col-span-1 overflow-hidden shadow-sm">
-                    <div className="flex items-center gap-3 px-4 py-3" style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg, color: tableStyles.th_text, }}>
-                        <Building2 className="w-4 h-4 text-zinc-400" />
-                        <div className="flex-1 min-w-0">
-                            <h3 className="text-xs font-bold uppercase tracking-widest">
-                                Accounts
-                            </h3>
-                            <p className="text-[11px]">
-                                {allAccounts.filter((acc: Account) => {
-                                    if (!accountsSearchTerm.trim()) return true;
-                                    const search = accountsSearchTerm.toLowerCase();
-                                    return (
-                                        acc.company_name?.toLowerCase().includes(search) ||
-                                        acc.contact_person?.toLowerCase().includes(search) ||
-                                        acc.address?.toLowerCase().includes(search)
-                                    );
-                                }).length} shown / {accountsTotalCount || allAccounts.length} total accounts
-                                {accountsSearchTerm.trim() && " (filtered)"}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Accounts Search Bar */}
-                    <div className="p-3 border-b border-zinc-100">
-                        <div className="relative flex gap-2">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
-                                <Input
-                                    className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
-                                    placeholder="Search company name..."
-                                    value={accountsSearchTerm}
-                                    onChange={(e) => setAccountsSearchTerm(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            handleAccountsSearch();
-                                        }
-                                    }}
-                                />
-                            </div>
-                            <Button
-                                onClick={handleAccountsSearch}
-                                disabled={accountsLoading}
-                                className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
-                            >
-                                {accountsLoading ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                    "Search"
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="overflow-y-auto max-h-[600px] divide-y divide-zinc-100">
-                        {accountsLoading ? (
-                            <div className="flex items-center justify-center py-12 text-zinc-400">
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            </div>
-                        ) : allAccounts.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-zinc-400 gap-2 px-4">
-                                <Building2 className="w-10 h-10 opacity-20" />
-                                <p className="text-xs font-semibold text-center">No accounts found</p>
-                            </div>
-                        ) : (
-                            allAccounts
-                                .filter((acc: Account) => {
-                                    // If searching, only show matching accounts
-                                    if (!accountsSearchTerm.trim()) return true;
-                                    const search = accountsSearchTerm.toLowerCase();
-                                    return (
-                                        acc.company_name?.toLowerCase().includes(search) ||
-                                        acc.contact_person?.toLowerCase().includes(search) ||
-                                        acc.address?.toLowerCase().includes(search)
-                                    );
-                                })
-                                .map((acc: Account, i: number) => (
-                                    <div key={acc.id || i} className="p-3 hover:bg-zinc-50 transition-colors">
-                                        <div className="flex items-start justify-between gap-2 mb-2">
-                                            <div className="min-w-0 flex-1">
-                                                <h4 className="text-xs font-bold text-zinc-800 truncate">
-                                                    {acc.company_name}
-                                                </h4>
-                                                <p className="text-[11px] text-zinc-500 truncate uppercase">
-                                                    {acc.contact_person}
-                                                </p>
-                                            </div>
-                                            <Button
-                                                size="sm"
-                                                className="h-7 rounded-none text-[10px] font-bold uppercase gap-1 px-2 shrink-0 bg-zinc-900 hover:bg-zinc-800"
-                                                onClick={() => openContactSelection(acc)}
-                                                disabled={loadingSPF}
-                                            >
-                                                <PlusCircle className="w-3 h-3" /> Create
-                                            </Button>
-                                        </div>
-                                        <p className="text-[10px] text-zinc-400 truncate uppercase">
-                                            {acc.address}
-                                        </p>
-                                    </div>
-                                ))
-                        )}
-                    </div>
-
-                    {/* Accounts Load More Button */}
-                    {accountsHasMore && (
-                        <div className="px-3 py-3 border-t border-zinc-100 bg-zinc-50/50 flex justify-center">
-                            <Button
-                                onClick={handleAccountsLoadMore}
-                                disabled={accountsLoadingMore}
-                                className="h-8 px-4 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
-                            >
-                                {accountsLoadingMore ? (
-                                    <>
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
-                                        Loading...
-                                    </>
-                                ) : (
-                                    "Load More"
-                                )}
-                            </Button>
-                        </div>
-                    )}
-                </div>
+            <div className="flex flex-col gap-4 items-start">
 
                 {/* ── SPF Records table ────────────────────────────────────────────── */}
-                <div className="col-span-3 border rounded-none overflow-hidden shadow-sm flex flex-col"
+                <div className="w-full border rounded-none overflow-hidden shadow-sm flex flex-col"
                     style={{
                         borderColor: tableStyles.table_border,
                         borderRadius: `${tableStyles.table_border_radius}px`,

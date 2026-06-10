@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const activities = await fetchOverdueActivities(referenceid);
-    const activityIds = activities.map((a) => a.activity_reference_number);
+    const activityIds = (activities as any[]).map((a) => a.activity_reference_number);
     const unsuccessfulHistory = await fetchUnsuccessfulHistory(activityIds);
 
     return res.status(200).json({

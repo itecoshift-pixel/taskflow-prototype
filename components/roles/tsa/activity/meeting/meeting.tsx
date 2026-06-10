@@ -320,7 +320,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
     onEdit: (meeting: MeetingItem) => void;
   }) {
     return (
-      <Card className="border border-slate-200 shadow-sm hover:shadow-md transition-shadow" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+      <Card className="border border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-lg">
         <CardHeader className="flex flex-row items-start justify-between pb-2 pt-4 px-4">
           <div className="flex items-center gap-2 min-w-0">
             <span className="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 shrink-0">
@@ -433,19 +433,6 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
   const latest = meetings.slice(0, 1);
 
-  const [tableStyles, setTableStyles] = useState({
-    table_border_radius: "16",
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.table_styles) setTableStyles(data.table_styles);
-      })
-      .catch(() => { }); // silently fall back to defaults
-  }, []);
-
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-3">
@@ -459,7 +446,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
           manager={manager}
           onMeetingCreated={handleMeetingCreated}
         >
-          <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+          <Button variant="outline" size="sm" className="text-xs h-8 gap-1.5 rounded-lg">
             <Plus size={13} /> Create
           </Button>
         </MeetingDialog>
@@ -484,8 +471,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
               <Button
                 variant="outline"
                 size="sm"
-                className="text-xs h-8 gap-1.5"
-                style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+                className="text-xs h-8 gap-1.5 rounded-lg"
                 onClick={() => setViewAllOpen(true)}
               >
                 <List size={13} /> View All ({meetings.length})
@@ -507,8 +493,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
 
       {/* ── View All Dialog ── */}
       <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-        <DialogContent className="max-w-lg w-full max-h-[80vh] overflow-auto"
-          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+        <DialogContent className="max-w-lg w-full max-h-[80vh] overflow-auto rounded-lg">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-slate-800">
               All Meetings
@@ -536,8 +521,7 @@ export function Meeting({ referenceid, tsm, manager }: MeetingProps) {
             <Button
               variant="outline"
               size="sm"
-              className="text-xs"
-              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+              className="text-xs rounded-lg"
               onClick={() => setViewAllOpen(false)}
             >
               Close

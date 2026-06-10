@@ -63,7 +63,7 @@ function getStatusDot(status: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
+const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100, 200, 500];
 
 export const TaskListDialog: React.FC<TaskListDialogProps> = ({
   filterStatus,
@@ -97,7 +97,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
     (filterTypeClient !== "all" ? 1 : 0) +
     (filterCallStatus !== "all" ? 1 : 0) +
     (filterQuotationStatus !== "all" ? 1 : 0) +
-    (itemsPerPage !== 20 ? 1 : 0); // Default is 20
+    (itemsPerPage !== 10 ? 1 : 0); // Default is 10
 
   const hasActiveFilters = activeCount > 0;
 
@@ -108,7 +108,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
     setFilterTypeClient("all");
     setFilterCallStatus("all");
     setFilterQuotationStatus("all");
-    setItemsPerPage(20);
+    setItemsPerPage(10);
   };
 
   return (
@@ -119,16 +119,16 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
           variant="outline"
           size="sm"
           aria-label="Open filters"
-          className="rounded-none h-9 w-9 p-0 relative"
+          className="rounded-full h-9 w-9 p-0 relative border-zinc-200 bg-white hover:bg-zinc-50 transition-all shadow-sm active:scale-95"
           onClick={() => setOpen(true)}
         >
-          <Filter className="h-4 w-4" />
+          <Filter className="h-4 w-4 text-zinc-600" />
         </Button>
-        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Advance Filter</span>
+        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Advance Filter</span>
 
         {/* Active filter badge */}
         {hasActiveFilters && (
-          <span className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-zinc-900 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none">
+          <span className="absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-zinc-900 text-white text-[9px] font-bold flex items-center justify-center pointer-events-none shadow-md">
             {activeCount}
           </span>
         )}
@@ -136,50 +136,50 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
 
       {/* ── Dialog ───────────────────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-full max-w-sm rounded-none p-0 overflow-hidden gap-0">
+        <DialogContent className="w-full max-w-sm rounded-2xl p-0 overflow-hidden gap-0 border-none shadow-2xl">
 
           {/* Header */}
-          <div className="bg-zinc-900 px-6 pt-5 pb-4">
+          <div className="bg-white px-6 pt-6 pb-4 border-b border-zinc-100">
             <DialogHeader>
               <div className="flex items-center gap-2 mb-1">
-                <div className="bg-white/10 rounded-full p-1.5">
-                  <Filter className="h-3.5 w-3.5 text-white" />
+                <div className="bg-zinc-100 rounded-full p-2">
+                  <Filter className="h-4 w-4 text-zinc-900" />
                 </div>
-                <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+                <DialogTitle className="text-zinc-900 text-sm font-bold tracking-tight">
                   Filter Activities
                 </DialogTitle>
                 {hasActiveFilters && (
-                  <span className="ml-auto text-[10px] bg-white/20 text-white px-2 py-0.5 rounded font-semibold">
+                  <span className="ml-auto text-[10px] bg-zinc-900 text-white px-2.5 py-1 rounded-full font-bold shadow-sm">
                     {activeCount} active
                   </span>
                 )}
               </div>
-              <DialogDescription className="text-zinc-400 text-xs">
-                Advance Filter - Filter by status, activity type, source, and more.
+              <DialogDescription className="text-zinc-500 text-xs font-medium">
+                Adjust your view by status, type, and more.
               </DialogDescription>
             </DialogHeader>
           </div>
 
           {/* Body - 2 Column Grid */}
-          <div className="px-6 py-5">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="px-6 py-6 bg-white">
+            <div className="grid grid-cols-2 gap-5 mb-6">
 
               {/* Status filter - only show if has options */}
               {statusOptions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Status
                   </label>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="all" className="text-xs">All</SelectItem>
                       {statusOptions.map((status) => (
                         <SelectItem key={status} value={status} className="text-xs">
                           <span className="flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(status)}`} />
+                            <span className={`w-2 h-2 rounded-full ${getStatusDot(status)}`} />
                             {status.replace("-", " ")}
                           </span>
                         </SelectItem>
@@ -192,14 +192,14 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
               {/* Activity type filter - only show if has options */}
               {typeActivityOptions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Activity Type
                   </label>
                   <Select value={filterTypeActivity} onValueChange={setFilterTypeActivity}>
-                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="all" className="text-xs">All</SelectItem>
                       {typeActivityOptions.map((type) => (
                         <SelectItem key={type} value={type} className="text-xs">
@@ -214,14 +214,14 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
               {/* Source filter - only show if has options */}
               {sourceOptions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Source
                   </label>
                   <Select value={filterSource} onValueChange={setFilterSource}>
-                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="all" className="text-xs">All</SelectItem>
                       {sourceOptions.map((source) => (
                         <SelectItem key={source} value={source} className="text-xs">
@@ -236,14 +236,14 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
               {/* Type Client filter - only show if has options */}
               {typeClientOptions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Client Type
                   </label>
                   <Select value={filterTypeClient} onValueChange={setFilterTypeClient}>
-                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="all" className="text-xs">All</SelectItem>
                       {typeClientOptions.map((type) => (
                         <SelectItem key={type} value={type} className="text-xs">
@@ -258,14 +258,14 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
               {/* Call Status filter - only show if has options */}
               {callStatusOptions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Call Status
                   </label>
                   <Select value={filterCallStatus} onValueChange={setFilterCallStatus}>
-                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="all" className="text-xs">All</SelectItem>
                       {callStatusOptions.map((status) => (
                         <SelectItem key={status} value={status} className="text-xs">
@@ -280,14 +280,14 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
               {/* Quotation Status filter - only show if has options */}
               {quotationStatusOptions.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Quotation Status
                   </label>
                   <Select value={filterQuotationStatus} onValueChange={setFilterQuotationStatus}>
-                    <SelectTrigger className="w-full rounded-none text-xs h-8">
+                    <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="All" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="all" className="text-xs">All</SelectItem>
                       {quotationStatusOptions.map((status) => (
                         <SelectItem key={status} value={status} className="text-xs">
@@ -301,7 +301,7 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
 
               {/* Rows per page - always show */}
               <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                   Rows Per Page
                 </label>
                 <Select 
@@ -311,13 +311,13 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
                     setCurrentPage(1);
                   }}
                 >
-                  <SelectTrigger className="w-full rounded-none text-xs h-8">
-                    <SelectValue placeholder="20" />
+                  <SelectTrigger className="w-full rounded-full text-xs h-9 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
+                    <SelectValue placeholder="10" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl">
                     {ITEMS_PER_PAGE_OPTIONS.map((n) => (
-                      <SelectItem key={n} value={String(n)} className="text-xs">
-                        {n}
+                      <SelectItem key={n} value={String(n)} className="text-xs font-medium">
+                        {n} items
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -328,15 +328,17 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
 
             {/* Active filters summary */}
             {hasActiveFilters && (
-              <div className="flex items-center gap-2 bg-zinc-50 border border-zinc-200 px-3 py-2">
-                <CheckCircle2 className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
-                <p className="text-xs text-zinc-600 flex-1">
+              <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-100 px-4 py-3 rounded-xl">
+                <div className="bg-zinc-200 rounded-full p-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-zinc-600 flex-shrink-0" />
+                </div>
+                <p className="text-xs text-zinc-600 flex-1 font-medium">
                   {activeCount} setting{activeCount > 1 ? "s" : ""} active
                 </p>
                 <button
                   type="button"
                   onClick={handleClearAll}
-                  className="text-[10px] text-zinc-500 hover:text-zinc-900 underline font-medium"
+                  className="text-[10px] text-zinc-400 hover:text-zinc-900 font-bold uppercase tracking-widest transition-colors"
                 >
                   Clear all
                 </button>
@@ -345,22 +347,22 @@ export const TaskListDialog: React.FC<TaskListDialogProps> = ({
           </div>
 
           {/* Footer */}
-          <DialogFooter className="px-6 py-4 border-t border-zinc-100 flex gap-2">
+          <DialogFooter className="px-6 py-5 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
             {hasActiveFilters && (
               <Button
-                variant="outline"
-                className="rounded-none flex-1 text-xs h-10 border-zinc-200"
+                variant="ghost"
+                className="rounded-full flex-1 text-xs h-11 font-bold text-zinc-500 hover:bg-zinc-100"
                 onClick={handleClearAll}
               >
-                <X className="h-3.5 w-3.5 mr-1.5" />
-                Clear All
+                <X className="h-4 w-4 mr-2" />
+                Reset
               </Button>
             )}
             <Button
-              className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
+              className="rounded-full flex-1 text-xs h-11 bg-zinc-900 hover:bg-zinc-800 font-bold text-white shadow-lg shadow-zinc-200"
               onClick={() => setOpen(false)}
             >
-              Apply
+              Apply Filters
             </Button>
           </DialogFooter>
 

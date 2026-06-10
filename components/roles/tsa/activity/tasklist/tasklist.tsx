@@ -51,7 +51,6 @@ import { sileo } from "sileo";
 import { TaskListDialog } from "./dialog/filter";
 import TaskListEditDialog from "./dialog/edit";
 import { AccountsActiveDeleteDialog } from "../../activity/planner/dialog/delete";
-import { getTableStyles, DEFAULT_TABLE_STYLES, type TableStyles } from "@/lib/table-styles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -200,23 +199,23 @@ function PasswordGateDialog({ open, onClose, onSuccess }: PasswordGateDialogProp
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-xs rounded-none p-0 overflow-hidden gap-0">
-        <div className="bg-zinc-900 px-6 pt-5 pb-4">
+      <DialogContent className="sm:max-w-xs rounded-2xl p-0 overflow-hidden gap-0 border-none shadow-2xl">
+        <div className="bg-white px-6 pt-6 pb-4 border-b border-zinc-100">
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
-              <div className="bg-white/10 rounded-full p-1.5">
-                <Lock className="h-4 w-4 text-yellow-400" />
+              <div className="bg-zinc-100 rounded-full p-2">
+                <Lock className="h-4 w-4 text-zinc-900" />
               </div>
-              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">
+              <DialogTitle className="text-zinc-900 text-sm font-bold tracking-tight">
                 Authentication Required
               </DialogTitle>
             </div>
-            <p className="text-zinc-400 text-xs mt-1">Enter the password to edit timestamp data.</p>
+            <p className="text-zinc-500 text-xs mt-1">Enter the password to edit timestamp data.</p>
           </DialogHeader>
         </div>
-        <div className={`px-6 py-5 space-y-4 ${shake ? "animate-shake" : ""}`}>
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Password</label>
+        <div className={`px-6 py-6 space-y-4 ${shake ? "animate-shake" : ""}`}>
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Password</label>
             <div className="relative">
               <Input
                 ref={inputRef}
@@ -225,21 +224,21 @@ function PasswordGateDialog({ open, onClose, onSuccess }: PasswordGateDialogProp
                 onChange={(e) => { setPassword(e.target.value); setError(false); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
                 placeholder="Enter password"
-                className={`rounded-none text-sm pr-9 ${error ? "border-red-400 focus-visible:ring-red-300" : ""}`}
+                className={`rounded-full h-11 text-sm pr-10 border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200 ${error ? "border-red-400 focus-visible:ring-red-300" : ""}`}
               />
               <button type="button" tabIndex={-1} onClick={() => setShowPw((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
-                {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors">
+                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {error && <p className="text-[11px] text-red-500 font-medium">Incorrect password. Please try again.</p>}
+            {error && <p className="text-[11px] text-red-500 font-medium ml-1">Incorrect password. Please try again.</p>}
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
-          <Button variant="outline" className="rounded-none flex-1 text-xs h-10" onClick={onClose}>Cancel</Button>
-          <Button className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800 gap-1.5"
+        <div className="px-6 py-5 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
+          <Button variant="ghost" className="rounded-full flex-1 text-xs h-11 font-bold text-zinc-500 hover:bg-zinc-100" onClick={onClose}>Cancel</Button>
+          <Button className="rounded-full flex-1 text-xs h-11 bg-zinc-900 hover:bg-zinc-800 font-bold text-white shadow-lg shadow-zinc-200 gap-2"
             onClick={handleSubmit} disabled={!password}>
-            <ShieldCheck className="h-3.5 w-3.5" />Confirm
+            <ShieldCheck className="h-4 w-4" />Confirm
           </Button>
         </div>
       </DialogContent>
@@ -310,44 +309,44 @@ function EditTimeDialog({ open, onClose, item, onSaved, onAutoUpdateStatus }: Ed
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-md rounded-none p-0 overflow-hidden gap-0">
-        <div className="bg-zinc-900 px-6 pt-5 pb-4">
+      <DialogContent className="sm:max-w-md rounded-2xl p-0 overflow-hidden gap-0 border-none shadow-2xl">
+        <div className="bg-white px-6 pt-6 pb-4 border-b border-zinc-100">
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
-              <div className="bg-white/10 rounded-full p-1.5"><Clock className="h-4 w-4 text-blue-400" /></div>
-              <DialogTitle className="text-white text-sm font-bold tracking-wide uppercase">Edit Time</DialogTitle>
+              <div className="bg-blue-50 rounded-full p-2"><Clock className="h-4 w-4 text-blue-600" /></div>
+              <DialogTitle className="text-zinc-900 text-sm font-bold tracking-tight">Edit Time</DialogTitle>
             </div>
-            <p className="text-zinc-400 text-xs font-mono mt-1">{item.company_name}</p>
-            {item.type_activity && <p className="text-zinc-500 text-[10px] uppercase tracking-wider mt-0.5">{item.type_activity}</p>}
+            <p className="text-zinc-500 text-xs font-medium mt-1">{item.company_name}</p>
+            {item.type_activity && <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest mt-1">{item.type_activity}</p>}
           </DialogHeader>
         </div>
-        <div className="px-6 py-5 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Start Date &amp; Time</label>
-            <Input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-none text-sm" />
+        <div className="px-6 py-6 space-y-5">
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Start Date &amp; Time</label>
+            <Input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-full h-11 text-sm border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200" />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">End Date &amp; Time</label>
-            <Input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-none text-sm" />
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest ml-1">End Date &amp; Time</label>
+            <Input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-full h-11 text-sm border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200" />
           </div>
           {startDate && endDate && (() => {
             const s = new Date(startDate), e = new Date(endDate);
             if (!isNaN(s.getTime()) && !isNaN(e.getTime()) && e > s) {
               return (
-                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-50 border border-zinc-200 text-xs text-zinc-600">
-                  <Clock className="h-3.5 w-3.5 text-zinc-400" />
-                  <span>Duration: <strong className="text-zinc-800">{formatDuration(s.toISOString(), e.toISOString())}</strong></span>
+                <div className="flex items-center gap-2 px-4 py-3 bg-blue-50/50 border border-blue-100 rounded-xl text-xs text-blue-700 font-medium">
+                  <Clock className="h-4 w-4 text-blue-400" />
+                  <span>Duration: <strong className="text-blue-900 font-bold">{formatDuration(s.toISOString(), e.toISOString())}</strong></span>
                 </div>
               );
             }
             return null;
           })()}
-          {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
+          {error && <p className="text-xs text-red-600 font-medium ml-1">{error}</p>}
         </div>
-        <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
-          <Button variant="outline" className="rounded-none flex-1 text-xs h-10" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button className="rounded-none flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800" onClick={handleSave} disabled={saving || !startDate || !endDate}>
-            {saving ? "Saving..." : "Save"}
+        <div className="px-6 py-5 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
+          <Button variant="ghost" className="rounded-full flex-1 text-xs h-11 font-bold text-zinc-500 hover:bg-zinc-100" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button className="rounded-full flex-1 text-xs h-11 bg-zinc-900 hover:bg-zinc-800 font-bold text-white shadow-lg shadow-zinc-200" onClick={handleSave} disabled={saving || !startDate || !endDate}>
+            {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </DialogContent>
@@ -400,12 +399,6 @@ export const TaskList: React.FC<CompletedProps> = ({
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const pageCount = Math.ceil(totalCount / itemsPerPage);
-
-  const [tableStyles, setTableStyles] = useState<TableStyles>(DEFAULT_TABLE_STYLES);
-
-  useEffect(() => {
-    getTableStyles().then(setTableStyles);
-  }, []);
 
   // ── Status Progression Automation ─────────────────────────────────────────
 
@@ -514,9 +507,11 @@ export const TaskList: React.FC<CompletedProps> = ({
       const to = dateCreatedFilterRange?.to ? new Date(dateCreatedFilterRange.to).toISOString().slice(0, 10) : null;
 
       const url = new URL("/api/activity/tsa/historical/fetch", window.location.origin);
-      url.searchParams.append("referenceid", encodeURIComponent(referenceid.trim()));
+      url.searchParams.append("referenceid", referenceid.trim());
       url.searchParams.append("page", String(targetPage));
       url.searchParams.append("limit", String(itemsPerPage));
+      url.searchParams.append("fields", "id,activity_reference_number,referenceid,tsm,manager,type_client,project_name,product_category,project_type,source,target_quota,type_activity,callback,call_status,call_type,quotation_number,quotation_amount,quotation_status,quotation_status_sub,so_number,so_amount,actual_sales,delivery_date,dr_number,ticket_reference_number,remarks,status,start_date,end_date,date_followup,date_site_visit,date_created,date_updated,company_name,contact_number,contact_person,email_address,payment_terms,scheduled_status");
+      
       if (searchTerm.trim()) url.searchParams.append("search", searchTerm.trim());
       if (filterStatus !== "all") url.searchParams.append("status", filterStatus);
       if (filterTypeActivity !== "all") url.searchParams.append("type_activity", filterTypeActivity);
@@ -622,23 +617,6 @@ export const TaskList: React.FC<CompletedProps> = ({
     } finally { setSavingSo(false); }
   };
 
-  // ── Shared cell style ──────────────────────────────────────────────────────
-
-  const tdStyle: React.CSSProperties = {
-    color: tableStyles.td_text,
-    fontSize: `${tableStyles.td_font_size}px`,
-    padding: `${tableStyles.td_padding}px 12px`,
-    borderColor: tableStyles.td_border,
-  };
-
-  const thStyle: React.CSSProperties = {
-    color: tableStyles.th_text,
-    fontSize: `${tableStyles.th_font_size}px`,
-    padding: `${tableStyles.th_padding}px 12px`,
-    borderColor: tableStyles.th_border,
-    backgroundColor: tableStyles.th_bg,
-  };
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -666,68 +644,52 @@ export const TaskList: React.FC<CompletedProps> = ({
       />
 
       {/* ── Unified table container ── */}
-      <div
-        className="overflow-hidden border"
-        style={{ borderColor: tableStyles.table_border, borderRadius: `${tableStyles.table_border_radius}px` }}
-      >
+      <div className="overflow-hidden border border-zinc-200 rounded-2xl bg-white shadow-sm">
 
         {/* ── Toolbar ── */}
-        <div
-          className="flex flex-wrap items-center gap-3 px-3 py-2.5 border-b"
-          style={{ backgroundColor: tableStyles.toolbar_bg, borderColor: tableStyles.toolbar_border }}
-        >
+        <div className="flex flex-wrap items-center gap-4 px-4 py-4 border-b bg-white border-zinc-100">
           {/* Title */}
-          <div className="flex items-center gap-2 shrink-0">
-            <ListFilter className="w-3.5 h-3.5" style={{ color: tableStyles.toolbar_btn_text }} />
-            <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: tableStyles.toolbar_btn_text }}>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="bg-zinc-900 rounded-full p-2">
+              <ListFilter className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-[12px] font-bold tracking-tight text-zinc-900">
               Historical Records
             </span>
           </div>
 
           {/* Search input */}
-          <div className="relative flex-1 min-w-[180px] max-w-sm flex gap-2">
+          <div className="relative flex-1 min-w-[200px] max-w-md flex gap-2">
             <div className="relative flex-1">
-              <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 opacity-50"
-                style={{ color: tableStyles.toolbar_input_text }}
-              />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <Input
                 placeholder="Search records..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-                className="h-8 text-[10px] rounded-none pl-8 uppercase tracking-widest border-0 focus-visible:ring-0"
-                style={{
-                  color: tableStyles.toolbar_input_text,
-                  fontSize: `${tableStyles.th_font_size}px`,
-                  backgroundColor: tableStyles.toolbar_input_bg,
-                  borderColor: tableStyles.toolbar_input_border,
-                  borderRadius: `${tableStyles.table_border_radius}px`,
-                }}
+                className="h-10 text-[11px] rounded-full pl-10 border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200 transition-all"
               />
             </div>
             <button
               onClick={handleSearch}
-              className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest border transition-colors"
-              style={{ color: tableStyles.toolbar_btn_text, borderColor: tableStyles.toolbar_btn_border, backgroundColor: tableStyles.toolbar_btn_bg, borderRadius: `${tableStyles.table_border_radius}px`, }}
+              className="h-10 px-5 text-[11px] font-bold rounded-full bg-zinc-900 text-white hover:bg-zinc-800 transition-all shadow-sm active:scale-95 flex items-center gap-2"
             >
-              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Search"}
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Search"}
             </button>
           </div>
 
           {/* Edit Time mode badge */}
           {showEditTimeBtn && (
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest border"
-              style={{ color: "#60a5fa", borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.15)" }}
+              className="inline-flex items-center gap-2 px-4 py-1.5 text-[10px] font-bold rounded-full border border-blue-100 bg-blue-50 text-blue-600 shadow-sm"
             >
-              <Clock className="w-3 h-3" />
+              <Clock className="w-3.5 h-3.5" />
               Edit Time Mode
             </span>
           )}
 
           {/* Right side actions */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             {/* Advanced filters dialog (existing) */}
             <TaskListDialog
               filterStatus={filterStatus}
@@ -756,27 +718,21 @@ export const TaskList: React.FC<CompletedProps> = ({
             {/* Delete selected */}
             {selectedIds.size > 0 && (
               <button
-                className="h-8 px-3 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-colors bg-red-600 border-red-700 text-white hover:bg-red-700"
-                style={{
-                  borderRadius: `${tableStyles.table_border_radius}px`,
-                }}
+                className="h-10 px-5 text-[11px] font-bold rounded-full flex items-center gap-2 transition-all bg-red-500 text-white hover:bg-red-600 shadow-sm active:scale-95"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-4 h-4" />
                 Delete ({selectedIds.size})
               </button>
             )}
 
             {/* Record count */}
             {totalCount > 0 && (
-              <div
-                className="flex items-center gap-2 px-3 py-1 border text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: tableStyles.toolbar_btn_text, borderColor: tableStyles.toolbar_btn_border, backgroundColor: tableStyles.toolbar_btn_bg, borderRadius: `${tableStyles.table_border_radius}px`, }}
-              >
-                <span className="border-r pr-2" style={{ borderColor: tableStyles.toolbar_btn_border }}>
+              <div className="flex items-center gap-2 px-4 py-2 border border-zinc-100 bg-zinc-50/50 text-[10px] font-bold rounded-full text-zinc-500 shadow-sm">
+                <span className="border-r border-zinc-200 pr-2">
                   {totalCount} records
                 </span>
-                <span className="font-mono">
+                <span className="font-mono text-zinc-900">
                   {Math.min((page - 1) * itemsPerPage + 1, totalCount)}–{Math.min(page * itemsPerPage, totalCount)}
                 </span>
               </div>
@@ -786,10 +742,7 @@ export const TaskList: React.FC<CompletedProps> = ({
 
         {/* ── Quick filter panel ── */}
         {showFilters && (
-          <div
-            className="flex flex-wrap items-center gap-3 px-3 py-2.5 border-b"
-            style={{ backgroundColor: tableStyles.toolbar_bg, borderColor: tableStyles.toolbar_border }}
-          >
+          <div className="flex flex-wrap items-center gap-4 px-4 py-3 border-b bg-zinc-50/30 border-zinc-100">
             {[
               { label: "Status", value: filterStatus, setter: setFilterStatus, options: statusOptions },
               { label: "Activity", value: filterTypeActivity, setter: setFilterTypeActivity, options: typeActivityOptions },
@@ -798,18 +751,15 @@ export const TaskList: React.FC<CompletedProps> = ({
               { label: "Call Status", value: filterCallStatus, setter: setFilterCallStatus, options: callStatusOptions },
               { label: "Quotation", value: filterQuotationStatus, setter: setFilterQuotationStatus, options: quotationStatusOptions },
             ].map(({ label, value, setter, options }) => (
-              <div key={label} className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: tableStyles.toolbar_btn_text }}>
-                  {label}:
+              <div key={label} className="flex items-center gap-2.5">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                  {label}
                 </span>
                 <Select value={value} onValueChange={(v) => { setter(v); fetchActivities(1); }}>
-                  <SelectTrigger
-                    className="rounded-none h-7 text-[10px] border-0 focus:ring-0 w-36 uppercase tracking-widest font-bold"
-                    style={{ color: tableStyles.toolbar_input_text, backgroundColor: tableStyles.toolbar_input_bg }}
-                  >
+                  <SelectTrigger className="rounded-full h-8 text-[10px] border border-zinc-200 focus:ring-0 w-40 font-bold bg-white text-zinc-700 shadow-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-none">
+                  <SelectContent className="rounded-xl">
                     <SelectItem value="all" className="text-xs">All</SelectItem>
                     {options.map((o) => <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>)}
                   </SelectContent>
@@ -821,9 +771,9 @@ export const TaskList: React.FC<CompletedProps> = ({
 
         {/* ── Error ── */}
         {error && (
-          <div className="p-4" style={{ backgroundColor: tableStyles.table_bg }}>
-            <Alert variant="destructive" className="rounded-none border-red-200 bg-red-50">
-              <AlertCircleIcon className="h-5 w-5 text-red-600" />
+          <div className="p-4 bg-white">
+            <Alert variant="destructive" className="rounded-xl border-red-100 bg-red-50 shadow-sm">
+              <AlertCircleIcon className="h-5 w-5 text-red-500" />
               <AlertTitle className="text-sm font-bold text-red-900">Sync Error</AlertTitle>
               <AlertDescription className="text-xs text-red-700">
                 Could not retrieve historical data. Please try again.
@@ -834,10 +784,11 @@ export const TaskList: React.FC<CompletedProps> = ({
 
         {/* ── Loading ── */}
         {loading && activities.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3"
-            style={{ backgroundColor: tableStyles.table_bg }}>
-            <Loader2 className="h-8 w-8 animate-spin" style={{ color: tableStyles.td_text, opacity: 0.4 }} />
-            <p className="text-[11px] font-mono uppercase tracking-widest" style={{ color: tableStyles.td_text, opacity: 0.5 }}>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white">
+            <div className="bg-zinc-50 rounded-full p-4">
+              <Loader2 className="h-8 w-8 animate-spin text-zinc-900" />
+            </div>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
               Retrieving Records...
             </p>
           </div>
@@ -845,10 +796,11 @@ export const TaskList: React.FC<CompletedProps> = ({
 
         {/* ── Empty state ── */}
         {!loading && !error && activities.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-2"
-            style={{ backgroundColor: tableStyles.table_bg }}>
-            <CheckCircle2Icon className="h-10 w-10 opacity-20" style={{ color: tableStyles.td_text }} />
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: tableStyles.td_text, opacity: 0.5 }}>
+          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-white">
+            <div className="bg-zinc-50 rounded-full p-4">
+              <CheckCircle2Icon className="h-10 w-10 text-zinc-200" />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">
               No historical records found
             </p>
           </div>
@@ -856,20 +808,18 @@ export const TaskList: React.FC<CompletedProps> = ({
 
         {/* ── Table ── */}
         {activities.length > 0 && (
-          <div className="overflow-x-auto" style={{ backgroundColor: tableStyles.table_bg }}>
+          <div className="overflow-x-auto bg-white">
             <Table>
               <TableHeader>
-                <TableRow style={{ backgroundColor: tableStyles.th_bg, borderColor: tableStyles.tr_border }}>
-                  <TableHead style={thStyle} className="uppercase font-black">
+                <TableRow className="bg-white border-zinc-100 hover:bg-white">
+                  <TableHead className="py-4 px-4 bg-zinc-50/50">
                     <Checkbox
                       checked={allCurrentSelected}
                       onCheckedChange={toggleSelectAll}
-                      className="h-4 w-4"
-                      style={{
-                        borderRadius: `${tableStyles.table_border_radius}px`,
-                      }} />
+                      className="h-4 w-4 rounded-full border-zinc-300 data-[state=checked]:bg-zinc-900 data-[state=checked]:border-zinc-900"
+                    />
                   </TableHead>
-                  <TableHead style={thStyle} className="uppercase font-black">Edit</TableHead>
+                  <TableHead className="uppercase font-bold text-zinc-400 text-[10px] tracking-widest py-4 px-4 bg-zinc-50/50">Edit</TableHead>
                   {[
                     "Date", "Quotation #", "Duration", "Company", "Status", "Quotation Status",
                     "Quotation Remarks", "Contact #", "Type Client", "Project Name", "Project Type",
@@ -877,7 +827,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                     "Quotation Amount", "SO #", "SO Amount", "Actual Sales", "Delivery Date",
                     "DR #", "Ticket Ref #", "Remarks", "Date Followup", "Payment Terms",
                   ].map((h) => (
-                    <TableHead key={h} style={thStyle} className="uppercase font-black whitespace-nowrap">{h}</TableHead>
+                    <TableHead key={h} className="uppercase font-bold text-zinc-400 text-[10px] tracking-widest whitespace-nowrap py-4 px-4 bg-zinc-50/50">{h}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
@@ -889,27 +839,21 @@ export const TaskList: React.FC<CompletedProps> = ({
                   return (
                     <TableRow
                       key={item.id}
-                      style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.tr_hover_bg; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = tableStyles.table_bg; }}
+                      className={`border-zinc-50 transition-colors ${isSelected ? "bg-zinc-50" : "bg-white hover:bg-zinc-50/30"}`}
                     >
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4">
                         <Checkbox
-                          className="h-4 w-4" checked={isSelected}
+                          className="h-4 w-4 rounded-full border-zinc-300 data-[state=checked]:bg-zinc-900 data-[state=checked]:border-zinc-900"
+                          checked={isSelected}
                           onCheckedChange={() => toggleSelect(item.id)}
-                          style={{
-                            borderRadius: `${tableStyles.table_border_radius}px`,
-                          }} />
+                        />
                       </TableCell>
-                      <TableCell style={tdStyle}>
-                        <div className="flex items-center gap-1">
+                      <TableCell className="py-4 px-4">
+                        <div className="flex items-center gap-1.5">
                           <button
                             title="Edit"
                             onClick={() => { setEditItem(item); setEditOpen(true); }}
-                            className="h-7 w-7 flex items-center justify-center border transition-colors"
-                            style={{ borderColor: tableStyles.td_border, color: tableStyles.td_text, borderRadius: `${tableStyles.table_border_radius}px`, }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#eff6ff"; (e.currentTarget as HTMLElement).style.color = "#2563eb"; }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = tableStyles.td_text; }}
+                            className="h-8 w-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 hover:shadow-sm transition-all rounded-full"
                           >
                             <PenIcon className="h-3.5 w-3.5" />
                           </button>
@@ -917,10 +861,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                             <button
                               title="RE-SO"
                               onClick={() => { setReSoItem(item); setEditSoNumber(item.so_number || ""); setEditSoAmount(item.so_amount ?? ""); setIsEditingSo(false); setReSoOpen(true); }}
-                              className="h-7 w-7 flex items-center justify-center border transition-colors"
-                              style={{ borderColor: tableStyles.td_border, color: tableStyles.td_text, borderRadius: `${tableStyles.table_border_radius}px`, }}
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#fffbeb"; (e.currentTarget as HTMLElement).style.color = "#d97706"; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = tableStyles.td_text; }}
+                              className="h-8 w-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-400 hover:text-amber-600 hover:border-amber-600 hover:shadow-sm transition-all rounded-full"
                             >
                               <Undo className="h-3.5 w-3.5" />
                             </button>
@@ -929,10 +870,7 @@ export const TaskList: React.FC<CompletedProps> = ({
                             <button
                               title="Edit Timestamp"
                               onClick={() => handleEditTimeClick(item)}
-                              className="h-7 w-7 flex items-center justify-center border transition-colors"
-                              style={{ borderColor: tableStyles.td_border, color: tableStyles.td_text, borderRadius: `${tableStyles.table_border_radius}px`, }}
-                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#ecfdf5"; (e.currentTarget as HTMLElement).style.color = "#059669"; }}
-                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = tableStyles.td_text; }}
+                              className="h-8 w-8 flex items-center justify-center bg-white border border-zinc-200 text-zinc-400 hover:text-blue-600 hover:border-blue-600 hover:shadow-sm transition-all rounded-full"
                             >
                               <Clock className="h-3.5 w-3.5" />
                             </button>
@@ -940,83 +878,72 @@ export const TaskList: React.FC<CompletedProps> = ({
                         </div>
                       </TableCell>
 
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
                         {new Date(item.date_updated ?? item.date_created).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
                       </TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.quotation_number)}</TableCell>
-                      <TableCell style={tdStyle}>{formatDuration(item.start_date, item.end_date)}</TableCell>
-                      <TableCell style={{ ...tdStyle }} className="font-bold">{item.company_name}</TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.quotation_number)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{formatDuration(item.start_date, item.end_date)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-900 font-bold tracking-tight">{item.company_name}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs">
                         {item.status && (
                           <Badge variant="outline"
-                            className={`text-[10px] font-bold uppercase tracking-tighter px-2 py-0.5 border-transparent ${item.status === "Delivered" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                              item.status === "Quote-Done" ? "bg-blue-50 text-blue-700 border-blue-100" :
-                                item.status === "SO-Done" ? "bg-amber-50 text-amber-700 border-amber-100" :
-                                  item.status === "On Progress" || item.status === "Assisted" ? "bg-orange-50 text-orange-700 border-orange-100" :
-                                    item.status === "Cancelled" ? "bg-red-50 text-red-700 border-red-100" :
-                                      "bg-zinc-100 text-zinc-600 border-zinc-200"
-                              }`}
-                            style={{
-                              borderRadius: `${tableStyles.table_border_radius}px`,
-                            }}>
+                            className={`text-[10px] font-bold px-3 py-1 border rounded-full shadow-sm ${item.status === "Delivered" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                              item.status === "Quote-Done" ? "bg-blue-50 text-blue-600 border-blue-100" :
+                                item.status === "SO-Done" ? "bg-amber-50 text-amber-600 border-amber-100" :
+                                  item.status === "On Progress" || item.status === "Assisted" ? "bg-orange-50 text-orange-600 border-orange-100" :
+                                    item.status === "Cancelled" ? "bg-red-50 text-red-600 border-red-100" :
+                                      "bg-zinc-50 text-zinc-500 border-zinc-200"
+                              }`}>
                             {item.status.replace("-", " ")}
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs">
                         {item.status === "Quote-Done" ? (
                           <Select
                             value={`${item.quotation_status || ""}__${item.quotation_status_sub || ""}`}
                             onValueChange={(val) => { const [main, sub] = val.split("__"); handleQuotationStatusUpdate(item.id, main, sub || ""); }}
                           >
-                            <SelectTrigger
-                              className="h-7 text-[10px] w-[140px] border-zinc-200 bg-white hover:bg-zinc-50 font-bold uppercase tracking-tight"
-                              style={{
-                                borderRadius: `${tableStyles.table_border_radius}px`,
-                              }}>
+                            <SelectTrigger className="h-8 text-[10px] w-[150px] border-zinc-200 bg-zinc-50/50 hover:bg-zinc-100 font-bold rounded-full transition-all">
                               <SelectValue asChild><span>{item.quotation_status || "Select status"}</span></SelectValue>
                             </SelectTrigger>
-                            <SelectContent style={{ borderRadius: tableStyles.table_border_radius, }}>
+                            <SelectContent className="rounded-xl">
                               {Object.entries(QUOTATION_STATUS_OPTIONS).map(([main, subs]) => (
                                 <SelectGroup key={main}>
-                                  <SelectItem value={main} className="text-[10px] uppercase font-semibold">{main}</SelectItem>
+                                  <SelectItem value={main} className="text-[10px] uppercase font-bold text-zinc-900">{main}</SelectItem>
                                   {subs.map((sub) => (
-                                    <SelectItem key={sub} value={`${main}__${sub}`} className="text-[10px] pl-8">{sub}</SelectItem>
+                                    <SelectItem key={sub} value={`${main}__${sub}`} className="text-[10px] pl-6 text-zinc-500">{sub}</SelectItem>
                                   ))}
                                 </SelectGroup>
                               ))}
                             </SelectContent>
                           </Select>
                         ) : (
-                          <span style={{ color: tableStyles.td_text }}>{displayValue(item.quotation_status)}</span>
+                          <span className="text-zinc-500 font-medium">{displayValue(item.quotation_status)}</span>
                         )}
                       </TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.quotation_status_sub)}</TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.contact_number)}</TableCell>
-                      <TableCell style={tdStyle}>
-                        <Badge variant="secondary"
-                          className="font-normal text-[10px] uppercase tracking-wider bg-zinc-100 text-zinc-600"
-                          style={{
-                            borderRadius: `${tableStyles.table_border_radius}px`,
-                          }}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.quotation_status_sub)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.contact_number)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs">
+                        <Badge variant="secondary" className="font-bold text-[10px] px-3 py-1 bg-zinc-100 text-zinc-600 rounded-full border-none">
                           {displayValue(item.type_client)}
                         </Badge>
                       </TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.project_name)}</TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.project_type)}</TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.source)}</TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.target_quota)}</TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.type_activity)}</TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.project_name)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.project_type)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.source)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.target_quota)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.type_activity)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
                         {item.callback ? `${new Date(item.callback).toLocaleDateString()} ${formatTimeWithAmPm(item.callback.substring(11, 16))}` : "-"}
                       </TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs">
                         {item.type_activity === "Outbound Calls" ? (
                           <Select value={item.call_status || ""} onValueChange={(val) => handleInlineUpdate(item.id, "call_status", val)}>
-                            <SelectTrigger className="h-7 text-[10px] w-[110px] rounded-none border-zinc-200 bg-white hover:bg-zinc-50">
+                            <SelectTrigger className="h-8 text-[10px] w-[120px] rounded-full border-zinc-200 bg-zinc-50/50 hover:bg-zinc-100 font-bold transition-all">
                               <SelectValue placeholder="Status" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="rounded-xl">
                               <SelectGroup>
                                 <SelectItem value="Successful" className="text-[10px]">Successful</SelectItem>
                                 <SelectItem value="Unsuccessful" className="text-[10px]">Unsuccessful</SelectItem>
@@ -1025,52 +952,51 @@ export const TaskList: React.FC<CompletedProps> = ({
                           </Select>
                         ) : displayValue(item.call_status)}
                       </TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.call_type)}</TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.call_type)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
                         {item.quotation_amount != null ? item.quotation_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" }) : "-"}
                       </TableCell>
-                      <TableCell style={tdStyle}>
-                        <div className="flex items-center gap-1">
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
+                        <div className="flex items-center gap-2">
                           {displayValue(item.so_number)}
                           {item.so_number && item.status === "Quote-Done" && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-800">AUTO</span>
+                            <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 rounded-full">AUTO</span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
                         {item.so_amount != null ? item.so_amount.toLocaleString("en-PH", { style: "currency", currency: "PHP" }) : "-"}
                       </TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
                         {item.actual_sales != null ? item.actual_sales.toLocaleString("en-PH", { style: "currency", currency: "PHP" }) : "-"}
                       </TableCell>
-                      <TableCell style={tdStyle}>{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : "-"}</TableCell>
-                      <TableCell style={tdStyle}>
-                        <div className="flex items-center gap-1">
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : "-"}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
+                        <div className="flex items-center gap-2">
                           {displayValue(item.dr_number)}
                           {item.dr_number && item.status === "SO-Done" && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-medium bg-green-100 text-green-800">AUTO</span>
+                            <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-bold bg-emerald-100 text-emerald-700 rounded-full">AUTO</span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.ticket_reference_number)}</TableCell>
-                      <TableCell style={tdStyle}>
-                        <span className="block truncate max-w-[180px]" title={item.remarks ?? ""}>{displayValue(item.remarks)}</span>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.ticket_reference_number)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
+                        <span className="block truncate max-w-[200px]" title={item.remarks ?? ""}>{displayValue(item.remarks)}</span>
                       </TableCell>
-                      <TableCell style={tdStyle}>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">
                         {item.date_followup && !isNaN(new Date(item.date_followup).getTime()) ? new Date(item.date_followup).toLocaleDateString() : "-"}
                       </TableCell>
-                      <TableCell style={tdStyle}>{displayValue(item.payment_terms)}</TableCell>
+                      <TableCell className="py-4 px-4 text-xs text-zinc-500 font-medium">{displayValue(item.payment_terms)}</TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
 
               <tfoot>
-                <TableRow style={{ backgroundColor: tableStyles.tfoot_bg, borderColor: tableStyles.tfoot_border }}>
+                <TableRow className="bg-zinc-50/50 border-t border-zinc-100">
                   <TableCell
                     colSpan={29}
-                    className="uppercase tracking-wider"
-                    style={{ color: tableStyles.tfoot_text, fontSize: `${tableStyles.tfoot_font_size}px`, padding: `${tableStyles.tfoot_padding}px 12px` }}
+                    className="text-zinc-400 text-[10px] font-bold py-5 px-6 uppercase tracking-widest"
                   >
                     {totalCount} record{totalCount !== 1 ? "s" : ""} total
                   </TableCell>
@@ -1082,39 +1008,26 @@ export const TaskList: React.FC<CompletedProps> = ({
 
         {/* ── Pagination ── */}
         {pageCount > 1 && (
-          <div
-            className="flex items-center justify-center border-t"
-            style={{ backgroundColor: tableStyles.pagination_bg, borderColor: tableStyles.toolbar_border }}
-          >
-            <Pagination style={{ color: tableStyles.pagination_text, padding: `${tableStyles.tfoot_padding}px 12px` }}>
-              <PaginationContent className="flex items-center gap-4 justify-center text-xs">
+          <div className="flex items-center justify-center border-t border-zinc-100 bg-white py-4">
+            <Pagination className="text-zinc-600">
+              <PaginationContent className="flex items-center gap-4 justify-center">
                 <PaginationItem>
                   <PaginationPrevious
                     href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (page > 1) fetchActivities(page - 1);
-                    }}
+                    onClick={(e) => { e.preventDefault(); if (page > 1) fetchActivities(page - 1); }}
                     aria-disabled={page === 1}
-                    className={`text-[10px] border font-bold uppercase tracking-widest transition-all ${page === 1 ? "pointer-events-none opacity-30" : ""}`}
-                    style={{ color: tableStyles.pagination_text, borderColor: tableStyles.pagination_border, borderRadius: tableStyles.pagination_radius }}
+                    className={`rounded-xl h-9 px-5 text-[11px] font-bold uppercase transition-all border-zinc-200 ${page === 1 ? "pointer-events-none opacity-30 bg-zinc-50" : "hover:bg-zinc-50 active:scale-95 shadow-sm"}`}
                   />
                 </PaginationItem>
-                <span
-                  style={{ color: tableStyles.pagination_text, borderColor: tableStyles.pagination_border, borderRadius: tableStyles.pagination_radius }}
-                >
+                <span className="font-mono text-[12px] font-bold select-none px-4 py-1.5 rounded-full border border-zinc-100 text-zinc-900 bg-zinc-50/50">
                   {page} / {pageCount}
                 </span>
                 <PaginationItem>
                   <PaginationNext
                     href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (page < pageCount) fetchActivities(page + 1);
-                    }}
+                    onClick={(e) => { e.preventDefault(); if (page < pageCount) fetchActivities(page + 1); }}
                     aria-disabled={page === pageCount}
-                    className={`text-[10px] border font-bold uppercase tracking-widest transition-all ${page === pageCount ? "pointer-events-none opacity-30" : ""}`}
-                    style={{ color: tableStyles.pagination_text, borderColor: tableStyles.pagination_border, borderRadius: tableStyles.pagination_radius }}
+                    className={`rounded-xl h-9 px-5 text-[11px] font-bold uppercase transition-all border-zinc-200 ${page === pageCount ? "pointer-events-none opacity-30 bg-zinc-50" : "hover:bg-zinc-50 active:scale-95 shadow-sm"}`}
                   />
                 </PaginationItem>
               </PaginationContent>
@@ -1125,45 +1038,38 @@ export const TaskList: React.FC<CompletedProps> = ({
 
       {/* ── RE-SO Dialog ── */}
       <Dialog open={reSoOpen} onOpenChange={(v) => { if (!v) { setReSoOpen(false); setIsEditingSo(false); } }}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden"
-          style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
-        >
-          <div className="px-6 pt-5 pb-4"
-            style={{
-              color: tableStyles.th_text,
-              backgroundColor: tableStyles.th_bg,
-            }}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+          <div className="bg-white px-6 pt-6 pb-4 border-b border-zinc-100">
             <DialogHeader>
               <div className="flex items-center gap-2 mb-1">
-                <div className="bg-white/10 rounded-full p-1.5"><Undo className="h-4 w-4 text-red-400" /></div>
-                <DialogTitle className="text-sm font-bold tracking-wide uppercase">Sales Order Info</DialogTitle>
+                <div className="bg-amber-50 rounded-full p-2"><Undo className="h-4 w-4 text-amber-600" /></div>
+                <DialogTitle className="text-sm font-bold tracking-tight text-zinc-900">Sales Order Info</DialogTitle>
               </div>
-              {reSoItem && <p className="text-zinc-400 text-xs font-mono mt-1">{reSoItem.company_name}</p>}
+              {reSoItem && <p className="text-zinc-500 text-xs font-medium mt-1">{reSoItem.company_name}</p>}
             </DialogHeader>
           </div>
-          <div className="px-6 py-5 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">SO Number</label>
+          <div className="px-6 py-6 space-y-5 bg-white">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest ml-1">SO Number</label>
               {!isEditingSo ? (
                 <div
-                  className="border border-zinc-200 px-3 py-2 bg-zinc-50 text-sm font-mono uppercase text-zinc-700">
-                  {reSoItem?.so_number || <span className="text-zinc-400 italic normal-case">Not set</span>}
+                  className="border border-zinc-100 px-4 py-3 bg-zinc-50/50 text-xs font-bold text-zinc-900 rounded-xl">
+                  {reSoItem?.so_number || <span className="text-zinc-400 italic font-medium">Not set</span>}
                 </div>
               ) : (
                 <Input
                   value={editSoNumber}
                   onChange={(e) => setEditSoNumber(e.target.value.toUpperCase())}
                   placeholder="Enter SO Number"
-                  className="text-sm"
-                  style={{ borderRadius: tableStyles.pagination_radius }}
+                  className="h-11 text-xs rounded-full border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200"
                   autoFocus />
               )}
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">SO Amount</label>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest ml-1">SO Amount</label>
               {!isEditingSo ? (
-                <div className="border border-zinc-200 px-3 py-2 bg-zinc-50 text-sm font-mono text-zinc-700">
-                  {reSoItem?.so_amount != null ? Number(reSoItem.so_amount).toLocaleString("en-PH", { style: "currency", currency: "PHP" }) : <span className="text-zinc-400 italic">Not set</span>}
+                <div className="border border-zinc-100 px-4 py-3 bg-zinc-50/50 text-xs font-bold text-zinc-900 rounded-xl">
+                  {reSoItem?.so_amount != null ? Number(reSoItem.so_amount).toLocaleString("en-PH", { style: "currency", currency: "PHP" }) : <span className="text-zinc-400 italic font-medium">Not set</span>}
                 </div>
               ) : (
                 <Input
@@ -1171,26 +1077,25 @@ export const TaskList: React.FC<CompletedProps> = ({
                   value={editSoAmount}
                   onChange={(e) => setEditSoAmount(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="Enter SO Amount"
-                  className="text-sm"
-                  style={{ borderRadius: tableStyles.pagination_radius }}
+                  className="h-11 text-xs rounded-full border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200"
                 />
               )}
             </div>
           </div>
-          <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
-            <Button variant="outline" className="flex-1 text-xs h-10" style={{ borderRadius: tableStyles.pagination_radius }}
+          <div className="px-6 py-5 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
+            <Button variant="ghost" className="flex-1 text-xs h-11 rounded-full font-bold text-zinc-500 hover:bg-zinc-100"
               onClick={() => { if (isEditingSo) { setIsEditingSo(false); setEditSoNumber(reSoItem?.so_number || ""); setEditSoAmount(reSoItem?.so_amount ?? ""); } else setReSoOpen(false); }}>
               {isEditingSo ? "Cancel" : "Close"}
             </Button>
             {!isEditingSo ? (
-              <Button className="flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800" style={{ borderRadius: tableStyles.pagination_radius }}
+              <Button className="flex-1 text-xs h-11 bg-zinc-900 hover:bg-zinc-800 rounded-full font-bold text-white shadow-lg shadow-zinc-200"
                 onClick={() => { setEditSoNumber(""); setEditSoAmount(""); setIsEditingSo(true); }}>
                 Update SO
               </Button>
             ) : (
-              <Button className="flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800" style={{ borderRadius: tableStyles.pagination_radius }}
+              <Button className="flex-1 text-xs h-11 bg-zinc-900 hover:bg-zinc-800 rounded-full font-bold text-white shadow-lg shadow-zinc-200"
                 onClick={handleSaveSo} disabled={!editSoNumber || editSoAmount === "" || savingSo}>
-                {savingSo ? "Saving..." : "Save"}
+                {savingSo ? "Saving..." : "Save Changes"}
               </Button>
             )}
           </div>

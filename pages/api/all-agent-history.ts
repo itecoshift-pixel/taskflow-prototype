@@ -9,7 +9,8 @@ async function* fetchTableBatches(
   tsm: string,
   from?: string,
   to?: string,
-  fields: string = "*"
+  fields: string = "*",
+  agentId?: string
 ) {
   let lastId: number | null = null;
   let totalFetched = 0;
@@ -23,9 +24,14 @@ async function* fetchTableBatches(
       .order("id", { ascending: true })
       .limit(BATCH_SIZE);
 
+    if (agentId) query = query.eq("referenceid", agentId);
     if (lastId) query = query.gt("id", lastId);
     if (from) query = query.gte("date_created", from);
-    if (to) query = query.lte("date_created", to);
+    if (to) {
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+      query = query.lte("date_created", toDate.toISOString());
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -41,8 +47,10 @@ async function* fetchTableBatches(
 // Normalize each table to a common structure
 function normalizeRecord(item: any, source: string) {
   switch (source) {
+    case "activity":
+      return { ...item, type_activity: item.type_activity, start_date: item.start_date, end_date: item.end_date, source: item.source || "activity" };
     case "history":
-      return { ...item, type_activity: item.type_activity, start_date: item.start_date, end_date: item.end_date, source: item.source };
+      return { ...item, type_activity: item.type_activity, start_date: item.start_date, end_date: item.end_date, source: item.source || "history" };
     case "documentation":
       return { ...item, type_activity: item.doc_type || "Documentation", start_date: item.start_date || null, end_date: item.end_date || null, source };
     case "revised_quotations":
@@ -61,7 +69,7 @@ export const config = {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { referenceid, from, to, fields } = req.query;
+  const { referenceid, from, to, fields, agentId } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "referenceid (agent tsm) is required" });
@@ -70,14 +78,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
   const selectFields = typeof fields === "string" ? fields : "*";
+  const targetAgentId = typeof agentId === "string" ? agentId : undefined;
 
   try {
     // Tables to fetch
-    const tables = ["history", "documentation", "revised_quotations", "meetings"];
+    const tables = ["activity", "history", "documentation", "revised_quotations", "meetings"];
     const allActivities: any[] = [];
 
     for (const table of tables) {
-      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate, selectFields)) {
+      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate, selectFields, targetAgentId)) {
         const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
         allActivities.push(...normalizedBatch);
       }

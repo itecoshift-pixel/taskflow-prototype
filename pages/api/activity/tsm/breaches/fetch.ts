@@ -17,8 +17,13 @@ async function fetchAllRows(table: string, referenceid: string, fromDate?: strin
       .order("id", { ascending: false }) // secondary sort to avoid skipping
       .range(offset, offset + BATCH_SIZE - 1);
 
-    if (fromDate && toDate) {
-      query = query.gte("date_created", fromDate).lte("date_created", toDate);
+    if (fromDate) {
+      query = query.gte("date_created", fromDate);
+    }
+    if (toDate) {
+      const d = new Date(toDate);
+      d.setHours(23, 59, 59, 999);
+      query = query.lte("date_created", d.toISOString());
     }
 
     const { data, error } = await query;
@@ -53,26 +58,31 @@ export default async function handler(
 
   const fromDate = typeof from === "string" ? from : undefined;
   const toDate = typeof to === "string" ? to : undefined;
-  const selectFields = typeof fields === "string" ? fields : "*";
+  // We'll use '*' to avoid errors if some tables lack specific columns
+  const selectFields = "*";
 
   try {
-    /* -------------------- 1️⃣ HISTORY -------------------- */
+    /* -------------------- 1️⃣ ACTIVITY (Current) -------------------- */
+    const activityData = await fetchAllRows("activity", tsm, fromDate, toDate, selectFields);
+
+    /* -------------------- 2️⃣ HISTORY -------------------- */
     const historyData = await fetchAllRows("history", tsm, fromDate, toDate, selectFields);
 
-    /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
+    /* -------------------- 3️⃣ REVISED QUOTATIONS -------------------- */
     const revisedData = await fetchAllRows("revised_quotations", tsm, fromDate, toDate, selectFields);
 
-    /* -------------------- 3️⃣ MEETINGS -------------------- */
+    /* -------------------- 4️⃣ MEETINGS -------------------- */
     const meetingsData = await fetchAllRows("meetings", tsm, fromDate, toDate, selectFields);
 
     const documentationData = await fetchAllRows("documentation", tsm, fromDate, toDate, selectFields);
 
-    /* -------------------- 4️⃣ NORMALIZE + MERGE -------------------- */
+    /* -------------------- 5️⃣ NORMALIZE + MERGE -------------------- */
     const activities = [
-      ...(historyData || []).map((item) => ({ source: "history", ...item })),
-      ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
-      ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
-      ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
+      ...(activityData || []).map((item) => ({ ...item, table_source: "activity" })),
+      ...(historyData || []).map((item) => ({ ...item, table_source: "history" })),
+      ...(revisedData || []).map((item) => ({ ...item, table_source: "revised_quotations" })),
+      ...(meetingsData || []).map((item) => ({ ...item, table_source: "meeting" })),
+      ...(documentationData || []).map((item) => ({ ...item, table_source: "documentation" })),
     ].sort(
       (a, b) =>
         new Date(b.date_created).getTime() - new Date(a.date_created).getTime()

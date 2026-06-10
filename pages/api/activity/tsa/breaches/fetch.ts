@@ -28,7 +28,11 @@ async function fetchAllRows(
       .range(offset, offset + BATCH_SIZE - 1);
 
     if (fromDate) query = query.gte("date_created", fromDate);
-    if (toDate) query = query.lte("date_created", toDate);
+    if (toDate) {
+      const d = new Date(toDate);
+      d.setHours(23, 59, 59, 999);
+      query = query.lte("date_created", d.toISOString());
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -76,7 +80,8 @@ export default async function handler(
 
   // Check if this is a fetch-all request
   const isFetchAll = fetchAll === "true";
-  const selectFields = typeof fields === "string" ? fields : "*";
+  // We'll use '*' to avoid errors if some tables lack specific columns
+  const selectFields = "*";
 
   // Parse limit - allow higher limit for fetchAll mode but cap at HARD_MAX
   let parsedLimit: number;
@@ -98,34 +103,40 @@ export default async function handler(
 
   try {
     // Per-table limit to distribute the load
-    const perTableLimit = Math.ceil(parsedLimit / 4);
+    const perTableLimit = Math.ceil(parsedLimit / 5);
 
-    /* -------------------- 1️⃣ HISTORY -------------------- */
+    /* -------------------- 1️⃣ ACTIVITY (Current) -------------------- */
+    const { data: activityData, hasMore: activityHasMore } = await fetchAllRows(
+      "activity", referenceid, fromDate, toDate, perTableLimit, selectFields
+    );
+
+    /* -------------------- 2️⃣ HISTORY -------------------- */
     const { data: historyData, hasMore: historyHasMore } = await fetchAllRows(
       "history", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
-    /* -------------------- 2️⃣ REVISED QUOTATIONS -------------------- */
+    /* -------------------- 3️⃣ REVISED QUOTATIONS -------------------- */
     const { data: revisedData, hasMore: revisedHasMore } = await fetchAllRows(
       "revised_quotations", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
-    /* -------------------- 3️⃣ MEETINGS -------------------- */
+    /* -------------------- 4️⃣ MEETINGS -------------------- */
     const { data: meetingsData, hasMore: meetingsHasMore } = await fetchAllRows(
       "meetings", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
-    /* -------------------- 4️⃣ DOCUMENTATION -------------------- */
+    /* -------------------- 5️⃣ DOCUMENTATION -------------------- */
     const { data: documentationData, hasMore: docHasMore } = await fetchAllRows(
       "documentation", referenceid, fromDate, toDate, perTableLimit, selectFields
     );
 
-    /* -------------------- 5️⃣ NORMALIZE + MERGE -------------------- */
+    /* -------------------- 6️⃣ NORMALIZE + MERGE -------------------- */
     let activities = [
-      ...(historyData || []).map((item) => ({ source: "history", ...item })),
-      ...(revisedData || []).map((item) => ({ source: "revised_quotations", ...item })),
-      ...(meetingsData || []).map((item) => ({ source: "meeting", ...item })),
-      ...(documentationData || []).map((item) => ({ source: "documentation", ...item })),
+      ...(activityData || []).map((item) => ({ ...item, table_source: "activity" })),
+      ...(historyData || []).map((item) => ({ ...item, table_source: "history" })),
+      ...(revisedData || []).map((item) => ({ ...item, table_source: "revised_quotations" })),
+      ...(meetingsData || []).map((item) => ({ ...item, table_source: "meeting" })),
+      ...(documentationData || []).map((item) => ({ ...item, table_source: "documentation" })),
     ].sort(
       (a, b) =>
         new Date(b.date_created).getTime() - new Date(a.date_created).getTime()
@@ -134,7 +145,7 @@ export default async function handler(
     // Generate next cursor based on last item's date
     let nextCursor: string | null = null;
     const hasMore = activities.length > parsedLimit ||
-      historyHasMore || revisedHasMore || meetingsHasMore || docHasMore;
+      activityHasMore || historyHasMore || revisedHasMore || meetingsHasMore || docHasMore;
 
     if (activities.length > parsedLimit) {
       activities = activities.slice(0, parsedLimit);

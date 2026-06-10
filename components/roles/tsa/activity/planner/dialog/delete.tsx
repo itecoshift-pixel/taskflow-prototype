@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { getTableStyles, DEFAULT_TABLE_STYLES, type TableStyles } from "@/lib/table-styles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AccountsActiveDeleteDialogProps {
@@ -42,45 +43,10 @@ export function AccountsActiveDeleteDialog({
   const [confirmed, setConfirmed] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [tableStyles, setTableStyles] = useState({
-    table_bg: "#ffffff",
-    table_border: "#111111",
-    table_border_radius: "0",
-    tr_border: "#d1d5db",
-    tr_hover_bg: "#f3f4f6",
-    th_bg: "#1f1f1f",
-    th_text: "#ffffff",
-    th_border: "#111111",
-    th_padding: "14",
-    th_font_size: "11",
-    td_text: "#111827",
-    td_border: "#e5e7eb",
-    td_padding: "14",
-    td_font_size: "12",
-    tfoot_bg: "#1f1f1f",
-    tfoot_text: "#ffffff",
-    tfoot_border: "#111111",
-    tfoot_padding: "12",
-    tfoot_font_size: "12",
-    pagination_bg: "#1f1f1f",
-    pagination_text: "#d1d5db",
-    pagination_radius: "8",
-    pagination_border: "#d1d5db",
-    toolbar_bg: "#1f1f1f",
-    toolbar_border: "#111111",
-    toolbar_btn_bg: "rgba(255,255,255,0.08)",
-    toolbar_btn_text: "#ffffff",
-    toolbar_input_bg: "rgba(255,255,255,0.08)",
-    toolbar_btn_border: "#3f3f3f",
-    toolbar_input_text: "#ffffff",
-    toolbar_input_border: "#3f3f3f",
-  });
+  const [tableStyles, setTableStyles] = useState<TableStyles>(DEFAULT_TABLE_STYLES);
 
   useEffect(() => {
-    fetch("/api/table-styles")
-      .then((res) => res.json())
-      .then((data) => { if (data?.table_styles) setTableStyles(data.table_styles); })
-      .catch(() => { });
+    getTableStyles().then(setTableStyles).catch(() => { });
   }, []);
 
   useEffect(() => {

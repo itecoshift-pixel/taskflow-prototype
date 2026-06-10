@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RefreshCcw, Loader2, List } from "lucide-react";
+import { RefreshCcw, Loader2 } from "lucide-react";
 import { sileo } from "sileo";
 import { useUser } from "@/contexts/UserContext";
 import { useSearchParams } from "next/navigation";
@@ -109,8 +109,8 @@ export default function TSAReports() {
   const queryUserId = searchParams?.get("id") ?? "";
 
   const today = new Date().toISOString().split("T")[0];
-  const [startDate, setStartDate] = useState<string>(today);
-  const [endDate, setEndDate] = useState<string>(today);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   const [managerDetails, setManagerDetails] = useState({
     referenceid: "", firstname: "", lastname: "", role: "",
@@ -247,11 +247,12 @@ export default function TSAReports() {
   }, []);
 
   const fetchActivities = useCallback(async (refId: string) => {
-    if (!refId) return;
+    if (!refId || !startDate || !endDate) return;
     setLoadingActivities(true);
     try {
       const fields = "id,date_created,status,actual_sales,source,call_status,quotation_status,call_type,company_name,activity_reference_number,start_date,end_date,type_activity,type_client";
-      const res = await fetch(`/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}&fetchAll=true&fields=${fields}`);
+      const url = `/api/activity/tsa/breaches/fetch?referenceid=${encodeURIComponent(refId)}&fetchAll=true&fields=${fields}&from=${startDate}&to=${endDate}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setActivities(data.activities || []);
@@ -260,7 +261,7 @@ export default function TSAReports() {
     } finally {
       setLoadingActivities(false);
     }
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchOverdue = useCallback(async (refId: string) => {
     if (!refId) return;
@@ -281,7 +282,7 @@ export default function TSAReports() {
   }, []);
 
   const fetchCsrMetrics = useCallback(async (refId: string, start: string, end: string) => {
-    if (!refId) return;
+    if (!refId || !start || !end) return;
     setLoadingCsrMetrics(true);
     try {
       const res = await fetch(`/api/act-fetch-activity-v2?referenceid=${encodeURIComponent(refId)}`);
@@ -351,7 +352,16 @@ export default function TSAReports() {
   // ── Auto-fetch on agent/date change ───────────────────────────────────────
 
   useEffect(() => {
-    if (!selectedRefId) return;
+    if (!selectedRefId || !startDate || !endDate) {
+      setActivities([]);
+      setOverdueByCompany({});
+      setOverdueCount(0);
+      setAvgResponseTime(0);
+      setAvgNonQuotationHT(0);
+      setAvgQuotationHT(0);
+      setAvgSpfHT(0);
+      return;
+    }
     setActivities([]);
     setOverdueByCompany({});
     setOverdueCount(0);
@@ -572,7 +582,11 @@ export default function TSAReports() {
   const selectedAgent = agents.find((a) => a.ReferenceID === selectedRefId);
 
   const handleManualSync = () => {
-    if (!selectedRefId) return;
+    if (!selectedRefId || !startDate || !endDate) {
+      sileo.warning({ title: "Date Range Required", description: "Please select both start and end dates before syncing.", duration: 4000 });
+      return;
+    }
+    setActivities([]);
     fetchClusterData(selectedRefId);
     fetchActivities(selectedRefId);
     fetchOverdue(selectedRefId);

@@ -28,8 +28,8 @@ export async function GET(req: Request) {
 
     if (Xchire_fetch.length === 0) {
       return NextResponse.json(
-        { success: false, data: [], error: "No accounts found with the provided reference ID." },
-        { status: 404 }
+        { success: true, data: [], message: "No accounts found with the provided reference ID." },
+        { status: 200 }
       );
     }
 

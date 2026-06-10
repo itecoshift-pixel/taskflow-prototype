@@ -165,47 +165,6 @@ export default function TaskListEditDialog({
 
   const [formData, setFormData] = useState<Partial<Completed>>(() => buildInitial(item));
 
-  const [tableStyles, setTableStyles] = useState({
-    table_bg: "#ffffff",
-    table_border: "#111111",
-    table_border_radius: "0",
-    tr_border: "#d1d5db",
-    tr_hover_bg: "#f3f4f6",
-    th_bg: "#1f1f1f",
-    th_text: "#ffffff",
-    th_border: "#111111",
-    th_padding: "14",
-    th_font_size: "11",
-    td_text: "#111827",
-    td_border: "#e5e7eb",
-    td_padding: "14",
-    td_font_size: "12",
-    tfoot_bg: "#1f1f1f",
-    tfoot_text: "#ffffff",
-    tfoot_border: "#111111",
-    tfoot_padding: "12",
-    tfoot_font_size: "12",
-    pagination_bg: "#1f1f1f",
-    pagination_text: "#d1d5db",
-    pagination_radius: "8",
-    pagination_border: "#d1d5db",
-    toolbar_bg: "#1f1f1f",
-    toolbar_border: "#111111",
-    toolbar_btn_bg: "rgba(255,255,255,0.08)",
-    toolbar_btn_text: "#ffffff",
-    toolbar_input_bg: "rgba(255,255,255,0.08)",
-    toolbar_btn_border: "#3f3f3f",
-    toolbar_input_text: "#ffffff",
-    toolbar_input_border: "#3f3f3f",
-  });
-
-  useEffect(() => {
-    fetch("/api/table-styles")
-      .then((r) => r.json())
-      .then((d) => { if (d?.table_styles) setTableStyles(d.table_styles); })
-      .catch(() => { });
-  }, []);
-
   // FIX: reset form when item changes (dialog reused for different rows)
   useEffect(() => {
     setFormData(buildInitial(item));
@@ -269,42 +228,35 @@ export default function TaskListEditDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden"
-        style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+      <DialogContent className="max-w-lg p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
 
         {/* ── Header ──────────────────────────────────────────────────── */}
-        <div className="px-6 pt-5 pb-4"
-          style={{
-            color: tableStyles.th_text,
-            backgroundColor: tableStyles.th_bg,
-          }}>
+        <div className="px-6 pt-6 pb-4 bg-white border-b border-zinc-100">
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
-              <div className="bg-white/10 rounded-full p-1.5">
-                <PenLine className="h-4 w-4" />
+              <div className="bg-zinc-100 rounded-full p-2">
+                <PenLine className="h-4 w-4 text-zinc-900" />
               </div>
-              <DialogTitle className="text-sm font-bold tracking-wide uppercase">
+              <DialogTitle className="text-sm font-bold tracking-tight text-zinc-900">
                 Edit Activity
               </DialogTitle>
             </div>
-            <p className="text-zinc-400 text-[11px] font-mono mt-0.5">
+            <p className="text-zinc-500 text-[11px] font-medium mt-0.5">
               {item.activity_reference_number}
             </p>
           </DialogHeader>
         </div>
 
         {/* ── Fields ──────────────────────────────────────────────────── */}
-        <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+        <div className="px-6 py-6 space-y-5 max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-200">
 
           {/* type_activity — read-only display */}
           {item.type_activity && (
             <div>
-              <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+              <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                 Activity Type
               </Label>
-              <div 
-              className="border border-zinc-200 px-3 py-2 bg-zinc-50 text-xs text-zinc-600 font-mono"
-              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+              <div className="border border-zinc-100 px-4 py-3 bg-zinc-50/50 text-xs text-zinc-600 font-medium rounded-xl">
                 {item.type_activity}
               </div>
             </div>
@@ -313,11 +265,10 @@ export default function TaskListEditDialog({
           {/* company_name — read-only display, not editable */}
           {item.company_name && (
             <div>
-              <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+              <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                 Company Name
               </Label>
-              <div className="border border-zinc-200 px-3 py-2 bg-zinc-50 text-xs text-zinc-700 font-bold"
-              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+              <div className="border border-zinc-100 px-4 py-3 bg-zinc-50/50 text-xs text-zinc-900 font-bold rounded-xl">
                 {item.company_name}
               </div>
             </div>
@@ -325,12 +276,11 @@ export default function TaskListEditDialog({
 
           {/* ── remarks textarea — always shown ─────────────────── */}
           <div>
-            <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+            <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
               Remarks
             </Label>
             <Textarea
-              className="w-full text-xs resize-none"
-              style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+              className="w-full text-xs resize-none rounded-2xl border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200 transition-all min-h-[100px]"
               rows={3}
               value={String(formData.remarks ?? "")}
               onChange={(e) => handleChange("remarks", e.target.value)}
@@ -349,17 +299,17 @@ export default function TaskListEditDialog({
             if (key === "call_status") {
               return (
                 <div key={key}>
-                  <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                  <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     {getLabel(key)}
                   </Label>
                   <Select
                     value={String(value ?? "")}
                     onValueChange={(val) => handleChange(key as keyof Completed, val)}
                   >
-                    <SelectTrigger className="w-full text-xs" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+                    <SelectTrigger className="w-full text-xs rounded-full h-11 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="Select call status" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectGroup>
                         <SelectItem value="Successful">Successful</SelectItem>
                         <SelectItem value="Unsuccessful">Unsuccessful</SelectItem>
@@ -374,20 +324,20 @@ export default function TaskListEditDialog({
             if (key === "quotation_status") {
               return (
                 <div key={key}>
-                  <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                  <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                     Quotation Status
                   </Label>
                   <Select
                     value={String(value ?? "")}
                     onValueChange={(val) => handleChange("quotation_status", val)}
                   >
-                    <SelectTrigger className="w-full text-xs" style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}>
+                    <SelectTrigger className="w-full text-xs rounded-full h-11 border-zinc-200 bg-zinc-50/50 focus:ring-zinc-200">
                       <SelectValue placeholder="Select quotation status" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectGroup>
                         {QUOTATION_STATUS_OPTIONS.map((s) => (
-                          <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                          <SelectItem key={s} value={s} className="text-xs font-medium">{s}</SelectItem>
                         ))}
                       </SelectGroup>
                     </SelectContent>
@@ -399,12 +349,11 @@ export default function TaskListEditDialog({
             // ── default input ───────────────────────────────────────
             return (
               <div key={key}>
-                <Label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                <Label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-2 ml-1">
                   {getLabel(key)}
                 </Label>
                 <Input
-                  className="w-full text-xs"
-                  style={{ borderRadius: `${tableStyles.table_border_radius}px`, }}
+                  className="w-full text-xs rounded-full h-11 border-zinc-200 bg-zinc-50/50 focus-visible:ring-zinc-200"
                   type={getInputType(key)}
                   value={String(value ?? "")}
                   onChange={(e) => handleChange(key as keyof Completed, e.target.value)}
@@ -415,24 +364,22 @@ export default function TaskListEditDialog({
         </div>
 
         {/* ── Footer ──────────────────────────────────────────────────── */}
-        <div className="px-6 py-4 border-t border-zinc-100 flex gap-2">
+        <div className="px-6 py-5 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
           <Button
-            variant="outline"
-            className="flex-1 text-xs h-10"
-            style={{ borderRadius: tableStyles.pagination_radius }}
+            variant="ghost"
+            className="flex-1 text-xs h-11 rounded-full font-bold text-zinc-500 hover:bg-zinc-100"
             onClick={onClose}
             disabled={saving}
           >
             Cancel
           </Button>
           <Button
-            className="flex-1 text-xs h-10 bg-zinc-900 hover:bg-zinc-800"
-            style={{ borderRadius: tableStyles.pagination_radius }}
+            className="flex-1 text-xs h-11 bg-zinc-900 hover:bg-zinc-800 rounded-full font-bold text-white shadow-lg shadow-zinc-200"
             onClick={handleSave}
             disabled={saving}
           >
             {saving ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving...</>
+              <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>
             ) : (
               "Save Changes"
             )}

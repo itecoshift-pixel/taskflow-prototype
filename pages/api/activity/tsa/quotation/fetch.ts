@@ -18,32 +18,40 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     type_client,
     call_status,
     quotation_status,
+    fields,
   } = req.query;
 
   if (!referenceid || typeof referenceid !== "string") {
     return res.status(400).json({ message: "Missing or invalid referenceid" });
   }
 
+  // Define allowed fields to prevent SQL injection or accidental exposure
+  let allowedFields = "*";
+  if (fields && typeof fields === "string") {
+    allowedFields = fields;
+  } else if (Array.isArray(fields)) {
+    allowedFields = fields.join(",");
+  }
+
   // Parse pagination parameters
   const pageNum = Math.max(1, parseInt(typeof page === "string" ? page : "1", 10));
-  const limitNum = Math.min(Math.max(1, parseInt(typeof limit === "string" ? limit : "10", 10)), 50);
+  const limitNum = Math.min(Math.max(1, parseInt(typeof limit === "string" ? limit : "10", 10)), 100);
   const offset = (pageNum - 1) * limitNum;
 
-  // Admin view: sees ALL records from ALL users, no status restriction
+  // Admin view: sees ALL records from ALL users
   const isAdminView = referenceid === ADMIN_REFERENCE_ID;
 
   try {
     // Build base query
     let query = supabase
       .from("history")
-      .select("*", { count: "exact" })
+      .select(allowedFields, { count: "exact" })
       .order("date_updated", { ascending: false })
       .order("date_created", { ascending: false });
 
     if (isAdminView) {
-      // Admin: no referenceid filter, no status filter — sees everything
-      query = query
-        .eq("status", "Quote-Done");
+      // Admin: sees Quote-Done status across all users
+      query = query.eq("status", "Quote-Done");
     } else {
       // Regular user: own data only, Quote-Done status only
       query = query
@@ -101,7 +109,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Fetch revised quotations for PDF configuration
-    const quotationNumbers = historyData?.map((item) => item.quotation_number).filter(Boolean) || [];
+    const quotationNumbers = (historyData as any[])?.map((item) => item.quotation_number).filter(Boolean) || [];
 
     // For admin, fetch revised_quotations without referenceid restriction
     let revisedQuery = supabase
@@ -141,23 +149,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Filter out items without meaningful data and merge with additional data
-    const filteredData = (historyData || [])
-      .filter((item) => {
+    const filteredData = (historyData as any[] || [])
+      .filter((item: any) => {
         if (!item || typeof item !== "object") return false;
         const checks = ["activity_reference_number", "referenceid", "quotation_number", "quotation_amount"];
         return checks.some((col) => {
-          try {
-            const val = item[col as keyof typeof item];
-            if (val === null || val === undefined) return false;
-            if (typeof val === "string") return val.trim() !== "" && val.trim() !== "-";
-            if (typeof val === "number") return !isNaN(val);
-            return Boolean(val);
-          } catch {
-            return false;
-          }
+          const val = item[col];
+          if (val === null || val === undefined) return false;
+          if (typeof val === "string") return val.trim() !== "" && val.trim() !== "-";
+          if (typeof val === "number") return !isNaN(val);
+          return Boolean(val);
         });
       })
-      .map((item) => {
+      .map((item: any) => {
         const revised = revisedMap.get(item.activity_reference_number || item.quotation_number);
         const sig = signaturesMap.get(item.quotation_number);
 
