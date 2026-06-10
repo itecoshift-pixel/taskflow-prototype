@@ -645,39 +645,139 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         );
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 p-4">
 
-            <div className="flex flex-col gap-4 items-start">
+            <div className="flex flex-col lg:flex-row gap-6 items-start h-[calc(100vh-140px)]">
 
-                {/* ── SPF Records table ────────────────────────────────────────────── */}
-                <div className="w-full border rounded-none overflow-hidden shadow-sm flex flex-col"
-                    style={{
-                        borderColor: tableStyles.table_border,
-                        borderRadius: `${tableStyles.table_border_radius}px`,
-                        backgroundColor: tableStyles.table_bg,
-                    }}>
-                    <div className="flex items-center gap-3 px-4 py-3" style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg, color: tableStyles.th_text, }}>
-                        <FileText className="w-4 h-4" />
+                {/* ── LEFT SIDE: Select Customer table ────────────────────────────────────────── */}
+                <div className="w-full lg:w-[350px] xl:w-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full shrink-0 bg-white"
+                >
+                    <div className="px-5 py-4 border-b border-zinc-100">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center">
+                                <Building2 className="w-4 h-4 text-white" />
+                            </div>
+                            <h3 className="text-[13px] font-black uppercase tracking-widest flex-1 text-zinc-900">
+                                Select Customer
+                            </h3>
+                        </div>
+                        {/* Accounts Search Bar */}
+                        <div className="relative flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-zinc-400" />
+                                <Input
+                                    className="pl-9 h-10 text-[12px] rounded-full border-zinc-200 bg-zinc-50 focus:ring-0 focus:border-zinc-900 transition-all placeholder:text-zinc-400 font-medium"
+                                    placeholder="Search customer..."
+                                    value={accountsSearchTerm}
+                                    onChange={(e) => setAccountsSearchTerm(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleAccountsSearch();
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                onClick={handleAccountsSearch}
+                                disabled={accountsLoading}
+                                size="sm"
+                                className="h-10 px-4 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-[11px] font-black uppercase tracking-tighter"
+                            >
+                                {accountsLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    "Search"
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {accountsLoading && allAccounts.length === 0 ? (
+                            <div className="flex justify-center items-center py-20">
+                                <Loader2 className="w-8 h-8 animate-spin text-zinc-200" />
+                            </div>
+                        ) : allAccounts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-zinc-300 gap-3">
+                                <Building2 className="w-12 h-12 opacity-10" />
+                                <p className="text-[11px] font-black uppercase tracking-widest">
+                                    No records found
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-zinc-50">
+                                {allAccounts.map((acc, idx) => (
+                                    <div key={acc.id || idx} className="p-4 hover:bg-zinc-50/80 transition-all group">
+                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                            <div className="min-w-0 flex-1">
+                                                <h4 className="text-[12px] font-black text-zinc-900 truncate leading-tight mb-1 uppercase tracking-tight">
+                                                    {acc.company_name}
+                                                </h4>
+                                                <p className="text-[10px] text-zinc-400 font-bold truncate uppercase tracking-tighter">
+                                                    {acc.contact_person}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                onClick={() => openContactSelection(acc)}
+                                                className="h-8 px-3 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-tighter flex items-center gap-1.5 shadow-sm shadow-emerald-200 shrink-0"
+                                            >
+                                                <PlusCircle className="w-3.5 h-3.5" />
+                                                Create
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-[10px] text-zinc-400 font-bold uppercase tracking-widest opacity-60">
+                                            <span className="truncate">{acc.contact_number}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Accounts Load More */}
+                    {accountsHasMore && (
+                        <div className="px-5 py-3 border-t border-zinc-50 bg-zinc-50/30 flex justify-center">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleAccountsLoadMore}
+                                disabled={accountsLoadingMore}
+                                className="h-8 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-900 hover:bg-transparent"
+                            >
+                                {accountsLoadingMore ? (
+                                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                                ) : (
+                                    "Load More"
+                                )}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── RIGHT SIDE: SPF Records table ────────────────────────────────────────────── */}
+                <div className="flex-1 w-full border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-full bg-white">
+                    <div className="flex items-center gap-4 px-6 py-5 border-b border-zinc-100">
+                        <div className="w-10 h-10 rounded-full bg-zinc-50 flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-zinc-900" />
+                        </div>
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-xs font-bold uppercase tracking-widest">
+                            <h3 className="text-[14px] font-black uppercase tracking-[0.1em] text-zinc-900">
                                 SPF Records
                             </h3>
-                            <p className="text-[11px]">
-                                {allActivities.length} records
-                                {totalCount > allActivities.length && (
-                                    <span className="text-[10px] ml-2">
-                                        Showing {allActivities.length} of {totalCount} total
-                                    </span>
-                                )}
-                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter bg-zinc-100 px-2 py-0.5 rounded-full">
+                                    {totalCount} TOTAL RECORDS
+                                </span>
+                            </div>
                         </div>
                         {/* SPF Records Search Bar */}
-                        <div className="relative flex gap-2 max-w-xs">
+                        <div className="relative flex gap-3 max-w-md w-full">
                             <div className="relative flex-1">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" />
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-zinc-400" />
                                 <Input
-                                    className="pl-7 h-8 text-xs rounded-none border-zinc-200 focus:ring-0 focus:border-zinc-400 transition-all"
-                                    placeholder="Search SPF records..."
+                                    className="pl-11 h-11 text-[12px] rounded-full border-zinc-200 bg-zinc-50 focus:ring-0 focus:border-zinc-900 transition-all placeholder:text-zinc-400 font-medium"
+                                    placeholder="Search by SPF number or customer name..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     onKeyDown={(e) => {
@@ -690,10 +790,11 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             <Button
                                 onClick={handleSearch}
                                 disabled={loading}
-                                className="h-8 px-3 rounded-none bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium"
+                                size="sm"
+                                className="h-11 px-6 rounded-full bg-zinc-900 hover:bg-zinc-800 text-white text-[11px] font-black uppercase tracking-widest"
                             >
                                 {loading ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                     "Search"
                                 )}
@@ -701,18 +802,18 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-x-auto">
+                    <div className="flex-1 overflow-auto custom-scrollbar">
                         {allActivities.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-2">
-                                <FileText className="w-12 h-12 opacity-20" />
-                                <p className="text-sm font-semibold uppercase tracking-wide">
-                                    No SPF records
+                            <div className="flex flex-col items-center justify-center py-32 text-zinc-300 gap-4">
+                                <FileText className="w-16 h-16 opacity-10" />
+                                <p className="text-[13px] font-black uppercase tracking-[0.2em]">
+                                    No SPF Records Found
                                 </p>
                             </div>
                         ) : (
                             <Table>
-                                <TableHeader>
-                                    <TableRow style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.th_bg }}>
+                                <TableHeader className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
+                                    <TableRow className="hover:bg-transparent border-none">
                                         {[
                                             "Actions", "Status", "SPF No.", "Customer",
                                             "Contact Person", "Contact No.", "Reg. Address",
@@ -720,13 +821,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                             "Payment", "Warranty", "Delivery Date",
                                             "Prepared By", "Approved By", "Time Spent", "Date Modified"
                                         ].map((h) => (
-                                            <TableHead key={h} style={{
-                                                color: tableStyles.th_text,
-                                                fontSize: `${tableStyles.th_font_size}px`,
-                                                padding: `${tableStyles.th_padding}px 12px`,
-                                                borderColor: tableStyles.th_border,
-                                                backgroundColor: tableStyles.th_bg,
-                                            }} className="uppercase font-bold">
+                                            <TableHead key={h} className="h-12 text-[10px] font-black uppercase tracking-widest text-zinc-400 px-6 whitespace-nowrap">
                                                 {h}
                                             </TableHead>
                                         ))}
@@ -737,19 +832,14 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                         const isHighlighted = highlight === item.spf_number;
                                         return (
                                             <TableRow key={item.id}
-                                                className={`text-xs ${isHighlighted ? "bg-yellow-50 hover:bg-yellow-100/70 border-l-4 border-l-yellow-500" : (idx % 2 === 0 ? "bg-white" : "bg-zinc-50/30")}`} style={{ borderColor: tableStyles.tr_border, backgroundColor: tableStyles.table_bg }}>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>
-                                                    <div className="flex items-center gap-1">
+                                                className={`group transition-all border-zinc-50/80 ${isHighlighted ? "bg-yellow-50/50 hover:bg-yellow-100/50" : "hover:bg-zinc-50/50"}`}>
+                                                <TableCell className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
                                                         <button
                                                             title="Edit"
                                                             onClick={() => openEditDialog(item)}
                                                             disabled={item.is_cancelled}
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-400 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
+                                                            className="p-2 bg-white border border-zinc-100 rounded-full text-zinc-400 hover:text-zinc-900 hover:border-zinc-900 hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                                         >
                                                             <PenIcon className="w-3.5 h-3.5" />
                                                         </button>
@@ -761,7 +851,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                             title="Request Revision"
                                                             onClick={() => openRevisionDialog(item.spf_number)}
                                                             disabled={item.is_cancelled}
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-amber-600 hover:border-amber-200 hover:bg-amber-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-400 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
+                                                            className="p-2 bg-white border border-zinc-100 rounded-full text-zinc-400 hover:text-amber-600 hover:border-amber-200 hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                                                         >
                                                             <RefreshCw className="w-3.5 h-3.5" />
                                                         </button>
@@ -773,112 +863,58 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                                             collectionName="spf_creations"
                                                             title={item.spf_number}
                                                             variant="icon"
-                                                            className="p-1.5 border border-zinc-200 rounded-none text-zinc-400 hover:text-[#be2d2d] hover:border-[#be2d2d]/30 hover:bg-[#be2d2d]/10 transition-all h-auto w-auto"
+                                                            className="p-2 bg-white border border-zinc-100 rounded-full text-zinc-400 hover:text-red-500 hover:border-red-100 hover:shadow-sm transition-all"
                                                         />
                                                     </div>
                                                 </TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>
+                                                <TableCell className="px-6 py-4">
                                                     <StatusBadge status={item.status} />
                                                 </TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.spf_number}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.customer_name}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.contact_person}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.contact_number}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.registered_address}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.delivery_address || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.billing_address || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.collection_address || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.payment_terms || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.warranty || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.delivery_date || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.prepared_by || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>{item.approved_by || "—"}</TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>
-                                                    <span className="font-mono text-zinc-500">
+                                                <TableCell className="px-6 py-4 font-black text-[11px] text-zinc-900 whitespace-nowrap tracking-tight uppercase">
+                                                    {item.spf_number}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 font-black text-[11px] text-zinc-900 min-w-[200px] uppercase tracking-tight">
+                                                    {item.customer_name}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-500 whitespace-nowrap uppercase">
+                                                    {item.contact_person}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-black text-zinc-400 font-mono whitespace-nowrap opacity-70">
+                                                    {item.contact_number}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-medium text-zinc-400 max-w-[250px] truncate uppercase">
+                                                    {item.registered_address}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-medium text-zinc-400 max-w-[250px] truncate uppercase">
+                                                    {item.delivery_address || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-medium text-zinc-400 max-w-[250px] truncate uppercase">
+                                                    {item.billing_address || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-medium text-zinc-400 max-w-[250px] truncate uppercase">
+                                                    {item.collection_address || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-500 whitespace-nowrap uppercase">
+                                                    {item.payment_terms || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-500 whitespace-nowrap uppercase">
+                                                    {item.warranty || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-500 whitespace-nowrap uppercase">
+                                                    {item.delivery_date || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-500 whitespace-nowrap uppercase">
+                                                    {item.prepared_by || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-500 whitespace-nowrap uppercase">
+                                                    {item.approved_by || "—"}
+                                                </TableCell>
+                                                <TableCell className="px-6 py-4">
+                                                    <span className="text-[10px] font-black text-zinc-400 font-mono whitespace-nowrap bg-zinc-50 px-2 py-1 rounded-full uppercase tracking-tighter">
                                                         {calculateTimeSpent(item.start_date, item.end_date)}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell style={{
-                                                    color: tableStyles.td_text,
-                                                    fontSize: `${tableStyles.td_font_size}px`,
-                                                    padding: `${tableStyles.td_padding}px 12px`,
-                                                    borderColor: tableStyles.td_border,
-                                                }}>
+                                                <TableCell className="px-6 py-4 text-[10px] font-bold text-zinc-400 whitespace-nowrap uppercase tracking-tighter">
                                                     {item.date_updated
                                                         ? new Date(item.date_updated).toLocaleString("en-PH", {
                                                             timeZone: "Asia/Manila",
