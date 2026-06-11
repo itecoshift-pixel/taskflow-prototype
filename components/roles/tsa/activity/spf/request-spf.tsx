@@ -329,6 +329,17 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
         );
     }, [allAccounts, accountsSearchTerm]);
 
+    // Filter SPF records client-side for immediate feedback
+    const filteredActivities = useMemo(() => {
+        if (!searchTerm.trim()) return allActivities;
+        const searchLower = searchTerm.toLowerCase();
+        return allActivities.filter(act => 
+            (act.spf_number || "").toLowerCase().includes(searchLower) ||
+            (act.customer_name || "").toLowerCase().includes(searchLower) ||
+            (act.contact_person || "").toLowerCase().includes(searchLower)
+        );
+    }, [allActivities, searchTerm]);
+
     useEffect(() => {
         fetchAccounts();
     }, [referenceid, fetchAccounts]);
@@ -814,7 +825,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                     </div>
 
                     <div className="flex-1 overflow-auto custom-scrollbar">
-                        {allActivities.length === 0 ? (
+                        {filteredActivities.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-32 text-zinc-300 gap-4">
                                 <FileText className="w-16 h-16 opacity-10" />
                                 <p className="text-[13px] font-black uppercase tracking-[0.2em]">
@@ -839,7 +850,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {allActivities.map((item: SPFRecord, idx: number) => {
+                                    {filteredActivities.map((item: SPFRecord, idx: number) => {
                                         const isHighlighted = highlight === item.spf_number;
                                         return (
                                             <TableRow key={item.id}
