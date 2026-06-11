@@ -100,8 +100,8 @@ export function NavUser({ user, userId }: NavUserProps) {
       localStorage.removeItem("deviceId");
       sessionStorage.clear();
 
-      router.replace("/auth/login");
-      window.location.reload();
+      // Ensure we go to login and clear any stale state
+      window.location.href = "/auth/login";
     } catch (err) {
       console.error("Logout error:", err);
     } finally {

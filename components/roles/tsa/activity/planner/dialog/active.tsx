@@ -434,7 +434,7 @@ export function AccountDialog({
           formData.contact_number.every((v) => (v || "").trim() !== "") &&
           !companyError &&
           formData.email_address.length > 0 &&
-          formData.email_address.every((em) => (em || "") === "N/A" || isValidEmail(em || ""))
+          formData.email_address.every((em) => (em || "").trim() !== "" && isValidEmail(em || ""))
         );
       case 1:
         return (
@@ -487,7 +487,7 @@ export function AccountDialog({
     }
 
     for (const em of formData.email_address) {
-      if ((em || "").trim() && (em || "").trim().toLowerCase() !== "n/a" && !isValidEmail(em || "")) {
+      if (!isValidEmail(em || "")) {
         sileo.error({
           title: "Invalid Email",
           description: `Invalid email address: ${em}`,
@@ -888,15 +888,13 @@ export function AccountDialog({
               </FieldContent>
               <div className="mt-1.5 space-y-2">
                 {formData.email_address.map((em, i) => {
-                  const isNA = em === "N/A";
-                  const emailError = em && !isNA && !isValidEmail(em) ? "Invalid email format" : "";
+                  const emailError = em && !isValidEmail(em) ? "Invalid email format" : "";
                   return (
                     <div key={i}>
                       <div className="flex gap-2">
                         <Input
                           type="email"
                           value={em}
-                          disabled={isNA}
                           onChange={(e) => {
                             const copy = [...formData.email_address];
                             copy[i] = e.target.value;
@@ -910,7 +908,7 @@ export function AccountDialog({
                           variant="destructive"
                           size="icon"
                           className="rounded-none shrink-0"
-                          disabled={formData.email_address.length === 1 || isNA}
+                          disabled={formData.email_address.length === 1}
                           onClick={() => {
                             const copy = [...formData.email_address];
                             copy.splice(i, 1);
@@ -923,7 +921,6 @@ export function AccountDialog({
                           type="button"
                           size="icon"
                           className="rounded-none shrink-0"
-                          disabled={formData.email_address[0] === "N/A"}
                           onClick={() => updateField("email_address", [...formData.email_address, ""])}
                         >
                           <PlusIcon className="h-4 w-4" />
@@ -933,16 +930,6 @@ export function AccountDialog({
                     </div>
                   );
                 })}
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="no-email-checkbox"
-                    checked={formData.email_address[0] === "N/A"}
-                    onChange={(e) => updateField("email_address", e.target.checked ? ["N/A"] : [""])}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="no-email-checkbox" className="text-sm">No email address</Label>
-                </div>
               </div>
             </div>
           </div>
