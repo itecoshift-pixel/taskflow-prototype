@@ -789,7 +789,7 @@ const SPF: React.FC<SPFProps> = ({ referenceid, tsm, manager, prepared_by }) => 
                             </h3>
                             <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter bg-zinc-100 px-2 py-0.5 rounded-full">
-                                    {totalCount} TOTAL RECORDS
+                                    {filteredActivities.length} of {totalCount} RECORDS
                                 </span>
                             </div>
                         </div>
