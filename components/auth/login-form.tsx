@@ -95,6 +95,7 @@ const allowedEmails = [
   "l.roluna@disruptivesolutionsinc.com",
   "tsa.taskflowtest@ecoshiftcorp.com",
   "b.rodriguez@ecoshiftcorp.com",
+  "a.baldugo@disruptivesolutionsinc.com",
 ];
 
 function isLoginLocked(email?: string): boolean {

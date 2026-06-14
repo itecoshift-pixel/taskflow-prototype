@@ -60,7 +60,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ========================================= */
   const manilaHour = getManilaHour();
   const isTimeLocked = manilaHour >= 18 || manilaHour < 6;
-  const isBypassEmail = userEmail === "l.roluna@disruptivesolutionsinc.com";
+  const isBypassEmail = [
+    "l.roluna@disruptivesolutionsinc.com",
+    "tsa.taskflowtest@ecoshiftcorp.com",
+    "b.rodriguez@ecoshiftcorp.com",
+    "a.baldugo@disruptivesolutionsinc.com"
+  ].includes(userEmail);
 
   if (isTimeLocked && user.Role !== "Manager" && !isBypassEmail) {
     return res.status(403).json({
