@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (!tsms || tsms.length === 0) {
-      return res.status(404).json({ error: "No TSMs found for this Manager" });
+      return res.status(200).json([]);
     }
 
     res.status(200).json(tsms);

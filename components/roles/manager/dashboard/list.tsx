@@ -129,22 +129,35 @@ export function AgentList({
         if (!referenceid) return;
         fetch(`/api/fetch-manager-all-user?id=${encodeURIComponent(referenceid)}`)
             .then((res) => { if (!res.ok) throw new Error("Failed to fetch agents"); return res.json(); })
-            .then(setAgents)
-            .catch(() => setErrorHistory("Failed to load agents."));
+            .then((data) => setAgents(Array.isArray(data) ? data : []))
+            .catch(() => setAgents([])); // don't block the page on agents failure
     }, [referenceid]);
 
     // ── Fetch history ───────────────────────────────────────────────────────
     useEffect(() => {
         if (!referenceid) return;
         setLoadingHistory(true);
-        fetch(`/api/manager-all-agent-history?referenceid=${encodeURIComponent(referenceid)}`)
+
+        const url = new URL("/api/manager-all-agent-history", window.location.origin);
+        url.searchParams.append("referenceid", referenceid);
+
+        // Always pass current month as default range so we don't pull all history
+        const from = dateCreatedFilterRange?.from
+            ? new Date(dateCreatedFilterRange.from)
+            : (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; })();
+        const to = dateCreatedFilterRange?.to
+            ? new Date(dateCreatedFilterRange.to)
+            : new Date(new Date().setHours(23,59,59,999));
+
+        url.searchParams.append("from", from.toISOString().slice(0, 10));
+        url.searchParams.append("to", to.toISOString().slice(0, 10));
+
+        fetch(url.toString())
             .then((res) => { if (!res.ok) throw new Error("Failed to fetch history"); return res.json(); })
             .then((data) => setHistory(data.activities ?? []))
             .catch((err) => setErrorHistory(err.message))
             .finally(() => setLoadingHistory(false));
-    }, [referenceid]);
-
-    // ── Filter history ──────────────────────────────────────────────────────
+    }, [referenceid, dateCreatedFilterRange]);
     const filteredHistory = useMemo(() => {
         if (!history.length) return [];
         const from = dateCreatedFilterRange?.from ? new Date(dateCreatedFilterRange.from) : new Date();
@@ -273,7 +286,6 @@ export function AgentList({
 
     // ── Render ──────────────────────────────────────────────────────────────
     if (loadingHistory) return <div className="text-center py-10 text-sm text-gray-500">Loading history data...</div>;
-    if (errorHistory)   return <div className="text-center text-red-500 py-10 text-sm">{errorHistory}</div>;
 
     return (
         <main className="flex flex-1 flex-col gap-4 p-4 overflow-auto">

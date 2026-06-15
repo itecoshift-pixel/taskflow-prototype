@@ -67,19 +67,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: "referenceid (manager) is required" });
   }
 
-  const fromDate = typeof from === "string" ? from : undefined;
-  const toDate = typeof to === "string" ? to : undefined;
+  const fromDate = typeof from === "string" ? `${from}T00:00:00Z` : undefined;
+  const toDate   = typeof to   === "string" ? `${to}T23:59:59Z`   : undefined;
   const selectFields = typeof fields === "string" ? fields : "*";
 
   try {
-    // Tables to fetch
+    // Tables to fetch — each runs independently so one failure doesn't kill the rest
     const tables = ["history", "documentation", "revised_quotations", "meetings"];
     const allActivities: any[] = [];
 
     for (const table of tables) {
-      for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate, selectFields)) {
-        const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
-        allActivities.push(...normalizedBatch);
+      try {
+        for await (const batch of fetchTableBatches(table, referenceid, fromDate, toDate, selectFields)) {
+          const normalizedBatch = batch.map((item) => normalizeRecord(item, table));
+          allActivities.push(...normalizedBatch);
+        }
+      } catch (tableErr: any) {
+        // Table may not exist or have no manager column — skip silently
+        console.warn(`manager-all-agent-history: skipping table "${table}":`, tableErr?.message);
       }
     }
 

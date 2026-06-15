@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (!agents || agents.length === 0) {
-      return res.status(404).json({ error: "No agents found for this Manager" });
+      return res.status(200).json([]);
     }
 
     res.status(200).json(agents);
