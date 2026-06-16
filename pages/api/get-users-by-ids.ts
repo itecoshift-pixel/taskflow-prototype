@@ -1,6 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { connectToDatabase } from "@/lib/mongodb";
-import { ObjectId } from "mongodb";
+import { supabase } from "@/utils/supabase";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -14,38 +13,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const db = await connectToDatabase();
-    const usersCollection = db.collection("users");
+    // Fetch users from Supabase - convert string IDs to numbers for query
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("id, Firstname, Lastname, userName, profilePicture, Department")
+      .in("id", userIds.map(id => parseInt(id)));
 
-    // Convert string IDs to ObjectId
-    const objectIds = userIds
-      .filter(id => ObjectId.isValid(id))
-      .map(id => new ObjectId(id));
-
-    // Fetch users with only necessary fields
-    const users = await usersCollection
-      .find({ _id: { $in: objectIds } })
-      .project({ 
-        _id: 1, 
-        Firstname: 1, 
-        Lastname: 1,
-        userName: 1,
-        profilePicture: 1,
-        Department: 1
-      })
-      .toArray();
+    if (error) {
+      console.error("Supabase error:", error);
+      return res.status(500).json({ message: "Database error" });
+    }
 
     // Create a map of userId -> user data
     const userMap: Record<string, { firstName: string; lastName: string; userName: string; profilePicture?: string; department?: string }> = {};
     
-    users.forEach(user => {
-      userMap[user._id.toString()] = {
-        firstName: user.Firstname || "",
-        lastName: user.Lastname || "",
-        userName: user.userName || "",
-        profilePicture: user.profilePicture || "",
-        department: user.Department || ""
-      };
+    users?.forEach((user: any) => {
+      // Use the id field as string to match Firebase seenBy IDs
+      const userId = user.id?.toString();
+      if (userId) {
+        userMap[userId] = {
+          firstName: user.Firstname || "",
+          lastName: user.Lastname || "",
+          userName: user.userName || "",
+          profilePicture: user.profilePicture || "",
+          department: user.Department || ""
+        };
+      }
     });
 
     return res.status(200).json({ users: userMap });
