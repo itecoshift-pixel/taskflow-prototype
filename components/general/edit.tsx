@@ -233,7 +233,7 @@ export default function ProfileClient() {
         }
 
         setUserDetails({
-          id: data._id || "",
+          id: data.id || "",
           Firstname: data.Firstname || "",
           Lastname: data.Lastname || "",
           Email: data.Email || "",
