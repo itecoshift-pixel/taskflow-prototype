@@ -90,7 +90,6 @@ export function CollaborationHubRowTrigger({
       userRole={userData?.userRole || "User"}
       status={status}
       title={title || spfNumber}
-      chatDocId={chatDocId}
     />
   );
 
