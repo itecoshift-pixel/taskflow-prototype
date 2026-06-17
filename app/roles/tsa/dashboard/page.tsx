@@ -561,7 +561,7 @@ function DashboardContent() {
         <div className="flex flex-col gap-4 p-4">
           {/* Background grid */}
 
-          {/* Row 1
+          {/* Artie Penano KPI Pattern */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <RunningTargetCard
               referenceid={userDetails.referenceid}
@@ -642,8 +642,10 @@ function DashboardContent() {
             newAccountCount={newAccountCount}
             newAccountTarget={newAccountTarget}
           />
-          — Summary cards */}
 
+          {/* End -- Artie Penano KPI Pattern */}
+
+          {/* Betty Rodriguez KPI Pattern */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <AccountCard referenceid={userDetails.referenceid} />
             <OutboundTouchbaseCard {...cardProps} />
@@ -684,6 +686,8 @@ function DashboardContent() {
               dateRange={dateCreatedFilterRange}
             />
           </div>
+
+          {/* End Betty Rodriguez KPI Pattern */}
         </div>
       </SidebarInset>
 
