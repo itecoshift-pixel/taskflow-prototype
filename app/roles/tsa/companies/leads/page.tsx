@@ -162,7 +162,7 @@ function DashboardContent() {
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <BreadcrumbPage className="text-xs font-semibold uppercase tracking-wide">
-                    Leads — Inactive Accounts
+                    Inactive Accounts
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>

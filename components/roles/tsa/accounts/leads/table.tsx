@@ -457,7 +457,7 @@ export function LeadsTable({ posts = [], userDetails }: LeadsTableProps) {
           className="relative overflow-hidden border bg-white p-5 shadow-sm"
           style={{ borderLeftColor: "#ef4444", borderLeftWidth: 3, borderRadius: `${tableStyles.table_border_radius}px` }}
         >
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Total Leads</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Total Accounts</p>
           <p className="text-3xl font-black text-red-500">{stats.total.toLocaleString()}</p>
           <p className="text-[11px] text-slate-400 mt-1">Inactive accounts</p>
         </div>
