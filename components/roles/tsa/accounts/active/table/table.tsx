@@ -263,7 +263,6 @@ export function AccountsTable({
   const [agents, setAgents] = useState<any[]>([]);
   const [historicalData, setHistoricalData] = useState<any[]>([]);
   const [loadingHistoricalData, setLoadingHistoricalData] = useState(false);
-  const [activityCounts, setActivityCounts] = useState<Record<string, number>>({});
   const [searchInput, setSearchInput] = useState("");
 
   function StatusBadge({ value }: { value: string }) {
@@ -457,30 +456,6 @@ export function AccountsTable({
         ),
       },
       {
-        id: "activities",
-        header: "Activities",
-        cell: ({ row }) => {
-          const count = activityCounts[row.original.id];
-          if (count === undefined) {
-            return (
-              <span className="text-[11px] text-slate-300 font-mono">—</span>
-            );
-          }
-          return (
-            <span
-              className={`inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 text-[11px] font-bold border ${
-                count > 0
-                  ? "bg-blue-50 text-blue-700 border-blue-200"
-                  : "bg-zinc-50 text-zinc-400 border-zinc-200"
-              }`}
-              style={{ borderRadius: `${tableStyles.table_border_radius}px` }}
-            >
-              {count}
-            </span>
-          );
-        },
-      },
-      {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => <StatusBadge value={row.original.status ?? "—"} />,
@@ -665,7 +640,7 @@ export function AccountsTable({
         },
       },
     ],
-    [activityCounts]
+    []
   );
 
   // ── Search debounce ───────────────────────────────────────────────────────
@@ -710,37 +685,6 @@ export function AccountsTable({
       .then(setAgents)
       .catch(console.error);
   }, [userDetails.referenceid]);
-
-  // ── Fetch activity counts ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!filteredData.length) return;
-    const counts: Record<string, number> = {};
-    Promise.all(
-      filteredData.map(async (acc) => {
-        const params = new URLSearchParams();
-        if (acc.account_reference_number)
-          params.set("account_reference_number", acc.account_reference_number);
-        else if (acc.company_name)
-          params.set("company_name", acc.company_name);
-        else return;
-        params.set("referenceid", userDetails.referenceid);
-        try {
-          const res = await fetch(
-            `/api/activity/tsa/historical/fetch-by-account?${params}`
-          );
-          if (res.ok) {
-            const json = await res.json();
-            counts[acc.id] = (json.activities || []).length;
-          } else {
-            counts[acc.id] = 0;
-          }
-        } catch {
-          counts[acc.id] = 0;
-        }
-      })
-    ).then(() => setActivityCounts({ ...counts }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localPosts]);
 
   // ── Fetch historical data (shared logic) ──────────────────────────────────
   const fetchHistoricalData = async (accountIds: string[]) => {
